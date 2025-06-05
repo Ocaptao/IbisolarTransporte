@@ -42,11 +42,15 @@ const firebaseConfig = {
 let app
 let auth // getAuth()
 let db // getFirestore()
+let userProfilesCollection
+let tripsCollection
 
 try {
   app = initializeApp(firebaseConfig)
   auth = getAuth(app)
   db = getFirestore(app)
+  userProfilesCollection = collection(db, "userProfiles")
+  tripsCollection = collection(db, "trips")
   console.log("Firebase initialized successfully!")
 } catch (error) {
   console.error(
@@ -436,7 +440,7 @@ async function handleRegister(event) {
     }
     console.log("Creating user profile in Firestore:", newUserProfile)
     await firebaseSetDoc(
-      doc(db, "userProfiles", firebaseUser.uid),
+      doc(userProfilesCollection, firebaseUser.uid),
       newUserProfile
     )
     console.log("User profile created in Firestore.")
@@ -618,78 +622,96 @@ onAuthStateChanged(auth, async user => {
     user ? user.uid : "null"
   )
   if (user) {
-    loggedInUser = user
+    loggedInUser = user // Set global loggedInUser immediately
     console.log("User is authenticated with UID:", user.uid)
     try {
       console.log(
         "Attempting to fetch user profile from Firestore for UID:",
         user.uid
       )
-      const userProfileDocRef = doc(db, "userProfiles", user.uid)
+      const userProfileDocRef = doc(userProfilesCollection, user.uid)
       const userProfileDoc = await getDoc(userProfileDocRef)
 
       if (userProfileDoc.exists()) {
-        loggedInUserProfile = {
-          id: userProfileDoc.id,
-          ...userProfileDoc.data()
-        }
-        console.log(
-          "User profile found in Firestore:",
-          "Username:",
-          loggedInUserProfile.username,
-          "Role:",
-          loggedInUserProfile.role
-        )
-
-        updateNavVisibility()
-        if (loggedInUserProfile.role === "admin") {
-          console.log("User is admin, showing adminView.")
-          showView("adminView")
-          initializeAdminView()
-        } else {
-          console.log("User is motorista, showing userView.")
-          showView("userView")
-          initializeUserView()
-        }
-        if (myTripsViewBtn.style.display !== "none") {
-          console.log("Initializing My Trips View for logged in user.")
-          initializeMyTripsView()
-        }
-        if (
-          userManagementViewBtn.style.display !== "none" &&
-          loggedInUserProfile.username.toLowerCase() === "fabio"
-        ) {
+        // Check if the user session is still active for THIS user.
+        // This guards against race conditions if auth state changes rapidly.
+        if (auth.currentUser && auth.currentUser.uid === user.uid) {
+          loggedInUserProfile = {
+            id: userProfileDoc.id,
+            ...userProfileDoc.data()
+          }
           console.log(
-            "User is Fabio (admin), initializing User Management View."
+            "User profile found in Firestore:",
+            "Username:",
+            loggedInUserProfile.username,
+            "Role:",
+            loggedInUserProfile.role
           )
-          initializeUserManagementView()
+
+          updateNavVisibility()
+          if (loggedInUserProfile.role === "admin") {
+            console.log("User is admin, showing adminView.")
+            showView("adminView")
+            initializeAdminView()
+          } else {
+            console.log("User is motorista, showing userView.")
+            showView("userView")
+            initializeUserView()
+          }
+          if (myTripsViewBtn.style.display !== "none") {
+            console.log("Initializing My Trips View for logged in user.")
+            initializeMyTripsView()
+          }
+          if (
+            userManagementViewBtn.style.display !== "none" &&
+            loggedInUserProfile.username.toLowerCase() === "fabio"
+          ) {
+            console.log(
+              "User is Fabio (admin), initializing User Management View."
+            )
+            initializeUserManagementView()
+          }
+        } else {
+          console.warn(
+            "User session changed (e.g., logged out or different user signed in) while fetching profile for UID:",
+            user.uid,
+            ". Aborting UI update for this stale session. The new auth state will be handled."
+          )
+          // No explicit action needed here, the onAuthStateChanged for the new state (e.g., null user or different user)
+          // will manage the UI accordingly. loggedInUser might have already been updated by that other event.
         }
       } else {
         console.error(
           "CRITICAL: User profile NOT FOUND in Firestore for UID:",
-          user.uid
+          user.uid,
+          "Email:",
+          user.email
         )
-        await handleLogout() // Forçar logout se o perfil não existir
+        // Display error on loginFeedback, then sign out.
+        // The onAuthStateChanged call for user=null will then show loginView.
         showFeedback(
           loginFeedback,
-          "Perfil do usuário não encontrado. Faça o cadastro novamente ou contate o suporte.",
+          `Falha ao carregar perfil (usuário ${user.email ||
+            user.uid}). Você será desconectado. Verifique o cadastro ou contate o suporte.`,
           "error"
         )
+        setTimeout(() => signOut(auth), 3000) // Delay for user to read message
       }
     } catch (error) {
       console.error(
-        "CRITICAL ERROR fetching user profile:",
-        "Code:",
-        error.code,
-        "Message:",
-        error.message
+        "CRITICAL ERROR fetching user profile for UID:",
+        user.uid,
+        "Error:",
+        error
       )
-      await handleLogout() // Forçar logout em caso de erro
+      // Display error on loginFeedback, then sign out.
       showFeedback(
         loginFeedback,
-        "Erro crítico ao carregar dados do usuário. Verifique o console.",
+        `Erro ao carregar dados do perfil (usuário ${user.email ||
+          user.uid}). Você será desconectado. (${error.message})`,
         "error"
       )
+      setTimeout(() => signOut(auth), 3000) // Delay for user to read message
     }
   } else {
     console.log("User is not authenticated (logged out or session ended).")
@@ -701,7 +723,10 @@ onAuthStateChanged(auth, async user => {
     showView("loginView")
     console.log("User is logged out, showing loginView.")
   }
-  console.log("onAuthStateChanged finished processing.")
+  console.log(
+    "onAuthStateChanged finished processing for user:",
+    user ? user.uid : "null"
+  )
 })
 
 // --- TRIP MANAGEMENT WITH FIRESTORE ---
@@ -779,11 +804,11 @@ async function handleTripFormSubmit(event) {
   }
 
   const formData = new FormData(tripForm)
-  const fuelEntries = []
+  const fuelEntriesFromForm = []
   const fuelEntryElements = fuelEntriesContainer.querySelectorAll(
     ".fuel-entry-item"
   )
-  let totalFuelCost = 0
+  let totalFuelCostCalculated = 0
 
   fuelEntryElements.forEach(entryEl => {
     const entryId = entryEl.id // HTML element ID
@@ -798,55 +823,57 @@ async function handleTripFormSubmit(event) {
 
     if (liters > 0 && valuePerLiter > 0) {
       // Only add valid entries
-      fuelEntries.push({
-        id: entryId, // este ID é do elemento HTML, não persistirá no Firestore com este valor.
+      fuelEntriesFromForm.push({
+        id: entryId,
         liters,
         valuePerLiter,
         discount,
         totalValue
       })
-      totalFuelCost += totalValue
+      totalFuelCostCalculated += totalValue
     }
   })
 
-  const kmInitial = parseFloat(formData.get("kmInitial")) || 0
-  const kmFinal = parseFloat(formData.get("kmFinal")) || 0
-  const kmDriven = kmFinal > kmInitial ? kmFinal - kmInitial : 0
+  const kmInitialVal = parseFloat(formData.get("kmInitial")) || 0
+  const kmFinalVal = parseFloat(formData.get("kmFinal")) || 0
+  const kmDrivenVal = kmFinalVal > kmInitialVal ? kmFinalVal - kmInitialVal : 0
 
-  const arla32Cost = parseFloat(formData.get("arla32Cost")) || 0
-  const tollCost = parseFloat(formData.get("tollCost")) || 0
-  const commissionCost = parseFloat(formData.get("commissionCost")) || 0
-  const otherExpenses = parseFloat(formData.get("otherExpenses")) || 0
+  const arla32CostVal = parseFloat(formData.get("arla32Cost")) || 0
+  const tollCostVal = parseFloat(formData.get("tollCost")) || 0
+  const commissionCostVal = parseFloat(formData.get("commissionCost")) || 0
+  const otherExpensesVal = parseFloat(formData.get("otherExpenses")) || 0
 
-  const totalExpenses =
-    totalFuelCost + arla32Cost + tollCost + otherExpenses + commissionCost
-  const freightValue = parseFloat(formData.get("freightValue")) || 0
-  const netProfit = freightValue - totalExpenses // Lucro bruto da viagem, antes da comissão do motorista se aplicável por fora
-  // Se comissãoCost é a comissão do motorista, ela já está em totalExpenses.
+  const totalExpensesCalculated =
+    totalFuelCostCalculated +
+    arla32CostVal +
+    tollCostVal +
+    otherExpensesVal +
+    commissionCostVal
+  const freightValueVal = parseFloat(formData.get("freightValue")) || 0
+  const netProfitVal = freightValueVal - totalExpensesCalculated
 
-  const tripData = {
+  const tripDataObjectFromForm = {
     userId: loggedInUser.uid,
     driverName:
-      formData.get("driverName").trim() || loggedInUserProfile.username, // Usa o nome do perfil se não preenchido
+      formData.get("driverName").trim() || loggedInUserProfile.username,
     date: formData.get("tripDate"),
     cargoType: formData.get("cargoType") || "",
-    kmInitial: kmInitial,
-    kmFinal: kmFinal,
-    kmDriven: kmDriven,
+    kmInitial: kmInitialVal,
+    kmFinal: kmFinalVal,
+    kmDriven: kmDrivenVal,
     weight: parseFloat(formData.get("weight")) || 0,
     unitValue: parseFloat(formData.get("unitValue")) || 0,
-    freightValue: freightValue,
-    fuelEntries: fuelEntries,
-    arla32Cost: arla32Cost,
-    tollCost: tollCost,
-    commissionCost: commissionCost,
-    otherExpenses: otherExpenses,
+    freightValue: freightValueVal,
+    fuelEntries: fuelEntriesFromForm,
+    arla32Cost: arla32CostVal,
+    tollCost: tollCostVal,
+    commissionCost: commissionCostVal,
+    otherExpenses: otherExpensesVal,
     expenseDescription: formData.get("expenseDescription") || "",
-    totalFuelCost: totalFuelCost,
-    totalExpenses: totalExpenses,
-    netProfit: netProfit,
-    declaredValue: parseFloat(formData.get("declaredValue")) || 0,
-    createdAt: Timestamp.now()
+    totalFuelCost: totalFuelCostCalculated,
+    totalExpenses: totalExpensesCalculated,
+    netProfit: netProfitVal,
+    declaredValue: parseFloat(formData.get("declaredValue")) || 0
   }
 
   try {
@@ -854,15 +881,23 @@ async function handleTripFormSubmit(event) {
     submitTripBtn.textContent = "Salvando..."
 
     if (editingTripId) {
-      const tripRef = doc(db, "trips", editingTripId)
-      await updateDoc(tripRef, tripData)
+      const tripRef = doc(tripsCollection, editingTripId)
+      const updatePayload = { ...tripDataObjectFromForm }
+      // If you add an 'updatedAt' field to the Trip interface, set it here:
+      // updatePayload.updatedAt = Timestamp.now();
+
+      await updateDoc(tripRef, updatePayload)
       showFeedback(
         userFormFeedback,
         "Viagem atualizada com sucesso!",
         "success"
       )
     } else {
-      await addDoc(collection(db, "trips"), tripData)
+      const createPayload = {
+        ...tripDataObjectFromForm,
+        createdAt: Timestamp.now()
+      }
+      await addDoc(tripsCollection, createPayload)
       showFeedback(
         userFormFeedback,
         "Viagem registrada com sucesso!",
@@ -875,11 +910,10 @@ async function handleTripFormSubmit(event) {
     editingTripId = null
     tripIdToEditInput.value = ""
     if (driverNameInput && loggedInUserProfile)
-      driverNameInput.value = loggedInUserProfile.username // Pre-fill driver name
+      driverNameInput.value = loggedInUserProfile.username
     submitTripBtn.textContent = "Salvar Viagem"
     cancelEditBtn.style.display = "none"
 
-    // Atualizar "Minhas Viagens" se estiver visível e for do usuário logado
     if (
       myTripsView.style.display === "block" &&
       (!currentUserForMyTripsSearch ||
@@ -887,11 +921,9 @@ async function handleTripFormSubmit(event) {
     ) {
       loadAndRenderMyTrips()
     }
-    // Atualizar resumo do admin se estiver na adminView
     if (adminView.style.display === "block") {
       updateAdminSummary()
       if (adminSelectedDriverUid === loggedInUser.uid) {
-        // Se o admin estava vendo as viagens do motorista que acabou de registrar
         loadAndRenderAdminDriverTrips(
           adminSelectedDriverUid,
           loggedInUserProfile.username
@@ -928,10 +960,9 @@ async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
     return
   }
 
-  let targetUid = loggedInUser.uid // Padrão: viagens do usuário logado
+  let targetUid = loggedInUser.uid
   let targetUsername = loggedInUserProfile.username
 
-  // Se admin está buscando por outro motorista
   if (
     loggedInUserProfile.role === "admin" &&
     currentUidForMyTripsSearch &&
@@ -948,18 +979,15 @@ async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
 
   try {
     let q = query(
-      collection(db, "trips"),
+      tripsCollection,
       where("userId", "==", targetUid),
       orderBy("date", "desc")
     )
 
-    // Aplicar filtros de data se fornecidos
     if (filterStartDate) {
       q = query(q, where("date", ">=", filterStartDate))
     }
     if (filterEndDate) {
-      // Para 'menor ou igual a', precisamos ajustar a data final para o fim do dia ou usar uma string que inclua o dia todo
-      // Como 'date' é YYYY-MM-DD, a comparação direta funciona
       q = query(q, where("date", "<=", filterEndDate))
     }
 
@@ -972,7 +1000,7 @@ async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
       })
     })
 
-    trips = fetchedTrips // Atualiza o cache local se necessário para esta visualização
+    trips = fetchedTrips
 
     if (trips.length === 0) {
       myTripsTablePlaceholder.textContent =
@@ -983,7 +1011,7 @@ async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
       myTripsTablePlaceholder.style.display = "none"
       renderMyTripsTable(trips)
     }
-    updateDriverSummary(trips, targetUsername) // Atualiza o resumo com as viagens filtradas/carregadas
+    updateDriverSummary(trips, targetUsername)
   } catch (error) {
     console.error(
       `Error loading trips for ${targetUsername} from Firestore:`,
@@ -1020,7 +1048,7 @@ function renderMyTripsTable(tripsToRender) {
     row.insertCell().textContent = trip.cargoType || "N/A"
     row.insertCell().textContent = formatCurrency(trip.freightValue)
     row.insertCell().textContent = formatCurrency(trip.totalExpenses)
-    row.insertCell().textContent = formatCurrency(trip.commissionCost) // Alterado de netProfit para commissionCost
+    row.insertCell().textContent = formatCurrency(trip.commissionCost)
 
     const actionsCell = row.insertCell()
     const editButton = document.createElement("button")
@@ -1033,10 +1061,8 @@ function renderMyTripsTable(tripsToRender) {
     editButton.onclick = () => loadTripForEditing(trip.id)
     actionsCell.appendChild(editButton)
 
-    // Lógica de permissão para excluir
     let canDelete = false
     if (loggedInUserProfile && trip.userId === loggedInUser.uid) {
-      // Motorista pode excluir suas próprias viagens
       canDelete = true
     }
     if (
@@ -1044,7 +1070,6 @@ function renderMyTripsTable(tripsToRender) {
       loggedInUserProfile.role === "admin" &&
       loggedInUserProfile.username.toLowerCase() === "fabio"
     ) {
-      // Admin "Fabio" pode excluir qualquer viagem nesta tela (após busca)
       canDelete = true
     }
 
@@ -1065,14 +1090,14 @@ function renderMyTripsTable(tripsToRender) {
 
 async function loadTripForEditing(tripId) {
   try {
-    const tripDoc = await getDoc(doc(db, "trips", tripId))
+    const tripDocRef = doc(tripsCollection, tripId)
+    const tripDoc = await getDoc(tripDocRef)
     if (tripDoc.exists()) {
       const trip = {
         id: tripDoc.id,
         ...tripDoc.data()
       }
 
-      // Verificar permissão: só o motorista da viagem ou um admin podem editar
       if (
         loggedInUser.uid !== trip.userId &&
         loggedInUserProfile?.role !== "admin"
@@ -1085,13 +1110,13 @@ async function loadTripForEditing(tripId) {
         return
       }
 
-      tripForm.reset() // Limpa o formulário antes de preencher
-      fuelEntriesContainer.innerHTML = "" // Limpa abastecimentos anteriores
+      tripForm.reset()
+      fuelEntriesContainer.innerHTML = ""
 
       tripIdToEditInput.value = trip.id
       editingTripId = trip.id
-      if (driverNameInput) driverNameInput.value = trip.driverName // Manter o nome do motorista original da viagem
-      tripDateInput.value = trip.date // Assumindo que trip.date está em YYYY-MM-DD
+      if (driverNameInput) driverNameInput.value = trip.driverName
+      tripDateInput.value = trip.date
       cargoTypeInput.value = trip.cargoType || ""
       kmInitialInput.value = trip.kmInitial?.toString() || ""
       kmFinalInput.value = trip.kmFinal?.toString() || ""
@@ -1110,7 +1135,7 @@ async function loadTripForEditing(tripId) {
 
       submitTripBtn.textContent = "Salvar Alterações"
       cancelEditBtn.style.display = "inline-block"
-      showView("userView") // Mudar para a tela de formulário
+      showView("userView")
       userView.scrollIntoView({ behavior: "smooth" })
       showFeedback(
         userFormFeedback,
@@ -1145,12 +1170,11 @@ async function loadTripForEditing(tripId) {
 function confirmDeleteTrip(tripId, driverNameForConfirm) {
   if (!tripId) return
 
-  // Verificar permissão ANTES de mostrar o confirm
   const tripToDelete =
-    trips.find(t => t.id === tripId) || // Procura no cache local de 'Minhas Viagens'
+    trips.find(t => t.id === tripId) ||
     (adminView.style.display === "block"
       ? trips.find(t => t.id === tripId)
-      : null) // Ou no cache de viagens do admin se aplicável
+      : null)
 
   if (tripToDelete) {
     if (
@@ -1171,8 +1195,6 @@ function confirmDeleteTrip(tripId, driverNameForConfirm) {
     loggedInUserProfile?.role !== "admin" ||
     loggedInUserProfile.username.toLowerCase() !== "fabio"
   ) {
-    // Se a viagem não está no cache E o usuário não é o admin Fabio, recusa.
-    // Isso é uma proteção extra, mas a verificação no `tripToDelete` deve ser suficiente se o cache estiver atualizado.
     showFeedback(
       myTripsFeedback,
       "Viagem não encontrada ou permissão negada.",
@@ -1192,9 +1214,8 @@ function confirmDeleteTrip(tripId, driverNameForConfirm) {
 
 async function deleteTrip(tripId) {
   try {
-    await deleteDoc(doc(db, "trips", tripId))
+    await deleteDoc(doc(tripsCollection, tripId))
     showFeedback(myTripsFeedback, "Viagem excluída com sucesso.", "success")
-    // Recarregar a lista de viagens da view atual
     if (myTripsView.style.display === "block") {
       loadAndRenderMyTrips(
         myTripsFilterStartDateInput.value,
@@ -1206,9 +1227,9 @@ async function deleteTrip(tripId) {
         adminSelectedDriverUid,
         adminSelectedDriverName
       )
-      updateAdminSummary() // Resumo geral também pode mudar
+      updateAdminSummary()
     } else if (adminView.style.display === "block") {
-      updateAdminSummary() // Se nenhuma viagem de motorista específica estiver carregada
+      updateAdminSummary()
     }
   } catch (error) {
     console.error(
@@ -1229,7 +1250,7 @@ async function deleteTrip(tripId) {
 function updateDriverSummary(summaryTrips, driverDisplayName) {
   let totalTrips = summaryTrips.length
   let totalFreight = 0
-  let totalEarnings = 0 // Total de comissões
+  let totalEarnings = 0
 
   summaryTrips.forEach(trip => {
     totalFreight += trip.freightValue
@@ -1242,7 +1263,6 @@ function updateDriverSummary(summaryTrips, driverDisplayName) {
   if (driverTotalEarningsEl)
     driverTotalEarningsEl.textContent = formatCurrency(totalEarnings)
 
-  // Atualiza o título do resumo, se necessário
   const summaryTitle = driverSummaryContainer.querySelector("h3")
   if (summaryTitle) {
     if (
@@ -1259,7 +1279,7 @@ function updateDriverSummary(summaryTrips, driverDisplayName) {
 
 // --- ADMIN PANEL FUNCTIONS ---
 async function updateAdminSummary(filterStartDate, filterEndDate) {
-  let q = query(collection(db, "trips"), orderBy("date", "desc"))
+  let q = query(tripsCollection, orderBy("date", "desc"))
 
   if (filterStartDate) q = query(q, where("date", ">=", filterStartDate))
   if (filterEndDate) q = query(q, where("date", "<=", filterEndDate))
@@ -1268,34 +1288,21 @@ async function updateAdminSummary(filterStartDate, filterEndDate) {
     const querySnapshot = await getDocs(q)
     let totalTrips = 0
     let totalFreight = 0
-    let totalExpensesOverall = 0 // Despesas totais de todas as viagens
-    let totalNetProfitOverall = 0 // Lucro líquido total de todas as viagens
-
-    const monthlyDataMap = new Map()
+    let totalExpensesOverall = 0
+    let totalNetProfitOverall = 0
 
     querySnapshot.forEach(doc => {
-      const trip = doc.data()
+      const trip = doc.data() // Data is already Trip due to typed collection
       totalTrips++
       totalFreight += trip.freightValue
       totalExpensesOverall += trip.totalExpenses
       totalNetProfitOverall += trip.netProfit
-
-      // Para o gráfico (se fosse reintroduzido)
-      // const monthYear = trip.date.substring(0, 7); // YYYY-MM
-      // const currentMonthData = monthlyDataMap.get(monthYear) || { month: monthYear, totalFreight: 0, totalExpenses: 0, netProfit: 0 };
-      // currentMonthData.totalFreight += trip.freightValue;
-      // currentMonthData.totalExpenses += trip.totalExpenses;
-      // currentMonthData.netProfit += trip.netProfit;
-      // monthlyDataMap.set(monthYear, currentMonthData);
     })
 
     adminTotalTripsEl.textContent = totalTrips.toString()
     adminTotalFreightEl.textContent = formatCurrency(totalFreight)
     adminTotalExpensesEl.textContent = formatCurrency(totalExpensesOverall)
     adminTotalNetProfitEl.textContent = formatCurrency(totalNetProfitOverall)
-
-    // const monthlyChartData = Array.from(monthlyDataMap.values()).sort((a, b) => a.month.localeCompare(b.month));
-    // renderAdminSummaryChart({ totalTrips, totalFreight, totalExpenses: totalExpensesOverall, totalNetProfit: totalNetProfitOverall, monthlyChartData });
   } catch (error) {
     console.error(
       "Error updating admin summary:",
@@ -1318,14 +1325,14 @@ async function populateAdminDriverSelect() {
     '<option value="">-- Carregando Motoristas --</option>'
   try {
     const q = query(
-      collection(db, "userProfiles"),
+      userProfilesCollection,
       where("role", "==", "motorista"),
       orderBy("username")
     )
     const querySnapshot = await getDocs(q)
     const options = ['<option value="">-- Selecione um Motorista --</option>']
     querySnapshot.forEach(doc => {
-      const user = doc.data()
+      const user = doc.data() // Data is UserProfile
       options.push(`<option value="${user.uid}">${user.username}</option>`)
     })
     adminSelectDriver.innerHTML = options.join("")
@@ -1359,7 +1366,7 @@ async function loadAndRenderAdminDriverTrips(driverUid, driverName) {
 
   try {
     const q = query(
-      collection(db, "trips"),
+      tripsCollection,
       where("userId", "==", driverUid),
       orderBy("date", "desc")
     )
@@ -1372,7 +1379,7 @@ async function loadAndRenderAdminDriverTrips(driverUid, driverName) {
       })
     })
 
-    trips = driverTrips // Atualiza cache global se admin está focando neste motorista
+    trips = driverTrips
 
     if (driverTrips.length === 0) {
       adminDriverTripsPlaceholder.textContent = `Nenhuma viagem encontrada para ${driverName}.`
@@ -1416,9 +1423,6 @@ function renderAdminDriverTripsTable(driverTripsToRender) {
     )
     viewButton.onclick = () => showAdminTripDetailModal(trip)
     actionsCell.appendChild(viewButton)
-
-    // Botão de excluir foi removido desta tabela específica do admin.
-    // O admin "Fabio" pode excluir pela tela "Minhas Viagens" após buscar o motorista.
   })
 }
 
@@ -1511,9 +1515,9 @@ async function loadAndRenderUsersForAdmin() {
   userManagementTableBody.innerHTML =
     '<tr><td colspan="3">Carregando usuários...</td></tr>'
   try {
-    const q = query(collection(db, "userProfiles"), orderBy("username"))
+    const q = query(userProfilesCollection, orderBy("username"))
     const querySnapshot = await getDocs(q)
-    userProfiles = [] // Limpa cache local
+    userProfiles = []
     querySnapshot.forEach(doc => {
       userProfiles.push({
         id: doc.id,
@@ -1563,25 +1567,20 @@ function renderUserManagementTable(usersToRender) {
     )
     editButton.onclick = () => openEditUserModal(userProf)
     actionsCell.appendChild(editButton)
-
-    // Botão de excluir usuário pode ser perigoso e complexo (precisa excluir do Auth e Firestore, e viagens associadas?)
-    // Por ora, admin "Fabio" apenas edita papéis. Exclusão via console do Firebase.
   })
 }
 
 function openEditUserModal(userProf) {
-  editingUserIdForAdmin = userProf.uid // Usar UID
-  editUserIdInput.value = userProf.uid // Guardar UID no input hidden
+  editingUserIdForAdmin = userProf.uid
+  editUserIdInput.value = userProf.uid
   editUsernameDisplayInput.value = userProf.username
   editUserRoleSelect.value = userProf.role
-  editUserNewPasswordInput.value = "" // Limpar campos de senha
+  editUserNewPasswordInput.value = ""
   editUserConfirmNewPasswordInput.value = ""
-  // editUserForm.reset(); // Garante que o form esteja limpo, exceto os valores preenchidos acima - CUIDADO: Isso limpa tudo
-  // Explicitly set values after potential reset if it were used:
-  editUsernameDisplayInput.value = userProf.username // Repopulate readonly field
-  editUserRoleSelect.value = userProf.role // Repopulate role
+  editUsernameDisplayInput.value = userProf.username
+  editUserRoleSelect.value = userProf.role
   editUserModal.style.display = "flex"
-  showFeedback(editUserFeedback, "", "info") // Clear previous feedback
+  showFeedback(editUserFeedback, "", "info")
 }
 
 async function handleEditUserFormSubmit(event) {
@@ -1606,15 +1605,12 @@ async function handleEditUserFormSubmit(event) {
   }
 
   try {
-    const userProfileRef = doc(db, "userProfiles", editingUserIdForAdmin)
-    await updateDoc(userProfileRef, { role: newRole })
+    const userProfileRef = doc(userProfilesCollection, editingUserIdForAdmin)
+    await updateDoc(userProfileRef, {
+      role: newRole
+    }) // Cast for updateDoc
 
     if (newPassword) {
-      // Alterar senha no Firebase Auth requer que o usuário esteja logado OU o uso do Admin SDK (não disponível no cliente).
-      // A maneira mais segura de um admin redefinir senha seria através de um link de redefinição enviado ao email do usuário.
-      // Para este app, vamos simplificar: o Admin "Fabio" NÃO pode mudar senhas de outros usuários por aqui.
-      // O usuário precisaria fazer isso sozinho ou o admin "Fabio" faria pelo console do Firebase.
-      // Se esta funcionalidade for crítica, precisa ser reavaliada com Admin SDK em Cloud Function.
       showFeedback(
         editUserFeedback,
         "Papel do usuário atualizado. A alteração de senha por esta tela não é suportada. Use o console do Firebase ou peça ao usuário para redefinir.",
@@ -1628,7 +1624,7 @@ async function handleEditUserFormSubmit(event) {
       )
     }
 
-    loadAndRenderUsersForAdmin() // Recarregar lista
+    loadAndRenderUsersForAdmin()
     setTimeout(() => {
       closeEditUserModalBtn.click()
     }, 1500)
@@ -1661,9 +1657,8 @@ function initializeUserView() {
   userFormFeedback.style.display = "none"
 
   if (driverNameInput && loggedInUserProfile) {
-    driverNameInput.value = loggedInUserProfile.username // Pre-fill driver name
+    driverNameInput.value = loggedInUserProfile.username
   }
-  // Adicionar um abastecimento em branco por padrão
   addFuelEntryToForm()
 }
 
@@ -1674,17 +1669,16 @@ function initializeMyTripsView() {
     myTripsDriverNameContainer.style.display =
       loggedInUserProfile.role === "admin" ? "flex" : "none"
   }
-  if (myTripsFilterControls) myTripsFilterControls.style.display = "block" // Sempre mostrar filtros
+  if (myTripsFilterControls) myTripsFilterControls.style.display = "block"
 
-  // Limpar filtros anteriores
   if (myTripsFilterStartDateInput) myTripsFilterStartDateInput.value = ""
   if (myTripsFilterEndDateInput) myTripsFilterEndDateInput.value = ""
   if (myTripsDriverNameInput) myTripsDriverNameInput.value = ""
 
-  currentUserForMyTripsSearch = null // Reset search state
+  currentUserForMyTripsSearch = null
   currentUidForMyTripsSearch = null
 
-  loadAndRenderMyTrips() // Carrega viagens do usuário logado por padrão
+  loadAndRenderMyTrips()
 }
 
 function initializeAdminView() {
@@ -1706,18 +1700,15 @@ function initializeUserManagementView() {
     loggedInUserProfile.username.toLowerCase() !== "fabio"
   )
     return
-  // const addUserForm = document.getElementById('addUserByAdminFieldset'); // Esconder o form de adicionar user
-  // if (addUserForm) addUserForm.style.display = 'none';
   loadAndRenderUsersForAdmin()
 }
 
 // --- EVENT LISTENERS ---
 document.addEventListener("DOMContentLoaded", () => {
   console.log("DOMContentLoaded event fired.")
-  // Verificação de inicialização do Firebase
-  if (!app || !auth || !db) {
+  if (!app || !auth || !db || !userProfilesCollection || !tripsCollection) {
     console.error(
-      "CRITICAL DOMContentLoaded: Firebase not initialized correctly. App listeners not added."
+      "CRITICAL DOMContentLoaded: Firebase not initialized correctly or collections not set. App listeners not added."
     )
     const body = document.querySelector("body")
     if (body) {
@@ -1735,11 +1726,10 @@ document.addEventListener("DOMContentLoaded", () => {
       errorDiv.style.zIndex = "9999"
       body.prepend(errorDiv)
     }
-    return // Impede a adição de outros listeners se o Firebase falhou
+    return
   }
   console.log("Firebase seems initialized, proceeding to add event listeners.")
 
-  // Auth forms
   if (registerForm) {
     registerForm.addEventListener("submit", handleRegister)
     console.log("Event listener added for registerForm.")
@@ -1765,7 +1755,6 @@ document.addEventListener("DOMContentLoaded", () => {
     })
   if (logoutBtn) logoutBtn.addEventListener("click", handleLogout)
 
-  // Nav buttons
   if (userViewBtn)
     userViewBtn.addEventListener("click", () => {
       showView("userView")
@@ -1787,7 +1776,6 @@ document.addEventListener("DOMContentLoaded", () => {
       initializeUserManagementView()
     })
 
-  // Trip form
   if (tripForm) tripForm.addEventListener("submit", handleTripFormSubmit)
   if (addFuelEntryBtn)
     addFuelEntryBtn.addEventListener("click", () => addFuelEntryToForm())
@@ -1801,12 +1789,11 @@ document.addEventListener("DOMContentLoaded", () => {
       if (submitTripBtn) submitTripBtn.textContent = "Salvar Viagem"
       if (cancelEditBtn) cancelEditBtn.style.display = "none"
       if (driverNameInput && loggedInUserProfile)
-        driverNameInput.value = loggedInUserProfile.username // Pre-fill driver name
-      addFuelEntryToForm() // Add one blank fuel entry
+        driverNameInput.value = loggedInUserProfile.username
+      addFuelEntryToForm()
       showFeedback(userFormFeedback, "Edição cancelada.", "info")
     })
 
-  // My Trips View
   if (loadMyTripsBtn && myTripsDriverNameInput) {
     loadMyTripsBtn.addEventListener("click", async () => {
       const driverNameToSearch = myTripsDriverNameInput.value.trim()
@@ -1821,18 +1808,17 @@ document.addEventListener("DOMContentLoaded", () => {
         loadAndRenderMyTrips(
           myTripsFilterStartDateInput.value,
           myTripsFilterEndDateInput.value
-        ) // Carrega do logado
+        )
         return
       }
       try {
-        // Buscar UID pelo username (assumindo que usernames são únicos ou o primeiro encontrado é ok)
         const qUser = query(
-          collection(db, "userProfiles"),
+          userProfilesCollection,
           where("username", "==", driverNameToSearch)
         )
         const userSnapshot = await getDocs(qUser)
         if (!userSnapshot.empty) {
-          const foundUser = userSnapshot.docs[0].data()
+          const foundUser = userSnapshot.docs[0].data() // UserProfile
           currentUserForMyTripsSearch = foundUser.username
           currentUidForMyTripsSearch = foundUser.uid
           loadAndRenderMyTrips(
@@ -1849,7 +1835,7 @@ document.addEventListener("DOMContentLoaded", () => {
           myTripsTablePlaceholder.textContent = `Nenhum motorista encontrado com o nome "${driverNameToSearch}".`
           myTripsTable.style.display = "none"
           myTripsTablePlaceholder.style.display = "block"
-          updateDriverSummary([], driverNameToSearch) // Limpa o resumo
+          updateDriverSummary([], driverNameToSearch)
         }
       } catch (err) {
         console.error(
@@ -1872,7 +1858,6 @@ document.addEventListener("DOMContentLoaded", () => {
     })
   }
 
-  // Admin View
   if (applyAdminSummaryFilterBtn) {
     applyAdminSummaryFilterBtn.addEventListener("click", () => {
       updateAdminSummary(
@@ -1901,9 +1886,6 @@ document.addEventListener("DOMContentLoaded", () => {
     )
   }
 
-  // User Management View (Admin Fabio)
-  // Funcionalidade de adicionar usuário pelo admin foi removida para simplificar.
-  // if (addUserByAdminForm) addUserByAdminForm.addEventListener('submit', handleAddUserByAdmin);
   if (editUserForm)
     editUserForm.addEventListener("submit", handleEditUserFormSubmit)
   if (closeEditUserModalBtn) {
@@ -1913,11 +1895,9 @@ document.addEventListener("DOMContentLoaded", () => {
     )
   }
 
-  // Esconder todos os modais inicialmente
   const modals = document.querySelectorAll(".modal")
   modals.forEach(modal => {
     modal.style.display = "none"
-    // Fechar modal ao clicar fora do conteúdo (opcional)
     modal.addEventListener("click", event => {
       if (event.target === modal) {
         modal.style.display = "none"
@@ -1925,6 +1905,4 @@ document.addEventListener("DOMContentLoaded", () => {
     })
   })
   console.log("All DOMContentLoaded event listeners nominally set up.")
-  // Estado inicial da aplicação é controlado pelo onAuthStateChanged.
-  // O onAuthStateChanged é chamado automaticamente quando o auth é inicializado.
 })

@@ -1,89 +1,164 @@
 import { Chart, registerables } from "chart.js"
+// Firebase App (o núcleo do Firebase SDK) é sempre necessário e deve ser listado primeiro
+import { initializeApp } from "firebase/app"
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged
+} from "firebase/auth"
+import {
+  getFirestore,
+  collection,
+  doc,
+  addDoc,
+  getDoc,
+  getDocs,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  Timestamp,
+  orderBy,
+  // Explicitly import setDoc
+  setDoc as firebaseSetDoc
+} from "firebase/firestore"
+
 Chart.register(...registerables)
 
+// --- FIREBASE CONFIGURATION ---
+const firebaseConfig = {
+  apiKey: "AIzaSyC3f9S7B94TI2nCHdC4FbIVPcBVLZGkHCQ",
+  authDomain: "ibisolar-transporte.firebaseapp.com",
+  projectId: "ibisolar-transporte",
+  storageBucket: "ibisolar-transporte.firebasestorage.app",
+  messagingSenderId: "601522852757",
+  appId: "1:601522852757:web:16e8af21fa364511385c9c",
+  measurementId: "G-JGY7JHX4ML"
+}
+
+// Inicializar Firebase
+let app
+let auth // getAuth()
+let db // getFirestore()
+
+try {
+  app = initializeApp(firebaseConfig)
+  auth = getAuth(app)
+  db = getFirestore(app)
+  console.log("Firebase initialized successfully!")
+} catch (error) {
+  console.error("CRITICAL ERROR: Firebase initialization failed:", error)
+  alert(
+    "Erro crítico: Não foi possível conectar ao serviço de dados. Verifique a configuração do Firebase e sua conexão com a internet."
+  )
+}
+
 // --- STATE VARIABLES ---
-let trips = []
-let fuelEntryIdCounter = 0
+let trips = [] // Cache local de viagens carregadas
 let editingTripId = null
-let currentUserForMyTripsSearch = null
+let currentUserForMyTripsSearch = null // Username
+let currentUidForMyTripsSearch = null // UID do Firebase
 
-let users = []
-let loggedInUser = null
-let editingUserIdForAdmin = null
-let adminSelectedDriverName = null
+let userProfiles = [] // Cache local de perfis de usuário (para admin)
+let loggedInUser = null // Usuário do Firebase Auth
+let loggedInUserProfile = null // Perfil do usuário logado do Firestore
+let editingUserIdForAdmin = null // UID do usuário sendo editado pelo admin
+let adminSelectedDriverName = null // Username
+let adminSelectedDriverUid = null // UID do Firebase
 
-let adminSummaryChart = null // Keep for future potential use, though rendering is removed.
+let adminSummaryChart = null
 
-// --- STORAGE KEYS ---
-const TRIPS_STORAGE_KEY = "travelTrackerApp_trips_v6_manual_declared" // Version bump for new structure
-const USERS_STORAGE_KEY = "travelTrackerApp_users_v1_hashed"
-const LOGGED_IN_USER_SESSION_KEY = "travelTrackerApp_loggedInUser_v1"
-
-// --- DOM ELEMENTS ---
-// Auth Views
+// --- DOM ELEMENTS (Assume-se que são obtidos corretamente como antes) ---
 const loginView = document.getElementById("loginView")
 const registerView = document.getElementById("registerView")
+const appContainer = document.getElementById("appContainer")
 const loginForm = document.getElementById("loginForm")
 const registerForm = document.getElementById("registerForm")
+const tripForm = document.getElementById("tripForm")
 const loginFeedback = document.getElementById("loginFeedback")
 const registerFeedback = document.getElementById("registerFeedback")
+const userFormFeedback = document.getElementById("userFormFeedback")
+const myTripsFeedback = document.getElementById("myTripsFeedback")
+const adminGeneralFeedback = document.getElementById("adminGeneralFeedback")
+// const addUserFeedback = document.getElementById('addUserFeedback') as HTMLParagraphElement; // Removido, pois addUserByAdminForm será removido
+const userManagementFeedback = document.getElementById("userManagementFeedback")
+const editUserFeedback = document.getElementById("editUserFeedback")
+
 const showRegisterViewLink = document.getElementById("showRegisterViewLink")
 const showLoginViewLink = document.getElementById("showLoginViewLink")
 
-// App Container & Main Navigation
-const appContainer = document.getElementById("appContainer")
-const logoutBtn = document.getElementById("logoutBtn")
 const userViewBtn = document.getElementById("userViewBtn")
 const myTripsViewBtn = document.getElementById("myTripsViewBtn")
 const adminViewBtn = document.getElementById("adminViewBtn")
 const userManagementViewBtn = document.getElementById("userManagementViewBtn")
+const logoutBtn = document.getElementById("logoutBtn")
 
-// Main Views
 const userView = document.getElementById("userView")
 const myTripsView = document.getElementById("myTripsView")
 const adminView = document.getElementById("adminView")
 const userManagementView = document.getElementById("userManagementView")
 
-// Trip Form Elements
-const tripForm = document.getElementById("tripForm")
-const tripDriverNameInput = document.getElementById("driverName")
 const tripIdToEditInput = document.getElementById("tripIdToEdit")
-const submitTripBtn = document.getElementById("submitTripBtn")
-const cancelEditBtn = document.getElementById("cancelEditBtn")
-const userFormFeedback = document.getElementById("userFormFeedback")
+const tripDateInput = document.getElementById("tripDate")
+const driverNameInput = document.getElementById("driverName")
+const cargoTypeInput = document.getElementById("cargoType")
+const kmInitialInput = document.getElementById("kmInitial")
+const kmFinalInput = document.getElementById("kmFinal")
+const weightInput = document.getElementById("weight")
+const unitValueInput = document.getElementById("unitValue")
+const freightValueInput = document.getElementById("freightValue")
 const fuelEntriesContainer = document.getElementById("fuelEntriesContainer")
 const addFuelEntryBtn = document.getElementById("addFuelEntryBtn")
-const declaredValueInput = document.getElementById("declaredValue") // Editable
-const freightValueInput = document.getElementById("freightValue")
 const arla32CostInput = document.getElementById("arla32Cost")
 const tollCostInput = document.getElementById("tollCost")
 const commissionCostInput = document.getElementById("commissionCost")
 const otherExpensesInput = document.getElementById("otherExpenses")
+const expenseDescriptionInput = document.getElementById("expenseDescription")
+const declaredValueInput = document.getElementById("declaredValue")
+const submitTripBtn = document.getElementById("submitTripBtn")
+const cancelEditBtn = document.getElementById("cancelEditBtn")
 
-// My Trips View Elements
-const myTripsDriverNameContainer = document.getElementById(
-  "myTripsDriverNameContainer"
-)
-const myTripsDriverNameInput = document.getElementById("myTripsDriverNameInput")
-const loadMyTripsBtn = document.getElementById("loadMyTripsBtn")
-const myTripsFilterControls = document.getElementById("myTripsFilterControls")
-const myTripsFilterStartDate = document.getElementById("myTripsFilterStartDate")
-const myTripsFilterEndDate = document.getElementById("myTripsFilterEndDate")
-const applyMyTripsFilterBtn = document.getElementById("applyMyTripsFilterBtn")
-const myTripsFeedback = document.getElementById("myTripsFeedback")
-const myTripsTableBody = document.getElementById("myTripsTableBody")
-const myTripsTable = document.getElementById("myTripsTable")
-const myTripsTablePlaceholder = document.getElementById(
-  "myTripsTablePlaceholder"
-)
 const driverSummaryContainer = document.getElementById("driverSummaryContainer")
 const driverTotalTripsEl = document.getElementById("driverTotalTripsEl")
 const driverTotalFreightParticipatedEl = document.getElementById(
   "driverTotalFreightParticipatedEl"
 )
 const driverTotalEarningsEl = document.getElementById("driverTotalEarningsEl")
+const myTripsDriverNameContainer = document.getElementById(
+  "myTripsDriverNameContainer"
+)
+const myTripsDriverNameInput = document.getElementById("myTripsDriverNameInput")
+const loadMyTripsBtn = document.getElementById("loadMyTripsBtn")
+const myTripsFilterControls = document.getElementById("myTripsFilterControls")
+const myTripsFilterStartDateInput = document.getElementById(
+  "myTripsFilterStartDate"
+)
+const myTripsFilterEndDateInput = document.getElementById(
+  "myTripsFilterEndDate"
+)
+const applyMyTripsFilterBtn = document.getElementById("applyMyTripsFilterBtn")
+const myTripsTable = document.getElementById("myTripsTable")
+const myTripsTableBody = document.getElementById("myTripsTableBody")
+const myTripsTablePlaceholder = document.getElementById(
+  "myTripsTablePlaceholder"
+)
 
-// Admin View Elements
+const adminSummaryContainer = document.getElementById("adminSummaryContainer")
+const adminSummaryFilterStartDateInput = document.getElementById(
+  "adminSummaryFilterStartDate"
+)
+const adminSummaryFilterEndDateInput = document.getElementById(
+  "adminSummaryFilterEndDate"
+)
+const applyAdminSummaryFilterBtn = document.getElementById(
+  "applyAdminSummaryFilterBtn"
+)
+const adminTotalTripsEl = document.getElementById("adminTotalTripsEl")
+const adminTotalFreightEl = document.getElementById("adminTotalFreightEl")
+const adminTotalExpensesEl = document.getElementById("adminTotalExpensesEl")
+const adminTotalNetProfitEl = document.getElementById("adminTotalNetProfitEl")
 const adminSelectDriver = document.getElementById("adminSelectDriver")
 const adminLoadDriverTripsBtn = document.getElementById(
   "adminLoadDriverTripsBtn"
@@ -102,149 +177,175 @@ const adminDriverTripsPlaceholder = document.getElementById(
   "adminDriverTripsPlaceholder"
 )
 const adminTripDetailModal = document.getElementById("adminTripDetailModal")
-const adminTripDetailContent = document.getElementById("adminTripDetailContent")
 const closeAdminTripDetailModalBtn = document.getElementById(
   "closeAdminTripDetailModalBtn"
 )
-const adminGeneralFeedback = document.getElementById("adminGeneralFeedback")
-const adminSummaryContainer = document.getElementById("adminSummaryContainer")
-const adminSummaryFilterStartDate = document.getElementById(
-  "adminSummaryFilterStartDate"
-)
-const adminSummaryFilterEndDate = document.getElementById(
-  "adminSummaryFilterEndDate"
-)
-const applyAdminSummaryFilterBtn = document.getElementById(
-  "applyAdminSummaryFilterBtn"
-)
-const adminTotalTripsEl = document.getElementById("adminTotalTripsEl")
-const adminTotalFreightEl = document.getElementById("adminTotalFreightEl")
-const adminTotalExpensesEl = document.getElementById("adminTotalExpensesEl")
-const adminTotalNetProfitEl = document.getElementById("adminTotalNetProfitEl")
-// const adminSummaryChartCanvas = document.getElementById('adminSummaryChartCanvas') as HTMLCanvasElement; // Chart canvas removed from HTML
+const adminTripDetailContent = document.getElementById("adminTripDetailContent")
 
-// User Management View Elements
-const userManagementFeedback = document.getElementById("userManagementFeedback")
+// const addUserByAdminForm = document.getElementById('addUserByAdminForm') as HTMLFormElement; // Removido
 const userManagementTableBody = document.getElementById(
   "userManagementTableBody"
 )
 const editUserModal = document.getElementById("editUserModal")
 const closeEditUserModalBtn = document.getElementById("closeEditUserModalBtn")
 const editUserForm = document.getElementById("editUserForm")
-const editUserIdInput = document.getElementById("editUserId")
-const editUsernameDisplay = document.getElementById("editUsernameDisplay")
+const editUserIdInput = document.getElementById("editUserId") // Armazenará UID
+const editUsernameDisplayInput = document.getElementById("editUsernameDisplay")
 const editUserRoleSelect = document.getElementById("editUserRole")
 const editUserNewPasswordInput = document.getElementById("editUserNewPassword")
 const editUserConfirmNewPasswordInput = document.getElementById(
   "editUserConfirmNewPassword"
 )
-const editUserFeedback = document.getElementById("editUserFeedback")
-const addUserByAdminForm = document.getElementById("addUserByAdminForm")
-const addUserFeedback = document.getElementById("addUserFeedback")
+
+let fuelEntryIdCounter = 0 // Para IDs de elementos HTML, não para IDs de dados de combustível
 
 // --- UTILITY FUNCTIONS ---
-const formatDate = dateString => {
-  if (!dateString) return ""
-  const date = new Date(dateString + "T00:00:00") // Ensure date is parsed as local
-  return date.toLocaleDateString("pt-BR")
+function generateId() {
+  // Para IDs de elementos HTML (ex: fuel entries) se necessário
+  return (
+    Date.now().toString(36) +
+    Math.random()
+      .toString(36)
+      .substring(2)
+  )
 }
 
-const formatMonthYear = dateString => {
-  if (!dateString) return ""
-  const date = new Date(dateString + "T00:00:00") // Ensure date is parsed as local
-  return `${date.getFullYear()}-${(date.getMonth() + 1)
-    .toString()
-    .padStart(2, "0")}`
+function formatDate(dateInput) {
+  if (!dateInput) return "Data inválida"
+
+  let dateToFormat
+
+  if (typeof dateInput === "string") {
+    // Handles YYYY-MM-DD string.
+    // Example: "2023-10-26"
+    // new Date("2023-10-26T00:00:00Z") is correct for UTC interpretation
+    dateToFormat = new Date(dateInput + "T00:00:00Z")
+  } else if (dateInput instanceof Date) {
+    // Check if it's already a Date object
+    dateToFormat = dateInput
+  } else if (typeof dateInput.toDate === "function") {
+    // Duck-typing for Firestore Timestamp
+    dateToFormat = dateInput.toDate()
+  } else {
+    console.warn(
+      "Unsupported dateInput type in formatDate:",
+      dateInput,
+      typeof dateInput
+    )
+    return "Data inválida"
+  }
+
+  if (isNaN(dateToFormat.getTime())) {
+    console.warn(
+      "Date parsing resulted in NaN in formatDate. Original input:",
+      dateInput
+    )
+    return "Data inválida"
+  }
+  return dateToFormat.toLocaleDateString("pt-BR", { timeZone: "UTC" })
 }
 
-const formatCurrency = amount => {
-  if (amount === undefined || isNaN(amount)) return "N/A"
-  return amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
-}
-
-const parseFloatInput = (value, defaultValue = 0) => {
-  if (value === null || value === undefined || value.trim() === "")
-    return defaultValue
-  const cleanedValue = value.replace(",", ".")
-  const parsed = parseFloat(cleanedValue)
-  return isNaN(parsed) ? defaultValue : parsed
+function formatCurrency(value) {
+  if (value === undefined || value === null || isNaN(value)) {
+    return "R$ 0,00"
+  }
+  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 }
 
 function showFeedback(element, message, type) {
+  if (!element) {
+    console.warn("Feedback element not found for message:", message)
+    return
+  }
   element.textContent = message
-  element.className = "feedback-message"
-  if (type === "success") element.classList.add("success")
-  else if (type === "error") element.classList.add("error")
-  else element.classList.add("info")
+  element.className = `feedback-message ${type}`
   element.style.display = "block"
-
   setTimeout(() => {
-    if (element) {
-      element.style.display = "none"
-      element.textContent = ""
-    }
+    element.style.display = "none"
+    element.textContent = ""
   }, 5000)
 }
 
-async function hashPassword(password) {
-  const encoder = new TextEncoder()
-  const data = encoder.encode(password)
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("")
-  return hashHex
+// --- VIEW MANAGEMENT ---
+function showView(viewId) {
+  const views = document.querySelectorAll(".view")
+  views.forEach(view => (view.style.display = "none"))
+  loginView.style.display = "none"
+  registerView.style.display = "none"
+  appContainer.style.display = "none"
+
+  const navButtons = document.querySelectorAll(".nav-btn")
+  navButtons.forEach(btn => btn.setAttribute("aria-pressed", "false"))
+
+  if (viewId === "loginView") {
+    loginView.style.display = "flex"
+  } else if (viewId === "registerView") {
+    registerView.style.display = "flex"
+  } else {
+    appContainer.style.display = "flex"
+    const targetView = document.getElementById(viewId)
+    if (targetView) {
+      targetView.style.display = "block"
+      const activeNavButton = document.getElementById(viewId + "Btn")
+      if (activeNavButton) {
+        activeNavButton.setAttribute("aria-pressed", "true")
+      }
+    }
+  }
+  window.scrollTo(0, 0)
 }
 
-// --- AUTHENTICATION & USER MANAGEMENT ---
-function loadUsersFromStorage() {
-  const storedUsers = localStorage.getItem(USERS_STORAGE_KEY)
-  if (storedUsers) {
-    try {
-      users = JSON.parse(storedUsers)
-    } catch (error) {
-      console.error("Erro ao carregar usuários do localStorage:", error)
-      users = []
+function updateNavVisibility() {
+  if (loggedInUser && loggedInUserProfile) {
+    logoutBtn.style.display = "inline-block"
+    if (loggedInUserProfile.role === "admin") {
+      userViewBtn.style.display = "inline-block"
+      myTripsViewBtn.style.display = "inline-block"
+      adminViewBtn.style.display = "inline-block"
+      if (loggedInUserProfile.username.toLowerCase() === "fabio") {
+        // Ou verifique o email/UID específico
+        userManagementViewBtn.style.display = "inline-block"
+      } else {
+        userManagementViewBtn.style.display = "none"
+      }
+    } else {
+      // 'motorista'
+      userViewBtn.style.display = "inline-block"
+      myTripsViewBtn.style.display = "inline-block"
+      adminViewBtn.style.display = "none"
+      userManagementViewBtn.style.display = "none"
     }
   } else {
-    users = []
+    userViewBtn.style.display = "none"
+    myTripsViewBtn.style.display = "none"
+    adminViewBtn.style.display = "none"
+    userManagementViewBtn.style.display = "none"
+    logoutBtn.style.display = "none"
   }
 }
 
-function saveUsersToStorage() {
-  localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users))
-}
-
-async function ensureMasterAdminExists() {
-  const fabioExists = users.some(
-    user => user.username.toLowerCase() === "fabio"
-  )
-  if (!fabioExists) {
-    const hashedPassword = await hashPassword("!admin")
-    users.push({
-      id: Date.now().toString(),
-      username: "Fabio",
-      password: hashedPassword,
-      role: "admin"
-    })
-    saveUsersToStorage()
-  }
-}
-
+// --- AUTHENTICATION WITH FIREBASE ---
 async function handleRegister(event) {
   event.preventDefault()
-  const username = registerForm.elements
-    .namedItem("registerUsername")
-    .value.trim()
-  const password = registerForm.elements.namedItem("registerPassword").value
-  const confirmPassword = registerForm.elements.namedItem(
+  const usernameInput = document.getElementById("registerUsername")
+  const passwordInput = document.getElementById("registerPassword")
+  const confirmPasswordInput = document.getElementById(
     "registerConfirmPassword"
-  ).value
-  const role = "motorista"
+  )
+
+  const username = usernameInput.value.trim() // Usaremos como nome de exibição
+  const email = `${username.toLowerCase().replace(/\s+/g, ".")}@example.com` // Cria um email único, mas o ideal é coletar email real
+  const password = passwordInput.value
+  const confirmPassword = confirmPasswordInput.value
 
   if (!username || !password || !confirmPassword) {
+    showFeedback(registerFeedback, "Todos os campos são obrigatórios.", "error")
+    return
+  }
+  if (password.length < 6) {
     showFeedback(
       registerFeedback,
-      "Por favor, preencha todos os campos.",
+      "A senha deve ter pelo menos 6 caracteres.",
       "error"
     )
     return
@@ -253,1088 +354,896 @@ async function handleRegister(event) {
     showFeedback(registerFeedback, "As senhas não coincidem.", "error")
     return
   }
-  if (
-    users.find(user => user.username.toLowerCase() === username.toLowerCase())
-  ) {
-    showFeedback(registerFeedback, "Este nome de usuário já existe.", "error")
-    return
-  }
 
-  const hashedPassword = await hashPassword(password)
-  const newUser = {
-    id: Date.now().toString(),
-    username,
-    password: hashedPassword,
-    role
+  try {
+    const userCredential = await createUserWithEmailAndPassword(
+      auth,
+      email,
+      password
+    )
+    const firebaseUser = userCredential.user
+
+    // Criar perfil do usuário no Firestore
+    const newUserProfile = {
+      uid: firebaseUser.uid,
+      username: username,
+      email: firebaseUser.email || email, // Usar o email do Firebase Auth
+      role: "motorista", // Papel padrão
+      createdAt: Timestamp.now()
+    }
+    // Use a importação explícita de firebaseSetDoc
+    await firebaseSetDoc(
+      doc(db, "userProfiles", firebaseUser.uid),
+      newUserProfile
+    )
+
+    showFeedback(
+      registerFeedback,
+      "Cadastro realizado com sucesso! Faça o login.",
+      "success"
+    )
+    registerForm.reset()
+    setTimeout(() => showView("loginView"), 1500)
+  } catch (error) {
+    console.error("Error during registration:", error)
+    if (error.code === "auth/email-already-in-use") {
+      showFeedback(
+        registerFeedback,
+        "Nome de usuário (ou e-mail derivado) já existe. Tente outro.",
+        "error"
+      )
+    } else if (error.code === "auth/weak-password") {
+      showFeedback(
+        registerFeedback,
+        "Senha muito fraca. Tente uma mais forte.",
+        "error"
+      )
+    } else {
+      showFeedback(
+        registerFeedback,
+        "Erro ao registrar. Tente novamente.",
+        "error"
+      )
+    }
   }
-  users.push(newUser)
-  saveUsersToStorage()
-  showFeedback(
-    registerFeedback,
-    "Cadastro realizado com sucesso! Faça o login.",
-    "success"
-  )
-  registerForm.reset()
-  setTimeout(() => updateUIAfterAuthChange("login"), 1000)
 }
 
 async function handleLogin(event) {
   event.preventDefault()
-  const username = loginForm.elements.namedItem("loginUsername").value.trim()
-  const password = loginForm.elements.namedItem("loginPassword").value
-
-  const hashedPassword = await hashPassword(password)
-  const user = users.find(
-    u =>
-      u.username.toLowerCase() === username.toLowerCase() &&
-      u.password === hashedPassword
-  )
-
-  if (user) {
-    loggedInUser = user
-    sessionStorage.setItem(LOGGED_IN_USER_SESSION_KEY, user.id)
-    showFeedback(loginFeedback, `Bem-vindo, ${user.username}!`, "success")
-    loginForm.reset()
-    updateUIAfterAuthChange("app")
-  } else {
-    showFeedback(loginFeedback, "Nome de usuário ou senha inválidos.", "error")
-    loggedInUser = null
-    sessionStorage.removeItem(LOGGED_IN_USER_SESSION_KEY)
-  }
-}
-
-function handleLogout() {
-  loggedInUser = null
-  adminSelectedDriverName = null
-  currentUserForMyTripsSearch = null
-  sessionStorage.removeItem(LOGGED_IN_USER_SESSION_KEY)
-  updateUIAfterAuthChange("login")
-  if (adminSummaryChart) {
-    adminSummaryChart.destroy()
-    adminSummaryChart = null
-  }
-}
-
-function checkSession() {
-  const loggedInUserId = sessionStorage.getItem(LOGGED_IN_USER_SESSION_KEY)
-  if (loggedInUserId) {
-    const user = users.find(u => u.id === loggedInUserId)
-    if (user) {
-      loggedInUser = user
-      updateUIAfterAuthChange("app")
-      return
-    }
-  }
-  updateUIAfterAuthChange("login")
-}
-
-function updateUIAfterAuthChange(targetView) {
-  loginView.style.display = "none"
-  registerView.style.display = "none"
-  appContainer.style.display = "none"
-
-  userView.classList.remove("active-view")
-  myTripsView.classList.remove("active-view")
-  adminView.classList.remove("active-view")
-  userManagementView.classList.remove("active-view")
-
-  ;[userViewBtn, myTripsViewBtn, adminViewBtn, userManagementViewBtn].forEach(
-    btn => {
-      btn.classList.remove("active")
-      btn.setAttribute("aria-pressed", "false")
-    }
-  )
-
-  if (targetView === "login") {
-    loginView.style.display = "flex"
-  } else if (targetView === "register") {
-    registerView.style.display = "flex"
-  } else if (targetView === "app" && loggedInUser) {
-    appContainer.style.display = "flex"
-    logoutBtn.style.display = "inline-block"
-
-    userViewBtn.style.display =
-      loggedInUser.role === "motorista" ? "inline-block" : "none"
-    myTripsViewBtn.style.display =
-      loggedInUser.role === "motorista" ? "inline-block" : "none"
-    adminViewBtn.style.display =
-      loggedInUser.role === "admin" ? "inline-block" : "none"
-    userManagementViewBtn.style.display =
-      loggedInUser.role === "admin" &&
-      loggedInUser.username.toLowerCase() === "fabio"
-        ? "inline-block"
-        : "none"
-
-    if (loggedInUser.role === "motorista") {
-      tripDriverNameInput.value = loggedInUser.username
-      tripDriverNameInput.disabled = true
-      myTripsDriverNameContainer.style.display = "none"
-      currentUserForMyTripsSearch = loggedInUser.username
-      showView("myTrips")
-    } else if (loggedInUser.role === "admin") {
-      tripDriverNameInput.disabled = false
-      tripDriverNameInput.value = ""
-      myTripsDriverNameContainer.style.display = "block"
-      currentUserForMyTripsSearch = null
-      populateAdminDriverSelect()
-      showView("admin")
-    }
-  } else {
-    loginView.style.display = "flex"
-  }
-}
-
-async function handleAddUserByAdmin(event) {
-  event.preventDefault()
-  if (!loggedInUser || loggedInUser.username.toLowerCase() !== "fabio") return
-
-  const usernameInput = addUserByAdminForm.elements.namedItem(
-    "addAdminUsername"
-  )
-  const passwordInput = addUserByAdminForm.elements.namedItem(
-    "addAdminPassword"
-  )
-  const confirmPasswordInput = addUserByAdminForm.elements.namedItem(
-    "addAdminConfirmPassword"
-  )
-  const roleSelect = addUserByAdminForm.elements.namedItem("addAdminRole")
+  const usernameInput = document.getElementById("loginUsername")
+  const passwordInput = document.getElementById("loginPassword")
 
   const username = usernameInput.value.trim()
+  // Derivar o email da mesma forma que no registro para consistência
+  const email = `${username.toLowerCase().replace(/\s+/g, ".")}@example.com`
   const password = passwordInput.value
-  const confirmPassword = confirmPasswordInput.value
-  const role = roleSelect.value
 
-  if (!username || !password || !confirmPassword) {
+  if (!username || !password) {
     showFeedback(
-      addUserFeedback,
-      "Por favor, preencha todos os campos.",
+      loginFeedback,
+      "Nome de usuário e senha são obrigatórios.",
       "error"
     )
     return
   }
-  if (password !== confirmPassword) {
-    showFeedback(addUserFeedback, "As senhas não coincidem.", "error")
-    return
-  }
-  if (
-    users.find(user => user.username.toLowerCase() === username.toLowerCase())
-  ) {
-    showFeedback(addUserFeedback, "Este nome de usuário já existe.", "error")
-    return
-  }
 
-  const hashedPassword = await hashPassword(password)
-  const newUser = {
-    id: Date.now().toString(),
-    username,
-    password: hashedPassword,
-    role
-  }
-  users.push(newUser)
-  saveUsersToStorage()
-  showFeedback(
-    addUserFeedback,
-    `Usuário '${username}' adicionado com sucesso como ${role}.`,
-    "success"
-  )
-  addUserByAdminForm.reset()
-  renderUserManagementTable()
-  if (loggedInUser && loggedInUser.role === "admin") {
-    populateAdminDriverSelect()
-  }
-}
-
-// --- TRIP DATA FUNCTIONS ---
-function calculateTripDerivedFields(trip) {
-  trip.kmDriven = (trip.kmFinal || 0) - (trip.kmInitial || 0)
-  if (trip.kmDriven < 0) trip.kmDriven = 0
-
-  trip.totalFuelCost = 0
-  if (trip.fuelEntries) {
-    trip.fuelEntries.forEach(entry => {
-      if (isNaN(entry.totalValue) || entry.totalValue < 0) entry.totalValue = 0
-      trip.totalFuelCost += entry.totalValue
-    })
-  }
-  if (isNaN(trip.totalFuelCost)) trip.totalFuelCost = 0
-
-  trip.totalExpenses =
-    (trip.totalFuelCost || 0) +
-    (trip.arla32Cost || 0) +
-    (trip.tollCost || 0) +
-    (trip.commissionCost || 0) +
-    (trip.otherExpenses || 0)
-  trip.netProfit = (trip.freightValue || 0) - trip.totalExpenses
-  return trip
-}
-
-function loadTripsFromStorage() {
-  const storedTrips = localStorage.getItem(TRIPS_STORAGE_KEY)
-  if (storedTrips) {
-    try {
-      trips = JSON.parse(storedTrips).map(trip =>
-        calculateTripDerivedFields(trip)
+  try {
+    await signInWithEmailAndPassword(auth, email, password)
+    // onAuthStateChanged irá lidar com a atualização do UI e do estado loggedInUser/loggedInUserProfile
+    showFeedback(
+      loginFeedback,
+      "Login bem-sucedido! Redirecionando...",
+      "success"
+    )
+    loginForm.reset()
+    // Não precisa redirecionar aqui, onAuthStateChanged fará isso
+  } catch (error) {
+    console.error("Error during login:", error)
+    if (
+      error.code === "auth/user-not-found" ||
+      error.code === "auth/wrong-password" ||
+      error.code === "auth/invalid-credential"
+    ) {
+      showFeedback(
+        loginFeedback,
+        "Nome de usuário ou senha incorretos.",
+        "error"
       )
+    } else {
+      showFeedback(
+        loginFeedback,
+        "Erro ao tentar fazer login. Tente novamente.",
+        "error"
+      )
+    }
+  }
+}
+
+async function handleLogout() {
+  try {
+    await signOut(auth)
+    // onAuthStateChanged irá limpar loggedInUser e loggedInUserProfile e redirecionar
+    showFeedback(loginFeedback, "Você foi desconectado.", "info")
+    // Limpeza adicional de UI pode ser feita aqui ou em onAuthStateChanged
+    if (myTripsTableBody) myTripsTableBody.innerHTML = ""
+    if (myTripsTablePlaceholder)
+      myTripsTablePlaceholder.textContent = "Nenhuma viagem para exibir..."
+    if (adminDriverTripsTableBody) adminDriverTripsTableBody.innerHTML = ""
+    if (adminDriverTripsPlaceholder)
+      adminDriverTripsPlaceholder.textContent =
+        "Nenhuma viagem encontrada para este motorista."
+    if (adminSelectDriver)
+      adminSelectDriver.innerHTML =
+        '<option value="">-- Selecione um Motorista --</option>'
+    if (userManagementTableBody) userManagementTableBody.innerHTML = ""
+    currentUserForMyTripsSearch = null
+    currentUidForMyTripsSearch = null
+    adminSelectedDriverName = null
+    adminSelectedDriverUid = null
+    editingTripId = null
+    editingUserIdForAdmin = null
+    if (tripForm) tripForm.reset()
+    if (fuelEntriesContainer) fuelEntriesContainer.innerHTML = ""
+    fuelEntryIdCounter = 0
+  } catch (error) {
+    console.error("Error during logout:", error)
+    showFeedback(loginFeedback, "Erro ao sair. Tente novamente.", "error")
+  }
+}
+
+// Listener de estado de autenticação
+onAuthStateChanged(auth, async user => {
+  if (user) {
+    loggedInUser = user
+    try {
+      const userProfileDoc = await getDoc(doc(db, "userProfiles", user.uid))
+      if (userProfileDoc.exists()) {
+        loggedInUserProfile = {
+          id: userProfileDoc.id,
+          ...userProfileDoc.data()
+        }
+        console.log("User is logged in:", loggedInUser)
+        console.log("User profile:", loggedInUserProfile)
+
+        updateNavVisibility()
+        if (loggedInUserProfile.role === "admin") {
+          showView("adminView")
+          initializeAdminView()
+        } else {
+          showView("userView")
+          initializeUserView()
+        }
+        if (myTripsViewBtn.style.display !== "none") {
+          initializeMyTripsView()
+        }
+        if (
+          userManagementViewBtn.style.display !== "none" &&
+          loggedInUserProfile.username.toLowerCase() === "fabio"
+        ) {
+          initializeUserManagementView()
+        }
+      } else {
+        console.error(
+          "CRITICAL: User profile not found in Firestore for UID:",
+          user.uid
+        )
+        // Forçar logout se o perfil não existir, pois o app depende dele
+        await handleLogout()
+        showFeedback(
+          loginFeedback,
+          "Erro ao carregar perfil do usuário. Tente novamente.",
+          "error"
+        )
+      }
     } catch (error) {
-      console.error("Erro ao carregar viagens do localStorage:", error)
-      trips = []
+      console.error("Error fetching user profile:", error)
+      await handleLogout() // Forçar logout em caso de erro
+      showFeedback(
+        loginFeedback,
+        "Erro ao carregar dados do usuário. Tente novamente.",
+        "error"
+      )
     }
   } else {
-    trips = []
+    loggedInUser = null
+    loggedInUserProfile = null
+    trips = [] // Limpar cache de viagens
+    userProfiles = [] // Limpar cache de perfis
+    updateNavVisibility()
+    showView("loginView")
+    console.log("User is logged out.")
   }
-}
+})
 
-function saveTripsToStorage() {
-  localStorage.setItem(TRIPS_STORAGE_KEY, JSON.stringify(trips))
-}
+// --- TRIP MANAGEMENT WITH FIRESTORE ---
 
-// --- SUMMARY AND CHART FUNCTIONS ---
-function calculateSummaryData(filteredTrips, context) {
-  let totalFreight = 0
-  let totalExpensesAgg = 0
-  let totalDriverEarningsOrNetProfit = 0
-
-  const monthlyAggregates = {}
-
-  filteredTrips.forEach(trip => {
-    totalFreight += trip.freightValue
-
-    const monthYearKey = formatMonthYear(trip.date)
-    if (!monthlyAggregates[monthYearKey]) {
-      monthlyAggregates[monthYearKey] = {
-        month: monthYearKey,
-        freight: 0,
-        expenses: 0,
-        earningsOrNetProfit: 0
-      }
-    }
-    monthlyAggregates[monthYearKey].freight += trip.freightValue
-
-    if (context === "admin") {
-      totalExpensesAgg += trip.totalExpenses
-      totalDriverEarningsOrNetProfit += trip.netProfit
-      monthlyAggregates[monthYearKey].expenses += trip.totalExpenses
-      monthlyAggregates[monthYearKey].earningsOrNetProfit += trip.netProfit
-    } else {
-      // context === 'driver'
-      const commissionVal = trip.commissionCost || 0
-      totalDriverEarningsOrNetProfit += commissionVal
-      monthlyAggregates[monthYearKey].earningsOrNetProfit += commissionVal
-    }
-  })
-
-  const monthlyChartDataResult = Object.values(monthlyAggregates)
-    .map(agg => ({
-      month: agg.month,
-      totalFreight: agg.freight,
-      totalExpenses: context === "admin" ? agg.expenses : 0,
-      netProfit: agg.earningsOrNetProfit
-    }))
-    .sort((a, b) => a.month.localeCompare(b.month))
-
-  return {
-    totalTrips: filteredTrips.length,
-    totalFreight: totalFreight,
-    totalExpenses: context === "admin" ? totalExpensesAgg : 0,
-    totalNetProfit: totalDriverEarningsOrNetProfit,
-    monthlyChartData: monthlyChartDataResult
-  }
-}
-
-function renderAdminOverallSummary(startDate, endDate) {
-  let filteredAdminTrips = trips
-  if (startDate && endDate) {
-    filteredAdminTrips = trips.filter(
-      trip => trip.date >= startDate && trip.date <= endDate
-    )
-  } else if (startDate) {
-    filteredAdminTrips = trips.filter(trip => trip.date >= startDate)
-  } else if (endDate) {
-    filteredAdminTrips = trips.filter(trip => trip.date <= endDate)
-  }
-
-  const summary = calculateSummaryData(filteredAdminTrips, "admin")
-
-  adminTotalTripsEl.textContent = summary.totalTrips.toString()
-  adminTotalFreightEl.textContent = formatCurrency(summary.totalFreight)
-  adminTotalExpensesEl.textContent = formatCurrency(summary.totalExpenses)
-  adminTotalNetProfitEl.textContent = formatCurrency(summary.totalNetProfit)
-  adminTotalNetProfitEl.className =
-    summary.totalNetProfit >= 0 ? "profit" : "loss"
-
-  // Admin chart rendering logic has been removed.
-}
-
-function renderDriverSummary(driverNameToSummarize, startDate, endDate) {
-  let driverSpecificTrips = trips.filter(
-    trip =>
-      trip.driverName.toLowerCase() === driverNameToSummarize.toLowerCase()
-  )
-
-  if (startDate && endDate) {
-    driverSpecificTrips = driverSpecificTrips.filter(
-      trip => trip.date >= startDate && trip.date <= endDate
-    )
-  } else if (startDate) {
-    driverSpecificTrips = driverSpecificTrips.filter(
-      trip => trip.date >= startDate
-    )
-  } else if (endDate) {
-    driverSpecificTrips = driverSpecificTrips.filter(
-      trip => trip.date <= endDate
-    )
-  }
-
-  const summary = calculateSummaryData(driverSpecificTrips, "driver")
-
-  driverTotalTripsEl.textContent = summary.totalTrips.toString()
-  driverTotalFreightParticipatedEl.textContent = formatCurrency(
-    summary.totalFreight
-  )
-  driverTotalEarningsEl.textContent = formatCurrency(summary.totalNetProfit) // Correctly reflects total commissions for the driver
-
-  // Chart rendering logic removed for driver summary
-  driverSummaryContainer.style.display = "block"
-}
-
-// --- VIEW RENDERING FUNCTIONS ---
-function showView(viewId, isEditingTrip = false) {
-  const views = [userView, myTripsView, adminView, userManagementView]
-  const buttons = [
-    userViewBtn,
-    myTripsViewBtn,
-    adminViewBtn,
-    userManagementViewBtn
-  ]
-
-  views.forEach(view => view.classList.remove("active-view"))
-  buttons.forEach(btn => {
-    btn.classList.remove("active")
-    btn.setAttribute("aria-pressed", "false")
-  })
-
-  switch (viewId) {
-    case "user":
-      userView.classList.add("active-view")
-      userViewBtn.classList.add("active")
-      userViewBtn.setAttribute("aria-pressed", "true")
-      if (!isEditingTrip) {
-        resetTripForm()
-        if (loggedInUser && loggedInUser.role === "motorista") {
-          tripDriverNameInput.value = loggedInUser.username
-          tripDriverNameInput.disabled = true
-        } else {
-          tripDriverNameInput.value = ""
-          tripDriverNameInput.disabled = false
-        }
-      }
-      break
-    case "myTrips":
-      myTripsView.classList.add("active-view")
-      myTripsViewBtn.classList.add("active")
-      myTripsViewBtn.setAttribute("aria-pressed", "true")
-      myTripsFilterControls.style.display = "block"
-
-      if (loggedInUser && loggedInUser.role === "motorista") {
-        currentUserForMyTripsSearch = loggedInUser.username
-        myTripsDriverNameContainer.style.display = "none"
-        renderMyTripsTable(
-          currentUserForMyTripsSearch,
-          myTripsFilterStartDate.value,
-          myTripsFilterEndDate.value
-        )
-        renderDriverSummary(
-          currentUserForMyTripsSearch,
-          myTripsFilterStartDate.value,
-          myTripsFilterEndDate.value
-        )
-      } else if (loggedInUser && loggedInUser.role === "admin") {
-        myTripsDriverNameContainer.style.display = "block"
-        if (currentUserForMyTripsSearch) {
-          myTripsDriverNameInput.value = currentUserForMyTripsSearch
-          renderMyTripsTable(
-            currentUserForMyTripsSearch,
-            myTripsFilterStartDate.value,
-            myTripsFilterEndDate.value
-          )
-          driverSummaryContainer.style.display = "none" // Admin viewing specific driver doesn't see generic driver summary
-        } else {
-          myTripsTableBody.innerHTML = ""
-          myTripsTable.style.display = "none"
-          myTripsTablePlaceholder.textContent =
-            "Administradores: Busque por um nome de motorista para ver as viagens."
-          myTripsTablePlaceholder.style.display = "block"
-          driverSummaryContainer.style.display = "none"
-        }
-      }
-      break
-    case "admin":
-      adminView.classList.add("active-view")
-      adminViewBtn.classList.add("active")
-      adminViewBtn.setAttribute("aria-pressed", "true")
-      populateAdminDriverSelect()
-      renderAdminOverallSummary(
-        adminSummaryFilterStartDate.value,
-        adminSummaryFilterEndDate.value
-      )
-      if (adminSelectedDriverName) {
-        adminSelectDriver.value = adminSelectedDriverName
-        renderAdminDriverTripsTable(adminSelectedDriverName)
-      } else {
-        adminDriverTripsSection.style.display = "none"
-      }
-      break
-    case "userManagement":
-      userManagementView.classList.add("active-view")
-      userManagementViewBtn.classList.add("active")
-      userManagementViewBtn.setAttribute("aria-pressed", "true")
-      renderUserManagementTable()
-      break
-  }
-}
-
-// --- TRIP FORM & FUEL ENTRIES ---
-function addFuelEntryToFormUI(entry, isEditing = false) {
-  const entryId = isEditing && entry ? entry.id : `fuel_${fuelEntryIdCounter++}`
-  const newFuelEntryDiv = document.createElement("div")
-  newFuelEntryDiv.classList.add("fuel-entry-item")
-  newFuelEntryDiv.setAttribute("data-fuel-entry-id", entryId)
-
-  newFuelEntryDiv.innerHTML = `
+function addFuelEntryToForm(entry) {
+  const entryId = entry ? entry.id : `fuel_${fuelEntryIdCounter++}`
+  const fuelDiv = document.createElement("div")
+  fuelDiv.className = "fuel-entry-item"
+  fuelDiv.id = entryId // HTML element ID
+  fuelDiv.innerHTML = `
+        <input type="hidden" name="fuelEntryId" value="${entryId}">
         <div class="form-group">
-            <label for="fuelLiters_${entryId}">Litros:</label>
-            <input type="number" id="fuelLiters_${entryId}" name="fuelLiters" min="0" step="any" value="${entry?.liters ||
-    ""}" placeholder="0" required>
+            <label for="liters_${entryId}">Litros:</label>
+            <input type="number" id="liters_${entryId}" name="liters" min="0" step="any" placeholder="0" value="${entry?.liters ||
+    ""}" required>
         </div>
         <div class="form-group">
-            <label for="fuelValuePerLiter_${entryId}">Valor/Litro (R$):</label>
-            <input type="number" id="fuelValuePerLiter_${entryId}" name="fuelValuePerLiter" min="0" step="0.01" value="${entry?.valuePerLiter ||
-    ""}" placeholder="0,00" required>
+            <label for="valuePerLiter_${entryId}">Valor/Litro (R$):</label>
+            <input type="number" id="valuePerLiter_${entryId}" name="valuePerLiter" min="0" step="0.01" placeholder="0,00" value="${entry?.valuePerLiter ||
+    ""}" required>
         </div>
         <div class="form-group">
-            <label for="fuelDiscount_${entryId}">Desconto (R$):</label>
-            <input type="number" id="fuelDiscount_${entryId}" name="fuelDiscount" min="0" step="0.01" value="${entry?.discount ||
-    0}" placeholder="0,00">
+            <label for="discount_${entryId}">Desconto (R$):</label>
+            <input type="number" id="discount_${entryId}" name="discount" min="0" step="0.01" placeholder="0,00" value="${entry?.discount ||
+    "0"}">
         </div>
         <div class="form-group">
-            <label for="fuelTotalValue_${entryId}">Total Abast. (R$):</label>
-            <input type="text" id="fuelTotalValue_${entryId}" name="fuelTotalValue" class="fuel-total-value-display" value="${formatCurrency(
-    entry?.totalValue || 0
-  )}" readonly>
+            <label for="totalValue_${entryId}">Valor Total (R$):</label>
+            <input type="number" id="totalValue_${entryId}" name="totalValue" min="0" step="0.01" placeholder="0,00" value="${entry?.totalValue ||
+    ""}" required readonly>
         </div>
-        <button type="button" class="control-btn danger-btn small-btn remove-fuel-entry-btn">Remover</button>
+        <button type="button" class="control-btn danger-btn small-btn remove-fuel-entry-btn" data-entry-id="${entryId}" aria-label="Remover este abastecimento">Remover</button>
     `
-  fuelEntriesContainer.appendChild(newFuelEntryDiv)
+  fuelEntriesContainer.appendChild(fuelDiv)
 
-  const removeBtn = newFuelEntryDiv.querySelector(".remove-fuel-entry-btn")
-  removeBtn.addEventListener("click", () => removeFuelEntryFromFormUI(entryId))
+  const litersInput = document.getElementById(`liters_${entryId}`)
+  const valuePerLiterInput = document.getElementById(`valuePerLiter_${entryId}`)
+  const discountInput = document.getElementById(`discount_${entryId}`)
+  const totalValueInput = document.getElementById(`totalValue_${entryId}`)
 
-  const litersInput = newFuelEntryDiv.querySelector(`input[name="fuelLiters"]`)
-  const valuePerLiterInput = newFuelEntryDiv.querySelector(
-    `input[name="fuelValuePerLiter"]`
-  )
-  const discountInput = newFuelEntryDiv.querySelector(
-    `input[name="fuelDiscount"]`
-  )
+  function calculateTotalFuelValue() {
+    const liters = parseFloat(litersInput.value) || 0
+    const valuePerLiter = parseFloat(valuePerLiterInput.value) || 0
+    const discount = parseFloat(discountInput.value) || 0
+    const total = liters * valuePerLiter - discount
+    totalValueInput.value = total.toFixed(2)
+  }
 
-  ;[litersInput, valuePerLiterInput, discountInput].forEach(input => {
-    input.addEventListener("input", () => {
-      updateFuelEntryRowCalculation(newFuelEntryDiv)
+  litersInput.addEventListener("input", calculateTotalFuelValue)
+  valuePerLiterInput.addEventListener("input", calculateTotalFuelValue)
+  discountInput.addEventListener("input", calculateTotalFuelValue)
+
+  fuelDiv
+    .querySelector(".remove-fuel-entry-btn")
+    ?.addEventListener("click", e => {
+      const targetButton = e.target
+      const idToRemove = targetButton.dataset.entryId
+      const entryElementToRemove = document.getElementById(idToRemove)
+      if (entryElementToRemove) {
+        entryElementToRemove.remove()
+      }
     })
-  })
-  if (isEditing && entry) {
-    updateFuelEntryRowCalculation(newFuelEntryDiv)
-  }
+  if (entry) calculateTotalFuelValue() // Calculate if pre-filling
 }
 
-function removeFuelEntryFromFormUI(entryId) {
-  const entryDiv = fuelEntriesContainer.querySelector(
-    `[data-fuel-entry-id="${entryId}"]`
-  )
-  if (entryDiv) {
-    fuelEntriesContainer.removeChild(entryDiv)
-  }
-}
-
-function updateFuelEntryRowCalculation(entryDiv) {
-  const liters = parseFloatInput(
-    entryDiv.querySelector('input[name="fuelLiters"]').value
-  )
-  const valuePerLiter = parseFloatInput(
-    entryDiv.querySelector('input[name="fuelValuePerLiter"]').value
-  )
-  const discount = parseFloatInput(
-    entryDiv.querySelector('input[name="fuelDiscount"]').value
-  )
-  const totalDisplay = entryDiv.querySelector(".fuel-total-value-display")
-
-  const totalValue = liters * valuePerLiter - discount
-  totalDisplay.value = formatCurrency(totalValue >= 0 ? totalValue : 0)
-}
-
-function resetTripForm() {
-  tripForm.reset()
-  editingTripId = null
-  tripIdToEditInput.value = ""
-  fuelEntriesContainer.innerHTML = ""
-  fuelEntryIdCounter = 0
-  addFuelEntryToFormUI()
-  submitTripBtn.textContent = "Salvar Viagem"
-  cancelEditBtn.style.display = "none"
-  userFormFeedback.style.display = "none"
-  userFormFeedback.textContent = ""
-  declaredValueInput.value = ""
-}
-
-function populateFormForEditing(tripId) {
-  const tripToEdit = trips.find(trip => trip.id === tripId)
-  if (!tripToEdit) {
+async function handleTripFormSubmit(event) {
+  event.preventDefault()
+  if (!loggedInUser || !loggedInUserProfile) {
     showFeedback(
       userFormFeedback,
-      "Erro: Viagem não encontrada para edição.",
+      "Você precisa estar logado para registrar uma viagem.",
       "error"
     )
     return
   }
 
-  editingTripId = tripId
-  tripIdToEditInput.value = tripId
-
-  document.getElementById("tripDate").value = tripToEdit.date
-  tripDriverNameInput.value = tripToEdit.driverName
-
-  if (loggedInUser && loggedInUser.role === "motorista") {
-    tripDriverNameInput.disabled = true
-  } else {
-    tripDriverNameInput.disabled = false
-  }
-
-  document.getElementById("cargoType").value = tripToEdit.cargoType || ""
-  document.getElementById("kmInitial").value =
-    tripToEdit.kmInitial?.toString() || ""
-  document.getElementById("kmFinal").value =
-    tripToEdit.kmFinal?.toString() || ""
-  document.getElementById("weight").value = tripToEdit.weight?.toString() || ""
-  document.getElementById("unitValue").value =
-    tripToEdit.unitValue?.toString() || ""
-  freightValueInput.value = tripToEdit.freightValue.toString()
-  declaredValueInput.value = tripToEdit.declaredValue?.toString() || ""
-
-  arla32CostInput.value = tripToEdit.arla32Cost?.toString() || ""
-  tollCostInput.value = tripToEdit.tollCost.toString()
-  commissionCostInput.value = tripToEdit.commissionCost?.toString() || ""
-  otherExpensesInput.value = tripToEdit.otherExpenses.toString()
-  document.getElementById("expenseDescription").value =
-    tripToEdit.expenseDescription || ""
-
-  fuelEntriesContainer.innerHTML = ""
-  fuelEntryIdCounter = 0
-
-  if (tripToEdit.fuelEntries && tripToEdit.fuelEntries.length > 0) {
-    tripToEdit.fuelEntries.forEach(entry => addFuelEntryToFormUI(entry, true))
-  } else {
-    addFuelEntryToFormUI(undefined, false)
-  }
-
-  submitTripBtn.textContent = "Atualizar Viagem"
-  cancelEditBtn.style.display = "inline-block"
-  showView("user", true)
-}
-
-function handleTripSubmit(event) {
-  event.preventDefault()
   const formData = new FormData(tripForm)
-
   const fuelEntries = []
-  const fuelEntryItems = fuelEntriesContainer.querySelectorAll(
+  const fuelEntryElements = fuelEntriesContainer.querySelectorAll(
     ".fuel-entry-item"
   )
-  fuelEntryItems.forEach(item => {
-    const id = item.getAttribute("data-fuel-entry-id")
-    const liters = parseFloatInput(
-      item.querySelector('input[name="fuelLiters"]').value
-    )
-    const valuePerLiter = parseFloatInput(
-      item.querySelector('input[name="fuelValuePerLiter"]').value
-    )
-    const discount = parseFloatInput(
-      item.querySelector('input[name="fuelDiscount"]').value
-    )
+  let totalFuelCost = 0
 
-    if (liters > 0 && valuePerLiter >= 0) {
-      const totalValue = liters * valuePerLiter - discount
+  fuelEntryElements.forEach(entryEl => {
+    const entryId = entryEl.id // HTML element ID
+    const liters =
+      parseFloat(entryEl.querySelector(`input[name="liters"]`).value) || 0
+    const valuePerLiter =
+      parseFloat(entryEl.querySelector(`input[name="valuePerLiter"]`).value) ||
+      0
+    const discount =
+      parseFloat(entryEl.querySelector(`input[name="discount"]`).value) || 0
+    const totalValue = liters * valuePerLiter - discount
+
+    if (liters > 0 && valuePerLiter > 0) {
+      // Only add valid entries
       fuelEntries.push({
-        id,
+        id: entryId, // este ID é do elemento HTML, não persistirá no Firestore com este valor.
         liters,
         valuePerLiter,
         discount,
-        totalValue: totalValue >= 0 ? totalValue : 0
+        totalValue
       })
+      totalFuelCost += totalValue
     }
   })
 
-  let driverNameValue
-  if (loggedInUser && loggedInUser.role === "motorista") {
-    driverNameValue = loggedInUser.username
-  } else {
-    driverNameValue = tripDriverNameInput.value.trim()
-  }
+  const kmInitial = parseFloat(formData.get("kmInitial")) || 0
+  const kmFinal = parseFloat(formData.get("kmFinal")) || 0
+  const kmDriven = kmFinal > kmInitial ? kmFinal - kmInitial : 0
 
-  let tripData = {
-    id: editingTripId || Date.now().toString(),
+  const arla32Cost = parseFloat(formData.get("arla32Cost")) || 0
+  const tollCost = parseFloat(formData.get("tollCost")) || 0
+  const commissionCost = parseFloat(formData.get("commissionCost")) || 0
+  const otherExpenses = parseFloat(formData.get("otherExpenses")) || 0
+
+  const totalExpenses =
+    totalFuelCost + arla32Cost + tollCost + otherExpenses + commissionCost
+  const freightValue = parseFloat(formData.get("freightValue")) || 0
+  const netProfit = freightValue - totalExpenses // Lucro bruto da viagem, antes da comissão do motorista se aplicável por fora
+  // Se comissãoCost é a comissão do motorista, ela já está em totalExpenses.
+
+  const tripData = {
+    userId: loggedInUser.uid,
+    driverName:
+      formData.get("driverName").trim() || loggedInUserProfile.username, // Usa o nome do perfil se não preenchido
     date: formData.get("tripDate"),
-    driverName: driverNameValue,
-    cargoType: formData.get("cargoType")?.trim() || undefined,
-    kmInitial: parseFloatInput(formData.get("kmInitial")),
-    kmFinal: parseFloatInput(formData.get("kmFinal")),
-    weight: parseFloatInput(formData.get("weight")),
-    unitValue: parseFloatInput(formData.get("unitValue")),
-    freightValue: parseFloatInput(formData.get("freightValue"), 0),
-    declaredValue: parseFloatInput(declaredValueInput.value),
+    cargoType: formData.get("cargoType") || "",
+    kmInitial: kmInitial,
+    kmFinal: kmFinal,
+    kmDriven: kmDriven,
+    weight: parseFloat(formData.get("weight")) || 0,
+    unitValue: parseFloat(formData.get("unitValue")) || 0,
+    freightValue: freightValue,
     fuelEntries: fuelEntries,
-    arla32Cost: parseFloatInput(formData.get("arla32Cost")),
-    tollCost: parseFloatInput(formData.get("tollCost"), 0),
-    commissionCost: parseFloatInput(formData.get("commissionCost")),
-    otherExpenses: parseFloatInput(formData.get("otherExpenses"), 0),
-    expenseDescription: formData.get("expenseDescription")?.trim() || undefined,
-    totalExpenses: 0,
-    netProfit: 0
+    arla32Cost: arla32Cost,
+    tollCost: tollCost,
+    commissionCost: commissionCost,
+    otherExpenses: otherExpenses,
+    expenseDescription: formData.get("expenseDescription") || "",
+    totalFuelCost: totalFuelCost,
+    totalExpenses: totalExpenses,
+    netProfit: netProfit,
+    declaredValue: parseFloat(formData.get("declaredValue")) || 0,
+    createdAt: Timestamp.now()
   }
 
-  if (
-    !tripData.date ||
-    !tripData.driverName ||
-    tripData.freightValue === undefined
-  ) {
-    showFeedback(
-      userFormFeedback,
-      "Por favor, preencha Data, Motorista e Valor do Frete.",
-      "error"
-    )
-    return
-  }
+  try {
+    submitTripBtn.disabled = true
+    submitTripBtn.textContent = "Salvando..."
 
-  tripData = calculateTripDerivedFields(tripData)
-
-  const wasEditing = !!editingTripId
-
-  if (editingTripId) {
-    const index = trips.findIndex(trip => trip.id === editingTripId)
-    if (index !== -1) {
-      trips[index] = tripData
+    if (editingTripId) {
+      const tripRef = doc(db, "trips", editingTripId)
+      await updateDoc(tripRef, tripData)
       showFeedback(
         userFormFeedback,
         "Viagem atualizada com sucesso!",
         "success"
       )
     } else {
+      await addDoc(collection(db, "trips"), tripData)
       showFeedback(
         userFormFeedback,
-        "Erro: Viagem para edição não encontrada ao salvar.",
-        "error"
+        "Viagem registrada com sucesso!",
+        "success"
       )
-      trips.push(tripData)
     }
-  } else {
-    trips.push(tripData)
-    showFeedback(userFormFeedback, "Viagem registrada com sucesso!", "success")
-  }
+    tripForm.reset()
+    fuelEntriesContainer.innerHTML = ""
+    fuelEntryIdCounter = 0
+    editingTripId = null
+    tripIdToEditInput.value = ""
+    if (driverNameInput && loggedInUserProfile)
+      driverNameInput.value = loggedInUserProfile.username // Pre-fill driver name
+    submitTripBtn.textContent = "Salvar Viagem"
+    cancelEditBtn.style.display = "none"
 
-  saveTripsToStorage()
-
-  const driverNameOfAffectedTrip = tripData.driverName
-  resetTripForm()
-
-  if (loggedInUser && loggedInUser.role === "motorista") {
-    tripDriverNameInput.value = loggedInUser.username
-    tripDriverNameInput.disabled = true
-  }
-
-  if (loggedInUser) {
-    if (loggedInUser.role === "admin") {
-      renderAdminOverallSummary(
-        adminSummaryFilterStartDate.value,
-        adminSummaryFilterEndDate.value
-      )
-      if (
-        adminSelectedDriverName &&
-        adminSelectedDriverName.toLowerCase() ===
-          driverNameOfAffectedTrip.toLowerCase()
-      ) {
-        renderAdminDriverTripsTable(adminSelectedDriverName)
-      }
-      if (adminView.classList.contains("active-view")) {
-        populateAdminDriverSelect()
-      }
-
-      if (
-        myTripsView.classList.contains("active-view") &&
-        currentUserForMyTripsSearch &&
-        currentUserForMyTripsSearch.toLowerCase() ===
-          driverNameOfAffectedTrip.toLowerCase()
-      ) {
-        renderMyTripsTable(
-          currentUserForMyTripsSearch,
-          myTripsFilterStartDate.value,
-          myTripsFilterEndDate.value
+    // Atualizar "Minhas Viagens" se estiver visível e for do usuário logado
+    if (
+      myTripsView.style.display === "block" &&
+      (!currentUserForMyTripsSearch ||
+        currentUserForMyTripsSearch === loggedInUserProfile.username)
+    ) {
+      loadAndRenderMyTrips()
+    }
+    // Atualizar resumo do admin se estiver na adminView
+    if (adminView.style.display === "block") {
+      updateAdminSummary()
+      if (adminSelectedDriverUid === loggedInUser.uid) {
+        // Se o admin estava vendo as viagens do motorista que acabou de registrar
+        loadAndRenderAdminDriverTrips(
+          adminSelectedDriverUid,
+          loggedInUserProfile.username
         )
       }
-    } else if (
-      loggedInUser.role === "motorista" &&
-      loggedInUser.username.toLowerCase() ===
-        driverNameOfAffectedTrip.toLowerCase()
-    ) {
-      renderMyTripsTable(
-        loggedInUser.username,
-        myTripsFilterStartDate.value,
-        myTripsFilterEndDate.value
-      )
-      renderDriverSummary(
-        loggedInUser.username,
-        myTripsFilterStartDate.value,
-        myTripsFilterEndDate.value
-      )
     }
+  } catch (error) {
+    console.error("Error saving trip to Firestore:", error)
+    showFeedback(
+      userFormFeedback,
+      "Erro ao salvar viagem. Tente novamente.",
+      "error"
+    )
+    submitTripBtn.textContent = editingTripId
+      ? "Salvar Alterações"
+      : "Salvar Viagem"
+  } finally {
+    submitTripBtn.disabled = false
   }
 }
 
-function editTrip(tripId) {
-  populateFormForEditing(tripId)
-}
+async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
+  if (!loggedInUserProfile) {
+    myTripsTablePlaceholder.textContent =
+      "Você precisa estar logado para ver suas viagens."
+    myTripsTable.style.display = "none"
+    myTripsTablePlaceholder.style.display = "block"
+    return
+  }
 
-function deleteTrip(tripId, associatedDriverName) {
-  if (!loggedInUser) return
+  let targetUid = loggedInUser.uid // Padrão: viagens do usuário logado
+  let targetUsername = loggedInUserProfile.username
 
-  const isOwnTripForDriver =
-    loggedInUser.role === "motorista" &&
-    associatedDriverName.toLowerCase() === loggedInUser.username.toLowerCase()
-  const isFabioAdmin =
-    loggedInUser.role === "admin" &&
-    loggedInUser.username.toLowerCase() === "fabio"
+  // Se admin está buscando por outro motorista
+  if (
+    loggedInUserProfile.role === "admin" &&
+    currentUidForMyTripsSearch &&
+    currentUserForMyTripsSearch
+  ) {
+    targetUid = currentUidForMyTripsSearch
+    targetUsername = currentUserForMyTripsSearch
+  }
 
-  if (!(isOwnTripForDriver || isFabioAdmin)) {
+  myTripsTablePlaceholder.textContent = `Carregando viagens de ${targetUsername}...`
+  myTripsTable.style.display = "none"
+  myTripsTablePlaceholder.style.display = "block"
+  myTripsTableBody.innerHTML = ""
+
+  try {
+    let q = query(
+      collection(db, "trips"),
+      where("userId", "==", targetUid),
+      orderBy("date", "desc")
+    )
+
+    // Aplicar filtros de data se fornecidos
+    if (filterStartDate) {
+      q = query(q, where("date", ">=", filterStartDate))
+    }
+    if (filterEndDate) {
+      // Para 'menor ou igual a', precisamos ajustar a data final para o fim do dia ou usar uma string que inclua o dia todo
+      // Como 'date' é YYYY-MM-DD, a comparação direta funciona
+      q = query(q, where("date", "<=", filterEndDate))
+    }
+
+    const querySnapshot = await getDocs(q)
+    const fetchedTrips = []
+    querySnapshot.forEach(doc => {
+      fetchedTrips.push({
+        id: doc.id,
+        ...doc.data()
+      })
+    })
+
+    trips = fetchedTrips // Atualiza o cache local se necessário para esta visualização
+
+    if (trips.length === 0) {
+      myTripsTablePlaceholder.textContent =
+        `Nenhuma viagem encontrada para ${targetUsername}` +
+        `${filterStartDate || filterEndDate ? " nos filtros aplicados." : "."}`
+    } else {
+      myTripsTable.style.display = "table"
+      myTripsTablePlaceholder.style.display = "none"
+      renderMyTripsTable(trips)
+    }
+    updateDriverSummary(trips, targetUsername) // Atualiza o resumo com as viagens filtradas/carregadas
+  } catch (error) {
+    console.error(
+      `Error loading trips for ${targetUsername} from Firestore:`,
+      error
+    )
     showFeedback(
-      userFormFeedback,
-      "Você não tem permissão para excluir esta viagem.",
+      myTripsFeedback,
+      `Erro ao carregar viagens de ${targetUsername}.`,
       "error"
     )
-    if (myTripsView.classList.contains("active-view")) {
+    myTripsTablePlaceholder.textContent = `Erro ao carregar viagens de ${targetUsername}.`
+  }
+}
+
+function renderMyTripsTable(tripsToRender) {
+  myTripsTableBody.innerHTML = ""
+  if (tripsToRender.length === 0) {
+    myTripsTable.style.display = "none"
+    myTripsTablePlaceholder.style.display = "block"
+    myTripsTablePlaceholder.textContent =
+      "Nenhuma viagem para exibir com os filtros atuais."
+    return
+  }
+
+  myTripsTable.style.display = "table"
+  myTripsTablePlaceholder.style.display = "none"
+
+  tripsToRender.forEach(trip => {
+    const row = myTripsTableBody.insertRow()
+    row.insertCell().textContent = formatDate(trip.date)
+    row.insertCell().textContent = trip.cargoType || "N/A"
+    row.insertCell().textContent = formatCurrency(trip.freightValue)
+    row.insertCell().textContent = formatCurrency(trip.totalExpenses)
+    row.insertCell().textContent = formatCurrency(trip.commissionCost) // Alterado de netProfit para commissionCost
+
+    const actionsCell = row.insertCell()
+    const editButton = document.createElement("button")
+    editButton.className = "control-btn small-btn"
+    editButton.textContent = "Editar"
+    editButton.setAttribute(
+      "aria-label",
+      `Editar viagem de ${formatDate(trip.date)}`
+    )
+    editButton.onclick = () => loadTripForEditing(trip.id)
+    actionsCell.appendChild(editButton)
+
+    // Lógica de permissão para excluir
+    let canDelete = false
+    if (loggedInUserProfile && trip.userId === loggedInUser.uid) {
+      // Motorista pode excluir suas próprias viagens
+      canDelete = true
+    }
+    if (
+      loggedInUserProfile &&
+      loggedInUserProfile.role === "admin" &&
+      loggedInUserProfile.username.toLowerCase() === "fabio"
+    ) {
+      // Admin "Fabio" pode excluir qualquer viagem nesta tela (após busca)
+      canDelete = true
+    }
+
+    if (canDelete) {
+      const deleteButton = document.createElement("button")
+      deleteButton.className = "control-btn danger-btn small-btn"
+      deleteButton.textContent = "Excluir"
+      deleteButton.setAttribute(
+        "aria-label",
+        `Excluir viagem de ${formatDate(trip.date)}`
+      )
+      deleteButton.style.marginLeft = "0.5rem"
+      deleteButton.onclick = () => confirmDeleteTrip(trip.id, trip.driverName)
+      actionsCell.appendChild(deleteButton)
+    }
+  })
+}
+
+async function loadTripForEditing(tripId) {
+  try {
+    const tripDoc = await getDoc(doc(db, "trips", tripId))
+    if (tripDoc.exists()) {
+      const trip = {
+        id: tripDoc.id,
+        ...tripDoc.data()
+      }
+
+      // Verificar permissão: só o motorista da viagem ou um admin podem editar
+      if (
+        loggedInUser.uid !== trip.userId &&
+        loggedInUserProfile?.role !== "admin"
+      ) {
+        showFeedback(
+          userFormFeedback,
+          "Você não tem permissão para editar esta viagem.",
+          "error"
+        )
+        return
+      }
+
+      tripForm.reset() // Limpa o formulário antes de preencher
+      fuelEntriesContainer.innerHTML = "" // Limpa abastecimentos anteriores
+
+      tripIdToEditInput.value = trip.id
+      editingTripId = trip.id
+      if (driverNameInput) driverNameInput.value = trip.driverName // Manter o nome do motorista original da viagem
+      tripDateInput.value = trip.date // Assumindo que trip.date está em YYYY-MM-DD
+      cargoTypeInput.value = trip.cargoType || ""
+      kmInitialInput.value = trip.kmInitial?.toString() || ""
+      kmFinalInput.value = trip.kmFinal?.toString() || ""
+      weightInput.value = trip.weight?.toString() || ""
+      unitValueInput.value = trip.unitValue?.toString() || ""
+      freightValueInput.value = trip.freightValue.toString()
+
+      trip.fuelEntries.forEach(entry => addFuelEntryToForm(entry))
+
+      arla32CostInput.value = trip.arla32Cost?.toString() || ""
+      tollCostInput.value = trip.tollCost.toString()
+      commissionCostInput.value = trip.commissionCost?.toString() || ""
+      otherExpensesInput.value = trip.otherExpenses.toString()
+      expenseDescriptionInput.value = trip.expenseDescription || ""
+      declaredValueInput.value = trip.declaredValue?.toString() || ""
+
+      submitTripBtn.textContent = "Salvar Alterações"
+      cancelEditBtn.style.display = "inline-block"
+      showView("userView") // Mudar para a tela de formulário
+      userView.scrollIntoView({ behavior: "smooth" })
+      showFeedback(
+        userFormFeedback,
+        `Editando viagem de ${trip.driverName} do dia ${formatDate(
+          trip.date
+        )}.`,
+        "info"
+      )
+    } else {
+      showFeedback(
+        myTripsFeedback,
+        "Viagem não encontrada para edição.",
+        "error"
+      )
+    }
+  } catch (error) {
+    console.error("Error loading trip for editing:", error)
+    showFeedback(
+      myTripsFeedback,
+      "Erro ao carregar viagem para edição.",
+      "error"
+    )
+  }
+}
+
+function confirmDeleteTrip(tripId, driverNameForConfirm) {
+  if (!tripId) return
+
+  // Verificar permissão ANTES de mostrar o confirm
+  const tripToDelete =
+    trips.find(t => t.id === tripId) || // Procura no cache local de 'Minhas Viagens'
+    (adminView.style.display === "block"
+      ? trips.find(t => t.id === tripId)
+      : null) // Ou no cache de viagens do admin se aplicável
+
+  if (tripToDelete) {
+    if (
+      loggedInUser.uid !== tripToDelete.userId &&
+      !(
+        loggedInUserProfile?.role === "admin" &&
+        loggedInUserProfile.username.toLowerCase() === "fabio"
+      )
+    ) {
       showFeedback(
         myTripsFeedback,
         "Você não tem permissão para excluir esta viagem.",
         "error"
       )
+      return
     }
+  } else if (
+    loggedInUserProfile?.role !== "admin" ||
+    loggedInUserProfile.username.toLowerCase() !== "fabio"
+  ) {
+    // Se a viagem não está no cache E o usuário não é o admin Fabio, recusa.
+    // Isso é uma proteção extra, mas a verificação no `tripToDelete` deve ser suficiente se o cache estiver atualizado.
+    showFeedback(
+      myTripsFeedback,
+      "Viagem não encontrada ou permissão negada.",
+      "error"
+    )
     return
   }
 
-  if (confirm("Tem certeza que deseja excluir esta viagem?")) {
-    trips = trips.filter(trip => trip.id !== tripId)
-    saveTripsToStorage()
-
-    let feedbackElement = userFormFeedback
-    if (myTripsView.classList.contains("active-view")) {
-      feedbackElement = myTripsFeedback
-    } else if (adminView.classList.contains("active-view")) {
-      feedbackElement = adminGeneralFeedback
-    }
-    showFeedback(feedbackElement, "Viagem excluída com sucesso.", "info")
-
-    if (myTripsView.classList.contains("active-view")) {
-      const currentDriverForTable =
-        loggedInUser.role === "motorista"
-          ? loggedInUser.username
-          : currentUserForMyTripsSearch
-      if (currentDriverForTable) {
-        renderMyTripsTable(
-          currentDriverForTable,
-          myTripsFilterStartDate.value,
-          myTripsFilterEndDate.value
-        )
-        if (
-          loggedInUser.role === "motorista" &&
-          loggedInUser.username.toLowerCase() ===
-            currentDriverForTable.toLowerCase()
-        ) {
-          renderDriverSummary(
-            currentDriverForTable,
-            myTripsFilterStartDate.value,
-            myTripsFilterEndDate.value
-          )
-        } else if (
-          loggedInUser.role === "admin" &&
-          loggedInUser.username.toLowerCase() === "fabio" &&
-          currentUserForMyTripsSearch
-        ) {
-          // No specific summary to update here for admin in "My Trips" view
-        }
-      }
-    }
-
-    if (adminView.classList.contains("active-view")) {
-      renderAdminOverallSummary(
-        adminSummaryFilterStartDate.value,
-        adminSummaryFilterEndDate.value
-      )
-      if (
-        adminSelectedDriverName &&
-        adminSelectedDriverName.toLowerCase() ===
-          associatedDriverName.toLowerCase()
-      ) {
-        renderAdminDriverTripsTable(adminSelectedDriverName)
-      }
-      populateAdminDriverSelect()
-    }
+  if (
+    confirm(
+      `Tem certeza que deseja excluir a viagem de ${driverNameForConfirm}? Esta ação não pode ser desfeita.`
+    )
+  ) {
+    deleteTrip(tripId)
   }
 }
 
-// --- "MY TRIPS" VIEW FUNCTIONS ---
-function renderMyTripsTable(driverNameToRender, startDate, endDate) {
-  let filteredTrips = trips.filter(
-    trip => trip.driverName.toLowerCase() === driverNameToRender.toLowerCase()
-  )
-
-  if (startDate && endDate) {
-    filteredTrips = filteredTrips.filter(
-      trip => trip.date >= startDate && trip.date <= endDate
-    )
-  } else if (startDate) {
-    filteredTrips = filteredTrips.filter(trip => trip.date >= startDate)
-  } else if (endDate) {
-    filteredTrips = filteredTrips.filter(trip => trip.date <= endDate)
-  }
-
-  filteredTrips.sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-  )
-
-  myTripsTableBody.innerHTML = ""
-  if (filteredTrips.length === 0) {
-    myTripsTable.style.display = "none"
-    myTripsTablePlaceholder.textContent =
-      "Nenhuma viagem encontrada para os filtros aplicados."
-    myTripsTablePlaceholder.style.display = "block"
-  } else {
-    myTripsTable.style.display = "table"
-    myTripsTablePlaceholder.style.display = "none"
-    filteredTrips.forEach(trip => {
-      const row = myTripsTableBody.insertRow()
-      row.insertCell().textContent = formatDate(trip.date)
-      row.insertCell().textContent = trip.cargoType || "-"
-      row.insertCell().textContent = formatCurrency(trip.freightValue)
-      row.insertCell().textContent = formatCurrency(trip.totalExpenses)
-
-      const commissionCell = row.insertCell()
-      commissionCell.textContent = formatCurrency(trip.commissionCost)
-
-      const actionsCell = row.insertCell()
-      const editButton = document.createElement("button")
-      editButton.textContent = "Editar"
-      editButton.classList.add("control-btn", "small-btn")
-      editButton.setAttribute(
-        "aria-label",
-        `Editar viagem de ${formatDate(trip.date)}`
+async function deleteTrip(tripId) {
+  try {
+    await deleteDoc(doc(db, "trips", tripId))
+    showFeedback(myTripsFeedback, "Viagem excluída com sucesso.", "success")
+    // Recarregar a lista de viagens da view atual
+    if (myTripsView.style.display === "block") {
+      loadAndRenderMyTrips(
+        myTripsFilterStartDateInput.value,
+        myTripsFilterEndDateInput.value
       )
-      editButton.onclick = () => editTrip(trip.id)
-      actionsCell.appendChild(editButton)
-
-      if (loggedInUser) {
-        // Condition for showing the delete button:
-        // 1. Logged-in user is a 'motorista' AND this trip belongs to them.
-        // OR
-        // 2. Logged-in user is an 'admin' AND their username is 'fabio' (case-insensitive).
-        const canDelete =
-          (loggedInUser.role === "motorista" &&
-            trip.driverName.toLowerCase() ===
-              loggedInUser.username.toLowerCase()) ||
-          (loggedInUser.role === "admin" &&
-            loggedInUser.username.toLowerCase() === "fabio")
-        if (canDelete) {
-          const deleteButton = document.createElement("button")
-          deleteButton.textContent = "Excluir"
-          deleteButton.classList.add("control-btn", "danger-btn", "small-btn")
-          deleteButton.style.marginLeft = "5px"
-          deleteButton.setAttribute(
-            "aria-label",
-            `Excluir viagem de ${formatDate(trip.date)}`
-          )
-          deleteButton.onclick = () => deleteTrip(trip.id, trip.driverName)
-          actionsCell.appendChild(deleteButton)
-        }
-      }
-    })
-  }
-}
-
-function handleLoadMyTripsForAdmin() {
-  const driverName = myTripsDriverNameInput.value.trim()
-  if (driverName) {
-    currentUserForMyTripsSearch = driverName
-    renderMyTripsTable(
-      driverName,
-      myTripsFilterStartDate.value,
-      myTripsFilterEndDate.value
-    )
-    myTripsFeedback.style.display = "none"
-    driverSummaryContainer.style.display = "none"
-  } else {
+    }
+    if (adminView.style.display === "block" && adminSelectedDriverUid) {
+      loadAndRenderAdminDriverTrips(
+        adminSelectedDriverUid,
+        adminSelectedDriverName
+      )
+      updateAdminSummary() // Resumo geral também pode mudar
+    } else if (adminView.style.display === "block") {
+      updateAdminSummary() // Se nenhuma viagem de motorista específica estiver carregada
+    }
+  } catch (error) {
+    console.error("Error deleting trip from Firestore:", error)
     showFeedback(
       myTripsFeedback,
-      "Por favor, digite um nome de motorista para buscar.",
-      "info"
+      "Erro ao excluir viagem. Tente novamente.",
+      "error"
     )
-    currentUserForMyTripsSearch = null
-    myTripsTableBody.innerHTML = ""
-    myTripsTable.style.display = "none"
-    myTripsTablePlaceholder.textContent =
-      "Administradores: Busque por um nome de motorista para ver as viagens."
-    myTripsTablePlaceholder.style.display = "block"
-    driverSummaryContainer.style.display = "none"
   }
 }
 
-function applyMyTripsDateFilter() {
-  const driverNameToFilter =
-    loggedInUser?.role === "motorista"
-      ? loggedInUser.username
-      : currentUserForMyTripsSearch
-  if (driverNameToFilter) {
-    renderMyTripsTable(
-      driverNameToFilter,
-      myTripsFilterStartDate.value,
-      myTripsFilterEndDate.value
-    )
+function updateDriverSummary(summaryTrips, driverDisplayName) {
+  let totalTrips = summaryTrips.length
+  let totalFreight = 0
+  let totalEarnings = 0 // Total de comissões
+
+  summaryTrips.forEach(trip => {
+    totalFreight += trip.freightValue
+    totalEarnings += trip.commissionCost || 0
+  })
+
+  if (driverTotalTripsEl) driverTotalTripsEl.textContent = totalTrips.toString()
+  if (driverTotalFreightParticipatedEl)
+    driverTotalFreightParticipatedEl.textContent = formatCurrency(totalFreight)
+  if (driverTotalEarningsEl)
+    driverTotalEarningsEl.textContent = formatCurrency(totalEarnings)
+
+  // Atualiza o título do resumo, se necessário
+  const summaryTitle = driverSummaryContainer.querySelector("h3")
+  if (summaryTitle) {
     if (
-      loggedInUser?.role === "motorista" &&
-      loggedInUser.username.toLowerCase() === driverNameToFilter.toLowerCase()
+      loggedInUserProfile?.role === "admin" &&
+      currentUserForMyTripsSearch &&
+      currentUserForMyTripsSearch !== loggedInUserProfile.username
     ) {
-      renderDriverSummary(
-        driverNameToFilter,
-        myTripsFilterStartDate.value,
-        myTripsFilterEndDate.value
-      )
-    }
-  } else if (loggedInUser?.role === "admin") {
-    if (!currentUserForMyTripsSearch) {
-      showFeedback(
-        myTripsFeedback,
-        "Busque por um motorista antes de aplicar o filtro de data.",
-        "info"
-      )
+      summaryTitle.textContent = `Resumo de ${driverDisplayName}`
+    } else {
+      summaryTitle.textContent = `Seu Resumo de Viagens`
     }
   }
 }
 
 // --- ADMIN PANEL FUNCTIONS ---
-function populateAdminDriverSelect() {
-  const driverUsernames = new Set()
-  users
-    .filter(u => u.role === "motorista")
-    .forEach(u => driverUsernames.add(u.username))
-  trips.forEach(trip => driverUsernames.add(trip.driverName))
+async function updateAdminSummary(filterStartDate, filterEndDate) {
+  let q = query(collection(db, "trips"), orderBy("date", "desc"))
 
-  const sortedDriverNames = Array.from(driverUsernames).sort((a, b) =>
-    a.toLowerCase().localeCompare(b.toLowerCase())
-  )
+  if (filterStartDate) q = query(q, where("date", ">=", filterStartDate))
+  if (filterEndDate) q = query(q, where("date", "<=", filterEndDate))
 
-  const currentSelectedValue = adminSelectDriver.value
-  adminSelectDriver.innerHTML =
-    '<option value="">-- Selecione um Motorista --</option>'
-  sortedDriverNames.forEach(name => {
-    const option = document.createElement("option")
-    option.value = name
-    option.textContent = name
-    adminSelectDriver.appendChild(option)
-  })
+  try {
+    const querySnapshot = await getDocs(q)
+    let totalTrips = 0
+    let totalFreight = 0
+    let totalExpensesOverall = 0 // Despesas totais de todas as viagens
+    let totalNetProfitOverall = 0 // Lucro líquido total de todas as viagens
 
-  if (
-    currentSelectedValue &&
-    sortedDriverNames.includes(currentSelectedValue)
-  ) {
-    adminSelectDriver.value = currentSelectedValue
-  } else if (
-    adminSelectedDriverName &&
-    sortedDriverNames.includes(adminSelectedDriverName)
-  ) {
-    adminSelectDriver.value = adminSelectedDriverName
-  } else {
-    adminSelectDriver.value = ""
-    if (
-      adminSelectedDriverName &&
-      !sortedDriverNames.includes(adminSelectedDriverName)
-    ) {
-      adminSelectedDriverName = null
-      if (adminDriverTripsSection)
-        adminDriverTripsSection.style.display = "none"
-    }
+    const monthlyDataMap = new Map()
+
+    querySnapshot.forEach(doc => {
+      const trip = doc.data()
+      totalTrips++
+      totalFreight += trip.freightValue
+      totalExpensesOverall += trip.totalExpenses
+      totalNetProfitOverall += trip.netProfit
+
+      // Para o gráfico (se fosse reintroduzido)
+      // const monthYear = trip.date.substring(0, 7); // YYYY-MM
+      // const currentMonthData = monthlyDataMap.get(monthYear) || { month: monthYear, totalFreight: 0, totalExpenses: 0, netProfit: 0 };
+      // currentMonthData.totalFreight += trip.freightValue;
+      // currentMonthData.totalExpenses += trip.totalExpenses;
+      // currentMonthData.netProfit += trip.netProfit;
+      // monthlyDataMap.set(monthYear, currentMonthData);
+    })
+
+    adminTotalTripsEl.textContent = totalTrips.toString()
+    adminTotalFreightEl.textContent = formatCurrency(totalFreight)
+    adminTotalExpensesEl.textContent = formatCurrency(totalExpensesOverall)
+    adminTotalNetProfitEl.textContent = formatCurrency(totalNetProfitOverall)
+
+    // const monthlyChartData = Array.from(monthlyDataMap.values()).sort((a, b) => a.month.localeCompare(b.month));
+    // renderAdminSummaryChart({ totalTrips, totalFreight, totalExpenses: totalExpensesOverall, totalNetProfit: totalNetProfitOverall, monthlyChartData });
+  } catch (error) {
+    console.error("Error updating admin summary:", error)
+    showFeedback(
+      adminGeneralFeedback,
+      "Erro ao atualizar resumo do administrador.",
+      "error"
+    )
   }
 }
 
-function renderAdminDriverTripsTable(driverName) {
+async function populateAdminDriverSelect() {
+  if (!adminSelectDriver) return
+  adminSelectDriver.innerHTML =
+    '<option value="">-- Carregando Motoristas --</option>'
+  try {
+    const q = query(
+      collection(db, "userProfiles"),
+      where("role", "==", "motorista"),
+      orderBy("username")
+    )
+    const querySnapshot = await getDocs(q)
+    const options = ['<option value="">-- Selecione um Motorista --</option>']
+    querySnapshot.forEach(doc => {
+      const user = doc.data()
+      options.push(`<option value="${user.uid}">${user.username}</option>`)
+    })
+    adminSelectDriver.innerHTML = options.join("")
+  } catch (error) {
+    console.error("Error populating admin driver select:", error)
+    adminSelectDriver.innerHTML =
+      '<option value="">-- Erro ao carregar --</option>'
+  }
+}
+
+async function loadAndRenderAdminDriverTrips(driverUid, driverName) {
+  if (!driverUid) {
+    adminDriverTripsSection.style.display = "none"
+    return
+  }
+  adminSelectedDriverUid = driverUid
   adminSelectedDriverName = driverName
-  const driverTrips = trips
-    .filter(trip => trip.driverName.toLowerCase() === driverName.toLowerCase())
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
   adminSelectedDriverNameDisplay.textContent = `Viagens de ${driverName}`
   adminDriverTripsTableBody.innerHTML = ""
-
-  if (driverTrips.length === 0) {
-    adminDriverTripsTable.style.display = "none"
-    adminDriverTripsPlaceholder.textContent = `Nenhuma viagem encontrada para ${driverName}.`
-    adminDriverTripsPlaceholder.style.display = "block"
-  } else {
-    adminDriverTripsTable.style.display = "table"
-    adminDriverTripsPlaceholder.style.display = "none"
-    driverTrips.forEach(trip => {
-      const row = adminDriverTripsTableBody.insertRow()
-      row.insertCell().textContent = formatDate(trip.date)
-      row.insertCell().textContent = trip.cargoType || "-"
-      const netProfitCell = row.insertCell()
-      netProfitCell.textContent = formatCurrency(trip.netProfit)
-      netProfitCell.style.color = trip.netProfit >= 0 ? "green" : "red"
-
-      const actionsCell = row.insertCell()
-      const detailButton = document.createElement("button")
-      detailButton.textContent = "Detalhes"
-      detailButton.classList.add("control-btn", "small-btn")
-      detailButton.setAttribute(
-        "aria-label",
-        `Detalhes da viagem de ${formatDate(trip.date)}`
-      )
-      detailButton.onclick = () => showAdminTripDetailModal(trip.id)
-      actionsCell.appendChild(detailButton)
-
-      const editButton = document.createElement("button")
-      editButton.textContent = "Editar"
-      editButton.classList.add("control-btn", "secondary-btn", "small-btn")
-      editButton.style.marginLeft = "5px"
-      editButton.setAttribute(
-        "aria-label",
-        `Editar viagem de ${formatDate(trip.date)}`
-      )
-      editButton.onclick = () => editTrip(trip.id)
-      actionsCell.appendChild(editButton)
-
-      // Delete button is removed from this table as per requirements.
-      // Master admin ('Fabio') can delete via "Minhas Viagens" search.
-    })
-  }
+  adminDriverTripsPlaceholder.textContent = `Carregando viagens de ${driverName}...`
+  adminDriverTripsTable.style.display = "none"
+  adminDriverTripsPlaceholder.style.display = "block"
   adminDriverTripsSection.style.display = "block"
+
+  try {
+    const q = query(
+      collection(db, "trips"),
+      where("userId", "==", driverUid),
+      orderBy("date", "desc")
+    )
+    const querySnapshot = await getDocs(q)
+    const driverTrips = []
+    querySnapshot.forEach(doc => {
+      driverTrips.push({
+        id: doc.id,
+        ...doc.data()
+      })
+    })
+
+    trips = driverTrips // Atualiza cache global se admin está focando neste motorista
+
+    if (driverTrips.length === 0) {
+      adminDriverTripsPlaceholder.textContent = `Nenhuma viagem encontrada para ${driverName}.`
+    } else {
+      adminDriverTripsTable.style.display = "table"
+      adminDriverTripsPlaceholder.style.display = "none"
+    }
+    renderAdminDriverTripsTable(driverTrips)
+  } catch (error) {
+    console.error(
+      `Error loading trips for driver ${driverName} (UID: ${driverUid}):`,
+      error
+    )
+    showFeedback(
+      adminGeneralFeedback,
+      `Erro ao carregar viagens de ${driverName}.`,
+      "error"
+    )
+    adminDriverTripsPlaceholder.textContent = `Erro ao carregar viagens de ${driverName}.`
+  }
 }
 
-function showAdminTripDetailModal(tripId) {
-  const trip = trips.find(t => t.id === tripId)
-  if (!trip) return
+function renderAdminDriverTripsTable(driverTripsToRender) {
+  adminDriverTripsTableBody.innerHTML = ""
+  driverTripsToRender.forEach(trip => {
+    const row = adminDriverTripsTableBody.insertRow()
+    row.insertCell().textContent = formatDate(trip.date)
+    row.insertCell().textContent = trip.cargoType || "N/A"
+    row.insertCell().textContent = formatCurrency(trip.netProfit)
 
+    const actionsCell = row.insertCell()
+    const viewButton = document.createElement("button")
+    viewButton.className = "control-btn small-btn"
+    viewButton.textContent = "Ver Detalhes"
+    viewButton.setAttribute(
+      "aria-label",
+      `Ver detalhes da viagem de ${formatDate(trip.date)}`
+    )
+    viewButton.onclick = () => showAdminTripDetailModal(trip)
+    actionsCell.appendChild(viewButton)
+
+    // Botão de excluir foi removido desta tabela específica do admin.
+    // O admin "Fabio" pode excluir pela tela "Minhas Viagens" após buscar o motorista.
+  })
+}
+
+function showAdminTripDetailModal(trip) {
   let fuelDetailsHtml = "<h4>Abastecimentos</h4>"
   if (trip.fuelEntries && trip.fuelEntries.length > 0) {
     trip.fuelEntries.forEach(entry => {
       fuelDetailsHtml += `
                 <div class="fuel-entry-detail-item">
-                    <p><strong>Litros:</strong> ${entry.liters.toLocaleString(
-                      "pt-BR"
-                    )}</p>
+                    <p><strong>Litros:</strong> ${entry.liters.toFixed(2)}</p>
                     <p><strong>Valor/Litro:</strong> ${formatCurrency(
                       entry.valuePerLiter
                     )}</p>
@@ -1344,8 +1253,7 @@ function showAdminTripDetailModal(tripId) {
                     <p><strong>Total Abastecimento:</strong> ${formatCurrency(
                       entry.totalValue
                     )}</p>
-                </div>
-            `
+                </div>`
     })
   } else {
     fuelDetailsHtml += "<p>Nenhum abastecimento registrado.</p>"
@@ -1354,21 +1262,13 @@ function showAdminTripDetailModal(tripId) {
   adminTripDetailContent.innerHTML = `
         <div class="trip-detail-section">
             <h4>Informações Gerais</h4>
-            <p><strong>Data:</strong> ${formatDate(trip.date)}</p>
             <p><strong>Motorista:</strong> ${trip.driverName}</p>
-            <p><strong>Tipo de Carga:</strong> ${trip.cargoType || "-"}</p>
-            <p><strong>Km Inicial:</strong> ${trip.kmInitial?.toLocaleString(
-              "pt-BR"
-            ) || "-"}</p>
-            <p><strong>Km Final:</strong> ${trip.kmFinal?.toLocaleString(
-              "pt-BR"
-            ) || "-"}</p>
-            <p><strong>Km Rodados:</strong> ${trip.kmDriven?.toLocaleString(
-              "pt-BR"
-            ) || "-"}</p>
-            <p><strong>Peso (Kg):</strong> ${trip.weight?.toLocaleString(
-              "pt-BR"
-            ) || "-"}</p>
+            <p><strong>Data:</strong> ${formatDate(trip.date)}</p>
+            <p><strong>Tipo de Carga:</strong> ${trip.cargoType || "N/A"}</p>
+            <p><strong>Km Inicial:</strong> ${trip.kmInitial || "N/A"}</p>
+            <p><strong>Km Final:</strong> ${trip.kmFinal || "N/A"}</p>
+            <p><strong>Km Rodados:</strong> ${trip.kmDriven || "N/A"}</p>
+            <p><strong>Peso (Kg):</strong> ${trip.weight || "N/A"}</p>
             <p><strong>Valor Unidade:</strong> ${formatCurrency(
               trip.unitValue
             )}</p>
@@ -1386,82 +1286,113 @@ function showAdminTripDetailModal(tripId) {
             <p><strong>Outras Despesas Adicionais:</strong> ${formatCurrency(
               trip.otherExpenses
             )}</p>
-            <p><strong>Descrição (Outras):</strong> ${trip.expenseDescription ||
-              "-"}</p>
+            <p><strong>Descrição (Outras Despesas):</strong> ${trip.expenseDescription ||
+              "Nenhuma"}</p>
         </div>
         <div class="trip-detail-section trip-financial-summary">
-            <h4>Resumo Financeiro</h4>
+            <h4>Resumo Financeiro da Viagem</h4>
             <p><strong>Valor do Frete:</strong> ${formatCurrency(
               trip.freightValue
-            )}</p>
-            <p><strong>Valor Declarado:</strong> ${formatCurrency(
-              trip.declaredValue
             )}</p>
             <p><strong>Total de Combustível:</strong> ${formatCurrency(
               trip.totalFuelCost
             )}</p>
-            <p><strong>Despesas Totais (Empresa):</strong> ${formatCurrency(
+            <p><strong>Despesas Totais:</strong> ${formatCurrency(
               trip.totalExpenses
             )}</p>
-            <p><strong>Lucro Líquido (Empresa):</strong> <strong class="${
+            <p><strong>Lucro Líquido da Viagem:</strong> <strong class="${
               trip.netProfit >= 0 ? "profit" : "loss"
             }">${formatCurrency(trip.netProfit)}</strong></p>
+            <p><strong>Valor Declarado (Manual):</strong> ${formatCurrency(
+              trip.declaredValue
+            )}</p>
         </div>
     `
   adminTripDetailModal.style.display = "flex"
 }
 
-// --- USER MANAGEMENT (ADMIN "Fabio" ONLY) ---
-function renderUserManagementTable() {
-  if (!loggedInUser || loggedInUser.username.toLowerCase() !== "fabio") return
+// --- USER MANAGEMENT FUNCTIONS (Admin Fabio) ---
+async function loadAndRenderUsersForAdmin() {
+  if (
+    !loggedInUserProfile ||
+    loggedInUserProfile.role !== "admin" ||
+    loggedInUserProfile.username.toLowerCase() !== "fabio"
+  ) {
+    userManagementTableBody.innerHTML =
+      '<tr><td colspan="3">Acesso negado.</td></tr>'
+    return
+  }
 
-  userManagementTableBody.innerHTML = ""
-  users
-    .sort((a, b) => a.username.localeCompare(b.username))
-    .forEach(user => {
-      const row = userManagementTableBody.insertRow()
-      row.insertCell().textContent = user.username
-      row.insertCell().textContent =
-        user.role === "admin" ? "Administrador" : "Motorista"
-
-      const actionsCell = row.insertCell()
-      const editButton = document.createElement("button")
-      editButton.textContent = "Editar"
-      editButton.classList.add("control-btn", "small-btn")
-      editButton.setAttribute("aria-label", `Editar usuário ${user.username}`)
-      editButton.onclick = () => openEditUserModal(user.id)
-      actionsCell.appendChild(editButton)
-
-      if (user.username.toLowerCase() !== "fabio") {
-        const deleteButton = document.createElement("button")
-        deleteButton.textContent = "Excluir"
-        deleteButton.classList.add("control-btn", "danger-btn", "small-btn")
-        deleteButton.style.marginLeft = "5px"
-        deleteButton.setAttribute(
-          "aria-label",
-          `Excluir usuário ${user.username}`
-        )
-        deleteButton.onclick = () => deleteUser(user.id, user.username)
-        actionsCell.appendChild(deleteButton)
-      }
+  userManagementTableBody.innerHTML =
+    '<tr><td colspan="3">Carregando usuários...</td></tr>'
+  try {
+    const q = query(collection(db, "userProfiles"), orderBy("username"))
+    const querySnapshot = await getDocs(q)
+    userProfiles = [] // Limpa cache local
+    querySnapshot.forEach(doc => {
+      userProfiles.push({
+        id: doc.id,
+        ...doc.data()
+      })
     })
+
+    renderUserManagementTable(userProfiles)
+  } catch (error) {
+    console.error("Error loading users for admin:", error)
+    showFeedback(
+      userManagementFeedback,
+      "Erro ao carregar lista de usuários.",
+      "error"
+    )
+    userManagementTableBody.innerHTML =
+      '<tr><td colspan="3">Erro ao carregar usuários.</td></tr>'
+  }
 }
 
-function openEditUserModal(userId) {
-  const user = users.find(u => u.id === userId)
-  if (!user) return
+function renderUserManagementTable(usersToRender) {
+  userManagementTableBody.innerHTML = ""
+  if (usersToRender.length === 0) {
+    userManagementTableBody.innerHTML =
+      '<tr><td colspan="3">Nenhum usuário cadastrado.</td></tr>'
+    return
+  }
+  usersToRender.forEach(userProf => {
+    const row = userManagementTableBody.insertRow()
+    row.insertCell().textContent = userProf.username
+    row.insertCell().textContent =
+      userProf.role === "admin" ? "Administrador" : "Motorista"
 
-  editingUserIdForAdmin = userId
-  editUserIdInput.value = userId
-  editUsernameDisplay.value = user.username
-  editUserRoleSelect.value = user.role
-  editUserNewPasswordInput.value = ""
+    const actionsCell = row.insertCell()
+    const editButton = document.createElement("button")
+    editButton.className = "control-btn small-btn"
+    editButton.textContent = "Editar Papel"
+    editButton.setAttribute(
+      "aria-label",
+      `Editar papel do usuário ${userProf.username}`
+    )
+    editButton.onclick = () => openEditUserModal(userProf)
+    actionsCell.appendChild(editButton)
+
+    // Botão de excluir usuário pode ser perigoso e complexo (precisa excluir do Auth e Firestore, e viagens associadas?)
+    // Por ora, admin "Fabio" apenas edita papéis. Exclusão via console do Firebase.
+  })
+}
+
+function openEditUserModal(userProf) {
+  editingUserIdForAdmin = userProf.uid // Usar UID
+  editUserIdInput.value = userProf.uid // Guardar UID no input hidden
+  editUsernameDisplayInput.value = userProf.username
+  editUserRoleSelect.value = userProf.role
+  editUserNewPasswordInput.value = "" // Limpar campos de senha
   editUserConfirmNewPasswordInput.value = ""
-  editUserFeedback.style.display = "none"
+  editUserForm.reset() // Garante que o form esteja limpo, exceto os valores preenchidos acima
+  editUsernameDisplayInput.value = userProf.username // Repopulate readonly field
+  editUserRoleSelect.value = userProf.role // Repopulate role
   editUserModal.style.display = "flex"
+  showFeedback(editUserFeedback, "", "info") // Clear previous feedback
 }
 
-async function handleEditUser(event) {
+async function handleEditUserFormSubmit(event) {
   event.preventDefault()
   if (!editingUserIdForAdmin) return
 
@@ -1469,247 +1400,336 @@ async function handleEditUser(event) {
   const newPassword = editUserNewPasswordInput.value
   const confirmNewPassword = editUserConfirmNewPasswordInput.value
 
-  const userIndex = users.findIndex(u => u.id === editingUserIdForAdmin)
-  if (userIndex === -1) {
-    showFeedback(editUserFeedback, "Usuário não encontrado.", "error")
-    return
-  }
-
-  if (newPassword) {
-    if (newPassword !== confirmNewPassword) {
-      showFeedback(editUserFeedback, "As novas senhas não coincidem.", "error")
-      return
-    }
-    users[userIndex].password = await hashPassword(newPassword)
-  }
-  users[userIndex].role = newRole
-  saveUsersToStorage()
-  showFeedback(editUserFeedback, "Usuário atualizado com sucesso!", "success")
-  renderUserManagementTable()
-
-  if (loggedInUser && loggedInUser.role === "admin") {
-    populateAdminDriverSelect()
-  }
-
-  setTimeout(() => {
-    editUserModal.style.display = "none"
-    editingUserIdForAdmin = null
-  }, 1500)
-}
-
-function deleteUser(userId, username) {
-  if (username.toLowerCase() === "fabio") {
+  if (newPassword && newPassword.length < 6) {
     showFeedback(
-      userManagementFeedback,
-      "Não é possível excluir o super-administrador.",
+      editUserFeedback,
+      "Nova senha deve ter pelo menos 6 caracteres.",
       "error"
     )
     return
   }
-  if (
-    confirm(
-      `Tem certeza que deseja excluir o usuário '${username}'? Isso não excluirá as viagens já registradas por ele.`
-    )
-  ) {
-    users = users.filter(user => user.id !== userId)
-    saveUsersToStorage()
-    showFeedback(
-      userManagementFeedback,
-      `Usuário '${username}' excluído.`,
-      "info"
-    )
-    renderUserManagementTable()
-
-    if (
-      adminSelectedDriverName &&
-      adminSelectedDriverName.toLowerCase() === username.toLowerCase()
-    ) {
-      adminSelectedDriverName = null
-      if (adminDriverTripsSection)
-        adminDriverTripsSection.style.display = "none"
-    }
-    if (loggedInUser && loggedInUser.role === "admin") {
-      populateAdminDriverSelect()
-    }
+  if (newPassword && newPassword !== confirmNewPassword) {
+    showFeedback(editUserFeedback, "As novas senhas não coincidem.", "error")
+    return
   }
+
+  try {
+    const userProfileRef = doc(db, "userProfiles", editingUserIdForAdmin)
+    await updateDoc(userProfileRef, { role: newRole })
+
+    if (newPassword) {
+      // Alterar senha no Firebase Auth requer que o usuário esteja logado OU o uso do Admin SDK (não disponível no cliente).
+      // A maneira mais segura de um admin redefinir senha seria através de um link de redefinição enviado ao email do usuário.
+      // Para este app, vamos simplificar: o Admin "Fabio" NÃO pode mudar senhas de outros usuários por aqui.
+      // O usuário precisaria fazer isso sozinho ou o admin "Fabio" faria pelo console do Firebase.
+      // Se esta funcionalidade for crítica, precisa ser reavaliada com Admin SDK em Cloud Function.
+      showFeedback(
+        editUserFeedback,
+        "Papel do usuário atualizado. A alteração de senha por esta tela não é suportada. Use o console do Firebase ou peça ao usuário para redefinir.",
+        "info"
+      )
+    } else {
+      showFeedback(
+        editUserFeedback,
+        "Papel do usuário atualizado com sucesso!",
+        "success"
+      )
+    }
+
+    loadAndRenderUsersForAdmin() // Recarregar lista
+    setTimeout(() => {
+      closeEditUserModalBtn.click()
+    }, 1500)
+  } catch (error) {
+    console.error("Error updating user role/password:", error)
+    showFeedback(
+      editUserFeedback,
+      "Erro ao atualizar usuário. Tente novamente.",
+      "error"
+    )
+  }
+}
+
+// --- INITIALIZATION FUNCTIONS FOR VIEWS ---
+function initializeUserView() {
+  if (tripForm) tripForm.reset()
+  if (fuelEntriesContainer) fuelEntriesContainer.innerHTML = ""
+  fuelEntryIdCounter = 0
+  editingTripId = null
+  if (tripIdToEditInput) tripIdToEditInput.value = ""
+  if (submitTripBtn) submitTripBtn.textContent = "Salvar Viagem"
+  if (cancelEditBtn) cancelEditBtn.style.display = "none"
+  if (userFormFeedback) userFormFeedback.textContent = ""
+  userFormFeedback.style.display = "none"
+
+  if (driverNameInput && loggedInUserProfile) {
+    driverNameInput.value = loggedInUserProfile.username // Pre-fill driver name
+  }
+  // Adicionar um abastecimento em branco por padrão
+  addFuelEntryToForm()
+}
+
+function initializeMyTripsView() {
+  if (!loggedInUserProfile) return
+
+  if (myTripsDriverNameContainer) {
+    myTripsDriverNameContainer.style.display =
+      loggedInUserProfile.role === "admin" ? "flex" : "none"
+  }
+  if (myTripsFilterControls) myTripsFilterControls.style.display = "block" // Sempre mostrar filtros
+
+  // Limpar filtros anteriores
+  if (myTripsFilterStartDateInput) myTripsFilterStartDateInput.value = ""
+  if (myTripsFilterEndDateInput) myTripsFilterEndDateInput.value = ""
+  if (myTripsDriverNameInput) myTripsDriverNameInput.value = ""
+
+  currentUserForMyTripsSearch = null // Reset search state
+  currentUidForMyTripsSearch = null
+
+  loadAndRenderMyTrips() // Carrega viagens do usuário logado por padrão
+}
+
+function initializeAdminView() {
+  if (!loggedInUserProfile || loggedInUserProfile.role !== "admin") return
+  updateAdminSummary()
+  populateAdminDriverSelect()
+  if (adminDriverTripsSection) adminDriverTripsSection.style.display = "none"
+  if (adminGeneralFeedback) adminGeneralFeedback.textContent = ""
+  adminGeneralFeedback.style.display = "none"
+  if (adminSummaryFilterStartDateInput)
+    adminSummaryFilterStartDateInput.value = ""
+  if (adminSummaryFilterEndDateInput) adminSummaryFilterEndDateInput.value = ""
+}
+
+function initializeUserManagementView() {
+  if (
+    !loggedInUserProfile ||
+    loggedInUserProfile.role !== "admin" ||
+    loggedInUserProfile.username.toLowerCase() !== "fabio"
+  )
+    return
+  // const addUserForm = document.getElementById('addUserByAdminFieldset'); // Esconder o form de adicionar user
+  // if (addUserForm) addUserForm.style.display = 'none';
+  loadAndRenderUsersForAdmin()
 }
 
 // --- EVENT LISTENERS ---
-function initializeEventListeners() {
-  loginForm.addEventListener("submit", e => handleLogin(e))
-  registerForm.addEventListener("submit", e => handleRegister(e))
-  showRegisterViewLink.addEventListener("click", e => {
-    e.preventDefault()
-    updateUIAfterAuthChange("register")
-  })
-  showLoginViewLink.addEventListener("click", e => {
-    e.preventDefault()
-    updateUIAfterAuthChange("login")
-  })
-  logoutBtn.addEventListener("click", handleLogout)
-
-  userViewBtn.addEventListener("click", () => showView("user"))
-  myTripsViewBtn.addEventListener("click", () => showView("myTrips"))
-  adminViewBtn.addEventListener("click", () => showView("admin"))
-  userManagementViewBtn.addEventListener("click", () =>
-    showView("userManagement")
-  )
-
-  tripForm.addEventListener("submit", handleTripSubmit)
-  addFuelEntryBtn.addEventListener("click", () =>
-    addFuelEntryToFormUI(undefined, false)
-  )
-  cancelEditBtn.addEventListener("click", () => {
-    resetTripForm()
-    if (loggedInUser && loggedInUser.role === "motorista") {
-      tripDriverNameInput.value = loggedInUser.username
-      tripDriverNameInput.disabled = true
-    } else if (loggedInUser && loggedInUser.role === "admin") {
-      tripDriverNameInput.value = ""
-      tripDriverNameInput.disabled = false
-    }
-  })
-
-  loadMyTripsBtn.addEventListener("click", handleLoadMyTripsForAdmin)
-  applyMyTripsFilterBtn.addEventListener("click", applyMyTripsDateFilter)
-
-  adminLoadDriverTripsBtn.addEventListener("click", () => {
-    const selectedDriver = adminSelectDriver.value
-    if (selectedDriver) {
-      renderAdminDriverTripsTable(selectedDriver)
-    } else {
-      adminSelectedDriverName = null
-      if (adminDriverTripsSection)
-        adminDriverTripsSection.style.display = "none"
-      showFeedback(
-        adminGeneralFeedback,
-        "Por favor, selecione um motorista.",
-        "info"
-      )
-    }
-  })
-  closeAdminTripDetailModalBtn.addEventListener(
-    "click",
-    () => (adminTripDetailModal.style.display = "none")
-  )
-  applyAdminSummaryFilterBtn.addEventListener("click", () =>
-    renderAdminOverallSummary(
-      adminSummaryFilterStartDate.value,
-      adminSummaryFilterEndDate.value
+document.addEventListener("DOMContentLoaded", () => {
+  // Verificação de inicialização do Firebase
+  if (!app || !auth || !db) {
+    console.error(
+      "Firebase não foi inicializado corretamente. O aplicativo pode não funcionar."
     )
-  )
-
-  addUserByAdminForm.addEventListener("submit", e => handleAddUserByAdmin(e))
-  editUserForm.addEventListener("submit", e => handleEditUser(e))
-  closeEditUserModalBtn.addEventListener(
-    "click",
-    () => (editUserModal.style.display = "none")
-  )
-}
-
-// --- INITIALIZATION ---
-document.addEventListener("DOMContentLoaded", async () => {
-  const essentialElements = [
-    loginView,
-    registerView,
-    loginForm,
-    registerForm,
-    loginFeedback,
-    registerFeedback,
-    showRegisterViewLink,
-    showLoginViewLink,
-    appContainer,
-    logoutBtn,
-    userViewBtn,
-    myTripsViewBtn,
-    adminViewBtn,
-    userManagementViewBtn,
-    userView,
-    myTripsView,
-    adminView,
-    userManagementView,
-    tripForm,
-    tripDriverNameInput,
-    tripIdToEditInput,
-    submitTripBtn,
-    cancelEditBtn,
-    userFormFeedback,
-    fuelEntriesContainer,
-    addFuelEntryBtn,
-    declaredValueInput,
-    freightValueInput,
-    arla32CostInput,
-    tollCostInput,
-    commissionCostInput,
-    otherExpensesInput,
-    myTripsDriverNameContainer,
-    myTripsDriverNameInput,
-    loadMyTripsBtn,
-    myTripsFilterControls,
-    myTripsFilterStartDate,
-    myTripsFilterEndDate,
-    applyMyTripsFilterBtn,
-    myTripsFeedback,
-    myTripsTableBody,
-    myTripsTable,
-    myTripsTablePlaceholder,
-    driverSummaryContainer,
-    driverTotalTripsEl,
-    driverTotalFreightParticipatedEl,
-    driverTotalEarningsEl,
-    adminSelectDriver,
-    adminLoadDriverTripsBtn,
-    adminDriverTripsSection,
-    adminSelectedDriverNameDisplay,
-    adminDriverTripsTable,
-    adminDriverTripsTableBody,
-    adminDriverTripsPlaceholder,
-    adminTripDetailModal,
-    adminTripDetailContent,
-    closeAdminTripDetailModalBtn,
-    adminGeneralFeedback,
-    adminSummaryContainer,
-    adminSummaryFilterStartDate,
-    adminSummaryFilterEndDate,
-    applyAdminSummaryFilterBtn,
-    adminTotalTripsEl,
-    adminTotalFreightEl,
-    adminTotalExpensesEl,
-    adminTotalNetProfitEl,
-    userManagementFeedback,
-    userManagementTableBody,
-    editUserModal,
-    closeEditUserModalBtn,
-    editUserForm,
-    editUserIdInput,
-    editUsernameDisplay,
-    editUserRoleSelect,
-    editUserNewPasswordInput,
-    editUserConfirmNewPasswordInput,
-    editUserFeedback,
-    addUserByAdminForm,
-    addUserFeedback
-  ]
-
-  let allElementsPresent = true
-  for (const el of essentialElements) {
-    if (!el) {
-      console.error(
-        "Elemento DOM essencial não encontrado. Verifique o HTML e os IDs.",
-        el === null ? "Um elemento nulo foi encontrado" : el
-      )
-      allElementsPresent = false
+    // Opcionalmente, mostrar uma mensagem ao usuário na UI
+    const body = document.querySelector("body")
+    if (body) {
+      const errorDiv = document.createElement("div")
+      errorDiv.textContent =
+        "ERRO CRÍTICO: FALHA AO CONECTAR AOS SERVIÇOS DE DADOS. VERIFIQUE O CONSOLE."
+      errorDiv.style.backgroundColor = "red"
+      errorDiv.style.color = "white"
+      errorDiv.style.padding = "10px"
+      errorDiv.style.textAlign = "center"
+      errorDiv.style.position = "fixed"
+      errorDiv.style.top = "0"
+      errorDiv.style.left = "0"
+      errorDiv.style.width = "100%"
+      errorDiv.style.zIndex = "9999"
+      body.prepend(errorDiv)
     }
+    return // Impede a adição de outros listeners se o Firebase falhou
   }
 
-  if (allElementsPresent) {
-    initializeEventListeners()
-    loadUsersFromStorage()
-    await ensureMasterAdminExists()
-    loadTripsFromStorage()
-    checkSession()
-  } else {
-    document.body.innerHTML =
-      '<p style="color: red; font-size: 1.5em; text-align: center; margin-top: 20px;">Erro crítico: Nem todos os elementos da interface foram carregados. Verifique o console para detalhes e o HTML para IDs corretos.</p>'
+  // Auth forms
+  if (registerForm) registerForm.addEventListener("submit", handleRegister)
+  if (loginForm) loginForm.addEventListener("submit", handleLogin)
+  if (showRegisterViewLink)
+    showRegisterViewLink.addEventListener("click", e => {
+      e.preventDefault()
+      showView("registerView")
+    })
+  if (showLoginViewLink)
+    showLoginViewLink.addEventListener("click", e => {
+      e.preventDefault()
+      showView("loginView")
+    })
+  if (logoutBtn) logoutBtn.addEventListener("click", handleLogout)
+
+  // Nav buttons
+  if (userViewBtn)
+    userViewBtn.addEventListener("click", () => {
+      showView("userView")
+      initializeUserView()
+    })
+  if (myTripsViewBtn)
+    myTripsViewBtn.addEventListener("click", () => {
+      showView("myTripsView")
+      initializeMyTripsView()
+    })
+  if (adminViewBtn)
+    adminViewBtn.addEventListener("click", () => {
+      showView("adminView")
+      initializeAdminView()
+    })
+  if (userManagementViewBtn)
+    userManagementViewBtn.addEventListener("click", () => {
+      showView("userManagementView")
+      initializeUserManagementView()
+    })
+
+  // Trip form
+  if (tripForm) tripForm.addEventListener("submit", handleTripFormSubmit)
+  if (addFuelEntryBtn)
+    addFuelEntryBtn.addEventListener("click", () => addFuelEntryToForm())
+  if (cancelEditBtn)
+    cancelEditBtn.addEventListener("click", () => {
+      editingTripId = null
+      tripIdToEditInput.value = ""
+      tripForm.reset()
+      fuelEntriesContainer.innerHTML = ""
+      fuelEntryIdCounter = 0
+      submitTripBtn.textContent = "Salvar Viagem"
+      cancelEditBtn.style.display = "none"
+      if (driverNameInput && loggedInUserProfile)
+        driverNameInput.value = loggedInUserProfile.username // Pre-fill driver name
+      addFuelEntryToForm() // Add one blank fuel entry
+      showFeedback(userFormFeedback, "Edição cancelada.", "info")
+    })
+
+  // My Trips View
+  if (loadMyTripsBtn && myTripsDriverNameInput) {
+    loadMyTripsBtn.addEventListener("click", async () => {
+      const driverNameToSearch = myTripsDriverNameInput.value.trim()
+      if (!driverNameToSearch) {
+        showFeedback(
+          myTripsFeedback,
+          "Digite um nome de motorista para buscar.",
+          "error"
+        )
+        currentUserForMyTripsSearch = null
+        currentUidForMyTripsSearch = null
+        loadAndRenderMyTrips(
+          myTripsFilterStartDateInput.value,
+          myTripsFilterEndDateInput.value
+        ) // Carrega do logado
+        return
+      }
+      try {
+        // Buscar UID pelo username (assumindo que usernames são únicos ou o primeiro encontrado é ok)
+        const qUser = query(
+          collection(db, "userProfiles"),
+          where("username", "==", driverNameToSearch)
+        )
+        const userSnapshot = await getDocs(qUser)
+        if (!userSnapshot.empty) {
+          const foundUser = userSnapshot.docs[0].data()
+          currentUserForMyTripsSearch = foundUser.username
+          currentUidForMyTripsSearch = foundUser.uid
+          loadAndRenderMyTrips(
+            myTripsFilterStartDateInput.value,
+            myTripsFilterEndDateInput.value
+          )
+        } else {
+          showFeedback(
+            myTripsFeedback,
+            `Motorista "${driverNameToSearch}" não encontrado.`,
+            "error"
+          )
+          myTripsTableBody.innerHTML = ""
+          myTripsTablePlaceholder.textContent = `Nenhum motorista encontrado com o nome "${driverNameToSearch}".`
+          myTripsTable.style.display = "none"
+          myTripsTablePlaceholder.style.display = "block"
+          updateDriverSummary([], driverNameToSearch) // Limpa o resumo
+        }
+      } catch (err) {
+        console.error("Error searching driver by name:", err)
+        showFeedback(myTripsFeedback, "Erro ao buscar motorista.", "error")
+      }
+    })
   }
+  if (applyMyTripsFilterBtn) {
+    applyMyTripsFilterBtn.addEventListener("click", () => {
+      loadAndRenderMyTrips(
+        myTripsFilterStartDateInput.value,
+        myTripsFilterEndDateInput.value
+      )
+    })
+  }
+
+  // Admin View
+  if (applyAdminSummaryFilterBtn) {
+    applyAdminSummaryFilterBtn.addEventListener("click", () => {
+      updateAdminSummary(
+        adminSummaryFilterStartDateInput.value,
+        adminSummaryFilterEndDateInput.value
+      )
+    })
+  }
+  if (adminLoadDriverTripsBtn && adminSelectDriver) {
+    adminLoadDriverTripsBtn.addEventListener("click", () => {
+      const selectedDriverUid = adminSelectDriver.value
+      const selectedDriverName =
+        adminSelectDriver.options[adminSelectDriver.selectedIndex]?.text
+      if (selectedDriverUid && selectedDriverName) {
+        loadAndRenderAdminDriverTrips(selectedDriverUid, selectedDriverName)
+      } else {
+        adminDriverTripsSection.style.display = "none"
+      }
+    })
+  }
+  if (closeAdminTripDetailModalBtn) {
+    closeAdminTripDetailModalBtn.addEventListener(
+      "click",
+      () => (adminTripDetailModal.style.display = "none")
+    )
+  }
+
+  // User Management View (Admin Fabio)
+  // Funcionalidade de adicionar usuário pelo admin foi removida para simplificar.
+  // if (addUserByAdminForm) addUserByAdminForm.addEventListener('submit', handleAddUserByAdmin);
+  if (editUserForm)
+    editUserForm.addEventListener("submit", handleEditUserFormSubmit)
+  if (closeEditUserModalBtn) {
+    closeEditUserModalBtn.addEventListener(
+      "click",
+      () => (editUserModal.style.display = "none")
+    )
+  }
+
+  // Esconder todos os modais inicialmente
+  const modals = document.querySelectorAll(".modal")
+  modals.forEach(modal => {
+    modal.style.display = "none"
+    // Fechar modal ao clicar fora do conteúdo (opcional)
+    modal.addEventListener("click", event => {
+      if (event.target === modal) {
+        modal.style.display = "none"
+      }
+    })
+  })
+
+  // Estado inicial da aplicação é controlado pelo onAuthStateChanged.
 })
+
+// Polyfill para setDoc com merge (caso não seja importado de 'firebase/firestore')
+// A importação explícita de `firebaseSetDoc` de `firebase/firestore` no topo do arquivo é a abordagem correta.
+// Esta função setDoc local não é mais necessária.
+/*
+async function setDoc(docRef: any, data: any, options?: { merge?: boolean }) {
+    const firestore = getFirestore(); // Certifique-se que db (firestore instance) está disponível
+    const colPath = docRef.parent.path;
+    const docId = docRef.id;
+    const fullPath = `${colPath}/${docId}`;
+
+    if (options && options.merge) {
+        return updateDoc(doc(firestore, fullPath), data); // updateDoc faz merge por padrão
+    } else {
+        // Para um set completo (sobrescrever), o SDK setDoc é o correto.
+        // Se a importação direta de setDoc de 'firebase/firestore' não funcionar devido a
+        // como o esm.sh lida com os exports, esta é uma forma de garantir.
+        // No entanto, a importação direta de `setDoc` do SDK é preferível.
+        // const { setDoc: firebaseSetDoc } = await import("firebase/firestore"); // Movido para o topo
+        return firebaseSetDoc(docRef, data);
+    }
+}
+*/

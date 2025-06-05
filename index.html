@@ -10,31 +10,31 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <script type="importmap">
-    {
-        "imports": {
-        "chart.js": "https://esm.sh/chart.js@4.4.0/auto",
-        "@google/genai": "https://esm.sh/@google/genai@^0.7.0"
-        }
-    }
-    </script>
-<link rel="stylesheet" href="/index.css">
+{
+  "imports": {
+    "chart.js": "https://esm.sh/chart.js@4.4.0/auto",
+    "@google/genai": "https://esm.sh/@google/genai@^0.7.0",
+    "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
+    "firebase/auth": "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js",
+    "firebase/firestore": "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js",
+    "firebase/": "https://esm.sh/firebase@^11.9.0/"
+  }
+}
+</script>
 </head>
 <body>
     <!-- Tela de Login -->
     <section id="loginView" class="auth-view">
         <div class="auth-container">
-            <div class="login-logo-container">
-                <img src="logo_ibisolar.png" alt="Logo IBISOLAR">
-            </div>
             <h2>Login</h2>
             <form id="loginForm">
                 <div class="form-group">
-                    <label for="loginUsername">Nome de Usuário:</label>
-                    <input type="text" id="loginUsername" name="loginUsername" required>
+                    <label for="loginUsername">Nome de Usuário (para login):</label>
+                    <input type="text" id="loginUsername" name="loginUsername" required autocomplete="username">
                 </div>
                 <div class="form-group">
                     <label for="loginPassword">Senha:</label>
-                    <input type="password" id="loginPassword" name="loginPassword" required>
+                    <input type="password" id="loginPassword" name="loginPassword" required autocomplete="current-password">
                 </div>
                 <button type="submit" class="submit-btn full-width-btn">Entrar</button>
             </form>
@@ -44,23 +44,22 @@
     </section>
 
     <!-- Tela de Cadastro -->
-    <section id="registerView" class="auth-view" style="display: none;">
+    <section id="registerView" class="auth-view">
         <div class="auth-container">
             <h2>Cadastro</h2>
             <form id="registerForm">
                 <div class="form-group">
-                    <label for="registerUsername">Nome de Usuário:</label>
-                    <input type="text" id="registerUsername" name="registerUsername" required>
+                    <label for="registerUsername">Nome de Usuário (será usado para login):</label>
+                    <input type="text" id="registerUsername" name="registerUsername" required autocomplete="username">
                 </div>
                 <div class="form-group">
-                    <label for="registerPassword">Senha:</label>
-                    <input type="password" id="registerPassword" name="registerPassword" required>
+                    <label for="registerPassword">Senha (mínimo 6 caracteres):</label>
+                    <input type="password" id="registerPassword" name="registerPassword" required autocomplete="new-password">
                 </div>
                 <div class="form-group">
                     <label for="registerConfirmPassword">Confirmar Senha:</label>
-                    <input type="password" id="registerConfirmPassword" name="registerConfirmPassword" required>
+                    <input type="password" id="registerConfirmPassword" name="registerConfirmPassword" required autocomplete="new-password">
                 </div>
-                <!-- Campo Tipo de Conta Removido -->
                 <button type="submit" class="submit-btn full-width-btn">Cadastrar</button>
             </form>
             <p id="registerFeedback" class="feedback-message" aria-live="polite"></p>
@@ -94,7 +93,7 @@
                                 <input type="date" id="tripDate" name="tripDate" required>
                             </div>
                             <div class="form-group">
-                                <label for="driverName">Motorista:</label>
+                                <label for="driverName">Motorista (seu nome será usado por padrão):</label>
                                 <input type="text" id="driverName" name="driverName" placeholder="ex: João Silva" required>
                             </div>
                             <div class="form-group">
@@ -177,7 +176,6 @@
             <section id="myTripsView" class="view" aria-labelledby="my-trips-view-title">
                 <h2 id="my-trips-view-title">Minhas Viagens</h2>
 
-                <!-- Resumo do Motorista -->
                 <div id="driverSummaryContainer" class="summary-section">
                     <h3>Seu Resumo de Viagens</h3>
                     <div class="summary-metrics">
@@ -194,10 +192,9 @@
                             <p id="driverTotalEarningsEl">R$ 0,00</p>
                         </div>
                     </div>
-                    <!-- Chart container removed -->
                 </div>
 
-                <div id="myTripsDriverNameContainer" class="dashboard-controls">
+                <div id="myTripsDriverNameContainer" class="dashboard-controls" style="display: none;">
                     <div class="form-group">
                         <label for="myTripsDriverNameInput">Nome do Motorista para Busca (Admin):</label>
                         <input type="text" id="myTripsDriverNameInput" placeholder="Digite nome para buscar">
@@ -235,14 +232,13 @@
                         </thead>
                         <tbody id="myTripsTableBody"></tbody>
                     </table>
-                    <p id="myTripsTablePlaceholder">Nenhuma viagem para exibir. Motoristas: suas viagens e resumo serão carregados automaticamente. Administradores: usem a busca.</p>
+                    <p id="myTripsTablePlaceholder">Nenhuma viagem para exibir. Suas viagens e resumo serão carregados automaticamente.</p>
                 </div>
             </section>
 
             <section id="adminView" class="view" aria-labelledby="admin-view-title">
                 <h2 id="admin-view-title">Painel do Administrador</h2>
 
-                <!-- Resumo Geral do Administrador -->
                 <div id="adminSummaryContainer" class="summary-section">
                     <h3>Resumo Geral das Operações</h3>
                     <div class="dashboard-controls">
@@ -276,14 +272,7 @@
                             <p id="adminTotalNetProfitEl">R$ 0,00</p>
                         </div>
                     </div>
-                    <!-- Admin Chart Container Removed -->
-                    <!--
-                    <div class="chart-container">
-                        <h4>Desempenho Financeiro Mensal (Geral)</h4>
-                        <canvas id="adminSummaryChartCanvas"></canvas>
-                    </div>
-                    -->
-                </div>
+                 </div>
 
                 <h3>Detalhes de Viagens por Motorista</h3>
                 <div id="adminDriverSelectorContainer" class="dashboard-controls">
@@ -314,39 +303,9 @@
                 <p id="adminGeneralFeedback" class="feedback-message" aria-live="polite"></p>
             </section>
 
-            <!-- Tela de Gerenciamento de Usuários (Admin Fabio) -->
             <section id="userManagementView" class="view" aria-labelledby="user-management-title">
                 <h2 id="user-management-title">Gerenciamento de Usuários</h2>
-
-                <fieldset id="addUserByAdminFieldset">
-                    <legend>Adicionar Novo Usuário</legend>
-                    <form id="addUserByAdminForm">
-                        <div class="form-grid">
-                            <div class="form-group">
-                                <label for="addAdminUsername">Nome de Usuário:</label>
-                                <input type="text" id="addAdminUsername" name="addAdminUsername" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="addAdminPassword">Senha:</label>
-                                <input type="password" id="addAdminPassword" name="addAdminPassword" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="addAdminConfirmPassword">Confirmar Senha:</label>
-                                <input type="password" id="addAdminConfirmPassword" name="addAdminConfirmPassword" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="addAdminRole">Tipo de Conta:</label>
-                                <select id="addAdminRole" name="addAdminRole">
-                                    <option value="motorista">Motorista</option>
-                                    <option value="admin">Administrador</option>
-                                </select>
-                            </div>
-                        </div>
-                        <button type="submit" class="submit-btn">Adicionar Usuário</button>
-                    </form>
-                    <p id="addUserFeedback" class="feedback-message" aria-live="polite"></p>
-                </fieldset>
-
+                <!-- Formulário de adicionar usuário pelo admin foi removido -->
                 <h3>Usuários Cadastrados</h3>
                 <p id="userManagementFeedback" class="feedback-message" aria-live="polite"></p>
                 <div id="userManagementTableContainer">
@@ -358,22 +317,19 @@
                                 <th>Ações</th>
                             </tr>
                         </thead>
-                        <tbody id="userManagementTableBody">
-                            <!-- User data will be injected here -->
-                        </tbody>
+                        <tbody id="userManagementTableBody"></tbody>
                     </table>
                 </div>
             </section>
         </main>
-         <!-- Modal de Edição de Usuário -->
-        <div id="editUserModal" class="modal" style="display: none;">
+         <div id="editUserModal" class="modal" style="display: none;">
             <div class="modal-content">
                 <span class="close-modal-btn" id="closeEditUserModalBtn">&times;</span>
                 <h3>Editar Usuário</h3>
                 <form id="editUserForm">
-                    <input type="hidden" id="editUserId">
+                    <input type="hidden" id="editUserId"> <!-- Armazenará o UID do Firebase -->
                     <div class="form-group">
-                        <label for="editUsernameDisplay">Nome de Usuário:</label>
+                        <label for="editUsernameDisplay">Nome de Usuário (não editável):</label>
                         <input type="text" id="editUsernameDisplay" readonly>
                     </div>
                     <div class="form-group">
@@ -385,11 +341,11 @@
                     </div>
                     <div class="form-group">
                         <label for="editUserNewPassword">Nova Senha (deixe em branco para não alterar):</label>
-                        <input type="password" id="editUserNewPassword">
+                        <input type="password" id="editUserNewPassword" autocomplete="new-password">
                     </div>
                     <div class="form-group">
                         <label for="editUserConfirmNewPassword">Confirmar Nova Senha:</label>
-                        <input type="password" id="editUserConfirmNewPassword">
+                        <input type="password" id="editUserConfirmNewPassword" autocomplete="new-password">
                     </div>
                     <button type="submit" class="submit-btn">Salvar Alterações</button>
                 </form>
@@ -397,24 +353,19 @@
             </div>
         </div>
 
-        <!-- Modal de Detalhes da Viagem (Admin) -->
         <div id="adminTripDetailModal" class="modal" style="display: none;">
             <div class="modal-content large-modal">
                 <span class="close-modal-btn" id="closeAdminTripDetailModalBtn">&times;</span>
                 <h3>Detalhes da Viagem</h3>
-                <div id="adminTripDetailContent">
-                    <!-- Trip details will be rendered here by JavaScript -->
-                </div>
+                <div id="adminTripDetailContent"></div>
             </div>
         </div>
-
 
         <footer>
             <p>&copy; 2024 Controle de Despesas de Viagem. Todos os direitos reservados.</p>
         </footer>
-    </div> <!-- Fim do appContainer -->
+    </div>
 
     <script type="module" src="index.js"></script>
-<script type="module" src="/index.tsx"></script>
 </body>
 </html>

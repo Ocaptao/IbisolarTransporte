@@ -29,16 +29,18 @@ body {
     max-width: 400px;
 }
 
+/*
 .login-logo-container {
-    text-align: center; /* Centers the inline-block image */
-    margin-bottom: 1.5rem; /* Space below the logo */
+    text-align: center;
+    margin-bottom: 1.5rem;
 }
 
 .login-logo-container img {
-    max-width: 220px; /* Adjust as needed */
-    height: auto;     /* Maintain aspect ratio */
-    display: inline-block; /* Allows text-align to center it */
+    max-width: 220px;
+    height: auto;
+    display: inline-block;
 }
+*/
 
 .auth-container h2 {
     text-align: center;
@@ -335,21 +337,8 @@ fieldset legend {
 .filter-buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 .filter-buttons .control-btn { margin-top: 0; }
 
-/* User Management - Add User Form */
-#addUserByAdminFieldset {
-    margin-top: 2rem;
-    margin-bottom: 2rem;
-}
-#addUserByAdminFieldset legend {
-    font-size: 1.2rem;
-}
-#addUserByAdminForm .form-grid {
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-}
-#addUserByAdminForm button[type="submit"] {
-    grid-column: 1 / -1; /* Make button span full width if grid allows */
-    margin-top: 0.5rem;
-}
+/* User Management - Add User Form related styles removed as form is removed */
+
 
 /* Admin Panel Refactor */
 #adminDriverTripsSection h3 {
@@ -573,7 +562,7 @@ footer { background-color: #34495e; color: #ecf0f1; text-align: center; padding:
     .view { padding: 1.5rem; }
     .form-grid, .filter-grid, .summary-container,
     #fuelEntriesContainer .fuel-entry-item,
-    #addUserByAdminForm .form-grid,
+    /* #addUserByAdminForm .form-grid, */ /* Removido */
     .summary-metrics {
         grid-template-columns: 1fr;
     }
@@ -587,4 +576,57 @@ footer { background-color: #34495e; color: #ecf0f1; text-align: center; padding:
     }
     .form-actions { flex-direction: column; }
     .form-actions .submit-btn, .form-actions .control-btn { width: 100%; }
+}
+
+/* Print Styles for Admin Trip Detail Modal */
+@media print {
+    body * {
+        visibility: hidden !important;
+    }
+    #adminTripDetailModal,
+    #adminTripDetailModal * {
+        visibility: visible !important;
+    }
+    #adminTripDetailModal {
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 100% !important;
+        height: auto !important;
+        box-shadow: none !important;
+        border: none !important;
+        overflow: visible !important;
+        background-color: white !important;
+        padding: 0 !important; /* Reset padding for the modal itself */
+        margin: 0 !important;
+    }
+    #adminTripDetailModal .modal-content {
+        box-shadow: none !important;
+        border: none !important;
+        margin: 0 !important;
+        padding: 10mm !important; /* Add some padding for print */
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: none !important; /* Allow content to flow */
+        border-radius: 0 !important;
+    }
+    #adminTripDetailModal .close-modal-btn,
+    #adminTripDetailModal #printAdminTripDetailBtn {
+        display: none !important;
+    }
+    #adminTripDetailModal h3,
+    #adminTripDetailModal h4,
+    #adminTripDetailModal p,
+    #adminTripDetailModal div {
+        color: #000 !important; /* Ensure text is black for printing */
+    }
+    #adminTripDetailModal .trip-detail-section {
+        background-color: #fff !important; /* Ensure section backgrounds are white */
+        border: 1px solid #ccc !important; /* Optional: add light borders to sections */
+        page-break-inside: avoid; /* Try to avoid breaking sections across pages */
+    }
+    #adminTripDetailModal .fuel-entry-detail-item {
+         border: 1px solid #eee !important;
+         page-break-inside: avoid;
+    }
 }

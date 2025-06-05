@@ -46,28 +46,25 @@ let app;
 let authFirebase; 
 let db;
 let userProfilesCollection;
-let tripsCollection;
+let tripsCollection; // Manteremos o nome da coleção como "trips" no Firestore por enquanto para evitar migração
 
 try {
     app = initializeApp(firebaseConfig);
     authFirebase = getAuth(app); 
     db = getFirestore(app);
     userProfilesCollection = collection(db, "userProfiles");
-    tripsCollection = collection(db, "trips");
+    tripsCollection = collection(db, "trips"); // Nome da coleção no Firestore
     console.log("Firebase inicializado com sucesso!");
 
-    // Anexar o listener onAuthStateChanged somente se a autenticação inicializou com sucesso
-    // Este listener foi movido para dentro do try/catch da inicialização no index.tsx
-    // e essa estrutura é mantida aqui.
 } catch (error) {
     console.error("ERRO CRÍTICO: Falha na inicialização do Firebase:", "Código:", error.code, "Mensagem:", error.message);
     alert("Erro crítico: Não foi possível conectar ao serviço de dados. Verifique a configuração do Firebase e sua conexão com a internet.");
-    if (typeof showView === 'function') showView('loginView'); // Tenta mostrar loginView se disponível
+    if (typeof showView === 'function') showView('loginView');
 }
 
 
 // --- VARIÁVEIS DE ESTADO ---
-let trips = []; 
+let trips = []; // Cache local de fretes carregados
 let editingTripId = null;
 let currentUserForMyTripsSearch = null; 
 let currentUidForMyTripsSearch = null; 
@@ -149,6 +146,7 @@ const adminSummaryContainer = document.getElementById('adminSummaryContainer');
 const adminSummaryFilterStartDateInput = document.getElementById('adminSummaryFilterStartDate');
 const adminSummaryFilterEndDateInput = document.getElementById('adminSummaryFilterEndDate');
 const applyAdminSummaryFilterBtn = document.getElementById('applyAdminSummaryFilterBtn');
+const exportAdminReportBtn = document.getElementById('exportAdminReportBtn');
 const adminTotalTripsEl = document.getElementById('adminTotalTripsEl');
 const adminTotalFreightEl = document.getElementById('adminTotalFreightEl');
 const adminTotalExpensesEl = document.getElementById('adminTotalExpensesEl');
@@ -282,8 +280,8 @@ function updateNavVisibility() {
     if (loggedInUser && loggedInUserProfile) {
         if(logoutBtn) logoutBtn.style.display = 'inline-block';
         if (loggedInUserProfile.role === 'admin') {
-            if(userViewBtn) userViewBtn.style.display = 'none'; // Admin não registra viagem por aqui
-            if(myTripsViewBtn) myTripsViewBtn.style.display = 'none'; // Admin não tem "Minhas Viagens" aqui
+            if(userViewBtn) userViewBtn.style.display = 'none'; 
+            if(myTripsViewBtn) myTripsViewBtn.style.display = 'none'; 
             if(adminViewBtn) adminViewBtn.style.display = 'inline-block';
             if (loggedInUserProfile.username.toLowerCase() === 'fabio' && userManagementViewBtn) {
                  userManagementViewBtn.style.display = 'inline-block';
@@ -368,7 +366,6 @@ async function handleRegister(event) {
 
         showFeedback(registerFeedback, "Cadastro realizado com sucesso! Redirecionando...", "success");
         if (registerForm) registerForm.reset();
-        // O onAuthStateChanged cuidará do redirecionamento para a view apropriada (userView/adminView).
 
     } catch (error) {
         console.error("ERRO CRÍTICO durante o cadastro:", "Código:", error.code, "Mensagem:", error.message);
@@ -442,9 +439,9 @@ async function handleLogout() {
         console.log("Usuário desconectado do Firebase Auth.");
         showFeedback(loginFeedback, "Você foi desconectado.", "info");
         if(myTripsTableBody) myTripsTableBody.innerHTML = '';
-        if(myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = 'Nenhuma viagem para exibir...';
+        if(myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = 'Nenhum frete para exibir...';
         if(adminDriverTripsTableBody) adminDriverTripsTableBody.innerHTML = '';
-        if(adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = 'Nenhuma viagem encontrada para este motorista.';
+        if(adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = 'Nenhum frete encontrado para este motorista.';
         if(adminSelectDriver) adminSelectDriver.innerHTML = '<option value="">-- Selecione um Motorista --</option>';
         if(userManagementTableBody) userManagementTableBody.innerHTML = '';
         currentUserForMyTripsSearch = null;
@@ -463,9 +460,10 @@ async function handleLogout() {
 }
 
 // Listener de estado de autenticação
-if (authFirebase) { // Adicionado verificação para garantir que authFirebase foi inicializado
+if (authFirebase) { 
     onAuthStateChanged(authFirebase, async (user) => { 
         console.log("onAuthStateChanged acionado. Objeto de usuário:", user ? user.uid : 'null');
+        console.log("loggedInUserProfile ANTES da busca no onAuthStateChanged:", loggedInUserProfile);
         if (user) {
             loggedInUser = user;
             console.log("Usuário está autenticado com UID:", user.uid);
@@ -473,11 +471,13 @@ if (authFirebase) { // Adicionado verificação para garantir que authFirebase f
                 console.log("Tentando buscar perfil do usuário no Firestore para o UID:", user.uid);
                 const userProfileDocRef = doc(userProfilesCollection, user.uid);
                 const userProfileDoc = await getDoc(userProfileDocRef);
+                console.log("loggedInUserProfile APÓS a busca no onAuthStateChanged (antes de if exists):", loggedInUserProfile); // Log para diagnóstico
 
                 if (userProfileDoc.exists()) {
                     if (authFirebase.currentUser && authFirebase.currentUser.uid === user.uid) { 
                         loggedInUserProfile = { id: userProfileDoc.id, ...userProfileDoc.data() };
                         console.log("Perfil do usuário encontrado no Firestore:", "Nome de usuário:", loggedInUserProfile.username, "Papel:", loggedInUserProfile.role);
+                        console.log("loggedInUserProfile ATUALIZADO:", loggedInUserProfile); // Log para diagnóstico
 
                         updateNavVisibility();
                         if (loggedInUserProfile.role === 'admin') {
@@ -489,11 +489,11 @@ if (authFirebase) { // Adicionado verificação para garantir que authFirebase f
                             showView('userView');
                             initializeUserView();
                         }
-                        // Esta condição agora previne initializeMyTripsView para admin, pois myTripsViewBtn estará 'none'
                         if (myTripsViewBtn && myTripsViewBtn.style.display !== 'none') {
-                            console.log("Inicializando a visualização 'Minhas Viagens' para o usuário logado.");
+                            console.log("Inicializando a visualização 'Meus Fretes' para o usuário logado.");
                             initializeMyTripsView();
                         }
+                        // Apenas 'fabio' pode ver o Gerenciamento de Usuários
                         if (userManagementViewBtn && userManagementViewBtn.style.display !== 'none' && loggedInUserProfile.username.toLowerCase() === 'fabio') {
                             console.log("Usuário é Fabio (admin), inicializando a visualização 'Gerenciamento de Usuários'.");
                             initializeUserManagementView();
@@ -526,7 +526,7 @@ if (authFirebase) { // Adicionado verificação para garantir que authFirebase f
 }
 
 
-// --- GERENCIAMENTO DE VIAGENS COM FIRESTORE ---
+// --- GERENCIAMENTO DE FRETES COM FIRESTORE ---
 
 function addFuelEntryToForm(entry) {
     const entryId = entry ? entry.id : `fuel_${fuelEntryIdCounter++}`;
@@ -586,7 +586,7 @@ function addFuelEntryToForm(entry) {
 async function handleTripFormSubmit(event) {
     event.preventDefault();
     if (!loggedInUser || !loggedInUserProfile) {
-        showFeedback(userFormFeedback, "Você precisa estar logado para registrar uma viagem.", "error");
+        showFeedback(userFormFeedback, "Você precisa estar logado para registrar um frete.", "error");
         return;
     }
 
@@ -660,14 +660,14 @@ async function handleTripFormSubmit(event) {
             const tripRef = doc(tripsCollection, editingTripId);
             const updatePayload = { ...tripDataObjectFromForm };
             await updateDoc(tripRef, updatePayload);
-            showFeedback(userFormFeedback, "Viagem atualizada com sucesso!", "success");
+            showFeedback(userFormFeedback, "Frete atualizado com sucesso!", "success");
         } else {
             const createPayload = {
                 ...tripDataObjectFromForm,
                 createdAt: Timestamp.now()
             };
             await addDoc(tripsCollection, createPayload);
-            showFeedback(userFormFeedback, "Viagem registrada com sucesso!", "success");
+            showFeedback(userFormFeedback, "Frete registrado com sucesso!", "success");
         }
         if(tripForm) tripForm.reset();
         if(fuelEntriesContainer) fuelEntriesContainer.innerHTML = '';
@@ -675,7 +675,7 @@ async function handleTripFormSubmit(event) {
         editingTripId = null;
         if(tripIdToEditInput) tripIdToEditInput.value = '';
         if (driverNameInput && loggedInUserProfile) driverNameInput.value = loggedInUserProfile.username;
-        if (submitTripBtn) submitTripBtn.textContent = 'Salvar Viagem';
+        if (submitTripBtn) submitTripBtn.textContent = 'Salvar Frete';
         if (cancelEditBtn) cancelEditBtn.style.display = 'none';
 
         if (myTripsView && myTripsView.style.display === 'block' && (!currentUserForMyTripsSearch || currentUserForMyTripsSearch === loggedInUserProfile.username)) {
@@ -689,9 +689,9 @@ async function handleTripFormSubmit(event) {
         }
 
     } catch (error) {
-        console.error("Erro ao salvar viagem no Firestore:", "Código:", error.code, "Mensagem:", error.message);
-        showFeedback(userFormFeedback, "Erro ao salvar viagem. Tente novamente.", "error");
-        if (submitTripBtn) submitTripBtn.textContent = editingTripId ? 'Salvar Alterações' : 'Salvar Viagem';
+        console.error("Erro ao salvar frete no Firestore:", "Código:", error.code, "Mensagem:", error.message);
+        showFeedback(userFormFeedback, "Erro ao salvar frete. Tente novamente.", "error");
+        if (submitTripBtn) submitTripBtn.textContent = editingTripId ? 'Salvar Alterações' : 'Salvar Frete';
     } finally {
         if (submitTripBtn) submitTripBtn.disabled = false;
     }
@@ -699,7 +699,7 @@ async function handleTripFormSubmit(event) {
 
 async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
     if (!loggedInUser || !loggedInUserProfile) {
-        const msg = 'Você precisa estar logado e seu perfil carregado para ver suas viagens.';
+        const msg = 'Você precisa estar logado e seu perfil carregado para ver seus fretes.';
         if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = msg;
         if (myTripsTable) myTripsTable.style.display = 'none';
         if (myTripsTablePlaceholder) myTripsTablePlaceholder.style.display = 'block';
@@ -716,13 +716,13 @@ async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
     }
     
     if (!targetUid) { 
-        const msg = 'Não foi possível identificar o motorista para carregar as viagens.';
+        const msg = 'Não foi possível identificar o motorista para carregar os fretes.';
          if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = msg;
         showFeedback(myTripsFeedback, msg, "error");
         return;
     }
 
-    if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Carregando viagens de ${targetUsername}...`;
+    if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Carregando fretes de ${targetUsername}...`;
     if (myTripsTable) myTripsTable.style.display = 'none';
     if (myTripsTablePlaceholder) myTripsTablePlaceholder.style.display = 'block';
     if (myTripsTableBody) myTripsTableBody.innerHTML = '';
@@ -743,10 +743,10 @@ async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
             fetchedTrips.push({ id: doc.id, ...doc.data() });
         });
 
-        trips = fetchedTrips; 
+        trips = fetchedTrips; // Atualiza cache local com os fretes filtrados/carregados
 
         if (trips.length === 0) {
-            if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Nenhuma viagem encontrada para ${targetUsername}` +
+            if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Nenhum frete encontrado para ${targetUsername}` +
                 `${(filterStartDate || filterEndDate) ? ' nos filtros aplicados.' : '.'}`;
         } else {
             if (myTripsTable) myTripsTable.style.display = 'table';
@@ -756,12 +756,12 @@ async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
         updateDriverSummary(trips, targetUsername); 
 
     } catch (error) {
-        console.error(`ERRO CRÍTICO ao carregar viagens de ${targetUsername} do Firestore:`, "Código:", error.code, "Mensagem:", error.message, "Detalhes:", error);
-        let userMessage = `Erro ao carregar viagens de ${targetUsername}. Verifique o console para mais detalhes.`;
+        console.error(`ERRO CRÍTICO ao carregar fretes de ${targetUsername} do Firestore:`, "Código:", error.code, "Mensagem:", error.message, "Detalhes:", error);
+        let userMessage = `Erro ao carregar fretes de ${targetUsername}. Verifique o console para mais detalhes.`;
         if (error.code === 'failed-precondition') {
-            userMessage = `Erro ao carregar viagens de ${targetUsername}: Provavelmente um índice está faltando no Firestore. Por favor, verifique o console do navegador (F12) para um link ou mensagem de erro detalhada do Firebase que pode incluir um link para criar o índice necessário.`;
+            userMessage = `Erro ao carregar fretes de ${targetUsername}: Provavelmente um índice está faltando no Firestore. Por favor, verifique o console do navegador (F12) para um link ou mensagem de erro detalhada do Firebase que pode incluir um link para criar o índice necessário.`;
         } else if (error.code === 'permission-denied') {
-            userMessage = `Erro ao carregar viagens de ${targetUsername}: Permissão negada. Verifique as regras de segurança do Firestore.`;
+            userMessage = `Erro ao carregar fretes de ${targetUsername}: Permissão negada. Verifique as regras de segurança do Firestore.`;
         }
         showFeedback(myTripsFeedback, userMessage, "error");
         if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = userMessage;
@@ -775,7 +775,7 @@ function renderMyTripsTable(tripsToRender) {
         if (myTripsTable) myTripsTable.style.display = 'none';
         if (myTripsTablePlaceholder) {
              myTripsTablePlaceholder.style.display = 'block';
-             myTripsTablePlaceholder.textContent = 'Nenhuma viagem para exibir com os filtros atuais.';
+             myTripsTablePlaceholder.textContent = 'Nenhum frete para exibir com os filtros atuais.';
         }
         return;
     }
@@ -795,7 +795,7 @@ function renderMyTripsTable(tripsToRender) {
         const editButton = document.createElement('button');
         editButton.className = 'control-btn small-btn';
         editButton.textContent = 'Editar';
-        editButton.setAttribute('aria-label', `Editar viagem de ${formatDate(trip.date)}`);
+        editButton.setAttribute('aria-label', `Editar frete de ${formatDate(trip.date)}`);
         editButton.onclick = () => loadTripForEditing(trip.id);
         actionsCell.appendChild(editButton);
 
@@ -812,7 +812,7 @@ function renderMyTripsTable(tripsToRender) {
             const deleteButton = document.createElement('button');
             deleteButton.className = 'control-btn danger-btn small-btn';
             deleteButton.textContent = 'Excluir';
-            deleteButton.setAttribute('aria-label', `Excluir viagem de ${formatDate(trip.date)}`);
+            deleteButton.setAttribute('aria-label', `Excluir frete de ${formatDate(trip.date)}`);
             deleteButton.style.marginLeft = '0.5rem';
             deleteButton.onclick = () => confirmDeleteTrip(trip.id, trip.driverName);
             actionsCell.appendChild(deleteButton);
@@ -827,8 +827,8 @@ async function loadTripForEditing(tripId) {
         if (tripDoc.exists()) {
             const trip = { id: tripDoc.id, ...tripDoc.data() };
 
-            if (!loggedInUser || (loggedInUser.uid !== trip.userId && loggedInUserProfile?.role !== 'admin')) {
-                showFeedback(userFormFeedback, "Você não tem permissão para editar esta viagem.", "error");
+            if (!loggedInUser ||(loggedInUser.uid !== trip.userId && loggedInUserProfile?.role !== 'admin')) {
+                showFeedback(userFormFeedback, "Você não tem permissão para editar este frete.", "error");
                 return;
             }
 
@@ -860,14 +860,14 @@ async function loadTripForEditing(tripId) {
             if (cancelEditBtn) cancelEditBtn.style.display = 'inline-block';
             showView('userView'); 
             if (userView) userView.scrollIntoView({ behavior: 'smooth' });
-            showFeedback(userFormFeedback, `Editando viagem de ${trip.driverName} do dia ${formatDate(trip.date)}.`, "info");
+            showFeedback(userFormFeedback, `Editando frete de ${trip.driverName} do dia ${formatDate(trip.date)}.`, "info");
 
         } else {
-            showFeedback(myTripsFeedback, "Viagem não encontrada para edição.", "error");
+            showFeedback(myTripsFeedback, "Frete não encontrado para edição.", "error");
         }
     } catch (error) {
-        console.error("Erro ao carregar viagem para edição:", "Código:", error.code, "Mensagem:", error.message);
-        showFeedback(myTripsFeedback, "Erro ao carregar viagem para edição.", "error");
+        console.error("Erro ao carregar frete para edição:", "Código:", error.code, "Mensagem:", error.message);
+        showFeedback(myTripsFeedback, "Erro ao carregar frete para edição.", "error");
     }
 }
 
@@ -875,22 +875,22 @@ async function loadTripForEditing(tripId) {
 function confirmDeleteTrip(tripId, driverNameForConfirm) {
     if (!tripId) return;
 
-    const tripToDelete = trips.find(t => t.id === tripId) || 
-                        (adminView && adminView.style.display === 'block' ? trips.find(t=>t.id === tripId) : null); 
+    // A variável global 'trips' pode conter os fretes da visão 'myTripsView' ou 'adminDriverTripsTable'
+    const tripToDelete = trips.find(t => t.id === tripId); 
 
     if (tripToDelete) {
          if (!loggedInUser || (loggedInUser.uid !== tripToDelete.userId &&
             !(loggedInUserProfile?.role === 'admin' && loggedInUserProfile.username.toLowerCase() === 'fabio'))) {
-            showFeedback(myTripsFeedback, "Você não tem permissão para excluir esta viagem.", "error");
+            showFeedback(myTripsFeedback, "Você não tem permissão para excluir este frete.", "error");
             return;
         }
     } else if (!loggedInUserProfile || loggedInUserProfile.role !== 'admin' || loggedInUserProfile.username.toLowerCase() !== 'fabio') {
-        showFeedback(myTripsFeedback, "Viagem não encontrada ou permissão para exclusão global negada.", "error");
+        showFeedback(myTripsFeedback, "Frete não encontrado ou permissão para exclusão global negada.", "error");
         return;
     }
 
 
-    if (confirm(`Tem certeza que deseja excluir a viagem de ${driverNameForConfirm}? Esta ação não pode ser desfeita.`)) {
+    if (confirm(`Tem certeza que deseja excluir o frete de ${driverNameForConfirm}? Esta ação não pode ser desfeita.`)) {
         deleteTrip(tripId);
     }
 }
@@ -898,7 +898,7 @@ function confirmDeleteTrip(tripId, driverNameForConfirm) {
 async function deleteTrip(tripId) {
     try {
         await deleteDoc(doc(tripsCollection, tripId));
-        showFeedback(myTripsFeedback, "Viagem excluída com sucesso.", "success");
+        showFeedback(myTripsFeedback, "Frete excluído com sucesso.", "success");
         if (myTripsView && myTripsView.style.display === 'block') {
             loadAndRenderMyTrips(myTripsFilterStartDateInput?.value, myTripsFilterEndDateInput?.value);
         }
@@ -910,8 +910,8 @@ async function deleteTrip(tripId) {
         }
 
     } catch (error) {
-        console.error("Erro ao excluir viagem do Firestore:", "Código:", error.code, "Mensagem:", error.message);
-        showFeedback(myTripsFeedback, "Erro ao excluir viagem. Tente novamente.", "error");
+        console.error("Erro ao excluir frete do Firestore:", "Código:", error.code, "Mensagem:", error.message);
+        showFeedback(myTripsFeedback, "Erro ao excluir frete. Tente novamente.", "error");
     }
 }
 
@@ -933,9 +933,9 @@ function updateDriverSummary(summaryTrips, driverDisplayName) {
         const summaryTitle = driverSummaryContainer.querySelector('h3');
         if (summaryTitle) {
             if (loggedInUserProfile?.role === 'admin' && currentUserForMyTripsSearch && currentUserForMyTripsSearch !== loggedInUserProfile.username) {
-                summaryTitle.textContent = `Resumo de ${driverDisplayName}`;
+                summaryTitle.textContent = `Resumo de Fretes de ${driverDisplayName}`;
             } else {
-                summaryTitle.textContent = `Seu Resumo de Viagens`;
+                summaryTitle.textContent = `Seu Resumo de Fretes`;
             }
         }
     }
@@ -945,7 +945,7 @@ function updateDriverSummary(summaryTrips, driverDisplayName) {
 // --- FUNÇÕES DO PAINEL ADMIN ---
 async function updateAdminSummary(filterStartDate, filterEndDate) {
     if (!adminTotalTripsEl || !adminTotalFreightEl || !adminTotalExpensesEl || !adminTotalNetProfitEl) return;
-
+    
     let q = query(tripsCollection, orderBy("date", "desc"));
 
     if (filterStartDate) q = query(q, where("date", ">=", filterStartDate));
@@ -985,11 +985,21 @@ async function populateAdminDriverSelect() {
     if (!adminSelectDriver) return;
     adminSelectDriver.innerHTML = '<option value="">-- Carregando Motoristas --</option>';
     try {
-        const q = query(userProfilesCollection, where("role", "==", "motorista"), orderBy("username"));
-        const querySnapshot = await getDocs(q);
+        // Garantir que userProfiles está populado
+        if (userProfiles.length === 0) {
+            const qProfiles = query(userProfilesCollection, orderBy("username"));
+            const profileSnapshot = await getDocs(qProfiles);
+            profileSnapshot.forEach(doc => {
+                if (!userProfiles.find(p => p.uid === doc.id)) { // Evitar duplicatas se já carregado parcialmente
+                    userProfiles.push({ id: doc.id, ...doc.data() });
+                }
+            });
+        }
+
+        const motoristas = userProfiles.filter(p => p.role === 'motorista').sort((a,b) => a.username.localeCompare(b.username));
+        
         const options = ['<option value="">-- Selecione um Motorista --</option>'];
-        querySnapshot.forEach((doc) => {
-            const user = doc.data(); 
+        motoristas.forEach(user => {
             options.push(`<option value="${user.uid}">${user.username}</option>`);
         });
         adminSelectDriver.innerHTML = options.join('');
@@ -1007,9 +1017,9 @@ async function loadAndRenderAdminDriverTrips(driverUid, driverName) {
     adminSelectedDriverUid = driverUid;
     adminSelectedDriverName = driverName;
 
-    if (adminSelectedDriverNameDisplay) adminSelectedDriverNameDisplay.textContent = `Viagens de ${driverName}`;
+    if (adminSelectedDriverNameDisplay) adminSelectedDriverNameDisplay.textContent = `Fretes de ${driverName}`;
     if (adminDriverTripsTableBody) adminDriverTripsTableBody.innerHTML = '';
-    if (adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = `Carregando viagens de ${driverName}...`;
+    if (adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = `Carregando fretes de ${driverName}...`;
     if (adminDriverTripsTable) adminDriverTripsTable.style.display = 'none';
     if (adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.style.display = 'block';
     if (adminDriverTripsSection) adminDriverTripsSection.style.display = 'block';
@@ -1022,10 +1032,10 @@ async function loadAndRenderAdminDriverTrips(driverUid, driverName) {
             driverTrips.push({ id: doc.id, ...doc.data() });
         });
 
-        trips = driverTrips; 
+        trips = driverTrips; // Atualiza o cache global 'trips' com os fretes deste motorista
 
         if (driverTrips.length === 0) {
-            if (adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = `Nenhuma viagem encontrada para ${driverName}.`;
+            if (adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = `Nenhum frete encontrado para ${driverName}.`;
         } else {
             if (adminDriverTripsTable) adminDriverTripsTable.style.display = 'table';
             if (adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.style.display = 'none';
@@ -1033,12 +1043,12 @@ async function loadAndRenderAdminDriverTrips(driverUid, driverName) {
         renderAdminDriverTripsTable(driverTrips);
 
     } catch (error) {
-        console.error(`ERRO CRÍTICO ao carregar viagens para o motorista ${driverName} (UID: ${driverUid}):`, "Código:", error.code, "Mensagem:", error.message, "Detalhes:", error);
-        let userMessage = `Erro ao carregar viagens de ${driverName}. Verifique o console para mais detalhes.`;
+        console.error(`ERRO CRÍTICO ao carregar fretes para o motorista ${driverName} (UID: ${driverUid}):`, "Código:", error.code, "Mensagem:", error.message, "Detalhes:", error);
+        let userMessage = `Erro ao carregar fretes de ${driverName}. Verifique o console para mais detalhes.`;
         if (error.code === 'failed-precondition') {
-            userMessage = `Erro ao carregar viagens de ${driverName}: Provavelmente um índice está faltando no Firestore. Verifique o console do navegador (F12) para um link ou mensagem de erro detalhada.`;
+            userMessage = `Erro ao carregar fretes de ${driverName}: Provavelmente um índice está faltando no Firestore. Verifique o console do navegador (F12) para um link ou mensagem de erro detalhada.`;
         } else if (error.code === 'permission-denied') {
-            userMessage = `Erro ao carregar viagens de ${driverName}: Permissão negada. Verifique as regras de segurança do Firestore.`;
+            userMessage = `Erro ao carregar fretes de ${driverName}: Permissão negada. Verifique as regras de segurança do Firestore.`;
         }
         showFeedback(adminGeneralFeedback, userMessage, "error");
         if (adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = userMessage;
@@ -1058,7 +1068,7 @@ function renderAdminDriverTripsTable(driverTripsToRender) {
         const viewButton = document.createElement('button');
         viewButton.className = 'control-btn small-btn';
         viewButton.textContent = 'Ver Detalhes';
-        viewButton.setAttribute('aria-label', `Ver detalhes da viagem de ${formatDate(trip.date)}`);
+        viewButton.setAttribute('aria-label', `Ver detalhes do frete de ${formatDate(trip.date)}`);
         viewButton.onclick = () => showAdminTripDetailModal(trip);
         actionsCell.appendChild(viewButton);
     });
@@ -1105,12 +1115,12 @@ function showAdminTripDetailModal(trip) {
             <p><strong>Descrição (Outras Despesas):</strong> ${trip.expenseDescription || 'Nenhuma'}</p>
         </div>
         <div class="trip-detail-section trip-financial-summary">
-            <h4>Resumo Financeiro da Viagem</h4>
+            <h4>Resumo Financeiro do Frete</h4>
             <p><strong>Valor do Frete:</strong> ${formatCurrency(trip.freightValue)}</p>
             <p><strong>Total de Combustível:</strong> ${formatCurrency(trip.totalFuelCost)}</p>
             <p><strong>Despesas Totais:</strong> ${formatCurrency(trip.totalExpenses)}</p>
-            <p><strong>Lucro Líquido da Viagem:</strong> <strong class="${trip.netProfit >= 0 ? 'profit' : 'loss'}">${formatCurrency(trip.netProfit)}</strong></p>
-            <p><strong>Valor Declarado (Manual):</strong> ${formatCurrency(trip.declaredValue)}</p>
+            <p><strong>Lucro Líquido do Frete:</strong> <strong class="${trip.netProfit >= 0 ? 'profit' : 'loss'}">${formatCurrency(trip.netProfit)}</strong></p>
+            <p><strong>Valor Declarado:</strong> ${formatCurrency(trip.declaredValue)}</p>
         </div>
     `;
     adminTripDetailModal.style.display = 'flex';
@@ -1222,7 +1232,7 @@ function initializeUserView() {
     fuelEntryIdCounter = 0;
     editingTripId = null;
     if (tripIdToEditInput) tripIdToEditInput.value = '';
-    if (submitTripBtn) submitTripBtn.textContent = 'Salvar Viagem';
+    if (submitTripBtn) submitTripBtn.textContent = 'Salvar Frete'; // Atualizado
     if (cancelEditBtn) cancelEditBtn.style.display = 'none';
     if (userFormFeedback) { userFormFeedback.textContent = ''; userFormFeedback.style.display = 'none';}
 
@@ -1263,6 +1273,118 @@ function initializeAdminView() {
 function initializeUserManagementView() {
      if (!loggedInUserProfile || loggedInUserProfile.role !== 'admin' || loggedInUserProfile.username.toLowerCase() !== 'fabio') return;
     loadAndRenderUsersForAdmin();
+}
+
+// --- FUNÇÃO DE EXPORTAÇÃO CSV ---
+function convertToCSV(dataArray, headers) {
+    const array = [headers, ...dataArray];
+    return array.map(row => {
+        return row.map(cell => {
+            const strCell = String(cell === null || cell === undefined ? '' : cell);
+            // Escapar aspas duplas dentro das células e envolver a célula em aspas se contiver vírgula ou aspas
+            const processedCell = strCell.replace(/"/g, '""');
+            if (strCell.includes(',') || strCell.includes('"') || strCell.includes('\n')) {
+                return `"${processedCell}"`;
+            }
+            return processedCell;
+        }).join(',');
+    }).join('\n');
+}
+
+async function handleExportAdminReport() {
+    if (!loggedInUserProfile || loggedInUserProfile.role !== 'admin') {
+        showFeedback(adminGeneralFeedback, "Apenas administradores podem exportar relatórios.", "error");
+        return;
+    }
+    showFeedback(adminGeneralFeedback, "Gerando relatório do mês anterior...", "info");
+
+    const today = new Date();
+    let year = today.getFullYear();
+    let month = today.getMonth(); // 0 = Janeiro, 11 = Dezembro
+
+    if (month === 0) { // Se hoje é Janeiro, o mês anterior é Dezembro do ano passado
+        month = 11;
+        year -= 1;
+    } else {
+        month -= 1; // Mês anterior
+    }
+
+    const firstDayPrevMonth = new Date(year, month, 1);
+    const lastDayPrevMonth = new Date(year, month + 1, 0); // O dia 0 do próximo mês é o último dia do mês atual
+
+    const startDate = firstDayPrevMonth.toISOString().split('T')[0]; // YYYY-MM-DD
+    const endDate = lastDayPrevMonth.toISOString().split('T')[0];   // YYYY-MM-DD
+    const reportMonthStr = `${year}-${String(month + 1).padStart(2, '0')}`; // YYYY-MM
+
+    try {
+        const q = query(tripsCollection, where("date", ">=", startDate), where("date", "<=", endDate), orderBy("date", "asc"));
+        const querySnapshot = await getDocs(q);
+        const reportTrips = [];
+        querySnapshot.forEach(doc => {
+            reportTrips.push({ id: doc.id, ...doc.data() });
+        });
+
+        if (reportTrips.length === 0) {
+            showFeedback(adminGeneralFeedback, `Nenhum frete encontrado para ${reportMonthStr} para exportar.`, "info");
+            return;
+        }
+
+        // Popular cache de perfis se estiver vazio, para mapear userId para username
+        if (userProfiles.length === 0) {
+            const qProfiles = query(userProfilesCollection, orderBy("username"));
+            const profileSnapshot = await getDocs(qProfiles);
+            profileSnapshot.forEach(doc => {
+                if (!userProfiles.find(p => p.uid === doc.id)) {
+                    userProfiles.push({ id: doc.id, ...doc.data() });
+                }
+            });
+        }
+        const userMap = new Map(userProfiles.map(p => [p.uid, p.username]));
+
+        const headers = [
+            "Data", "Motorista", "Tipo Carga", "Km Inicial", "Km Final", "Km Rodados", 
+            "Peso (Kg)", "Valor Frete Bruto (R$)", "Total Combustivel (R$)", "Arla-32 (R$)", "Pedagio (R$)",
+            "Comissao (R$)", "Outras Despesas (R$)", "Descricao Outras Despesas", 
+            "Despesas Totais (R$)", "Lucro Liquido (R$)", "Valor Declarado (R$)"
+        ];
+
+        const dataForCSV = reportTrips.map(trip => [
+            formatDate(trip.date),
+            userMap.get(trip.userId) || trip.driverName, // Usa nome do perfil se disponível, senão o nome no frete
+            trip.cargoType || '',
+            trip.kmInitial || 0,
+            trip.kmFinal || 0,
+            trip.kmDriven || 0,
+            trip.weight || 0,
+            trip.freightValue || 0,
+            trip.totalFuelCost || 0,
+            trip.arla32Cost || 0,
+            trip.tollCost || 0,
+            trip.commissionCost || 0,
+            trip.otherExpenses || 0,
+            trip.expenseDescription || '',
+            trip.totalExpenses || 0,
+            trip.netProfit || 0,
+            trip.declaredValue || 0
+        ]);
+
+        const csvString = convertToCSV(dataForCSV, headers);
+        const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", `Relatorio_Fretes_${reportMonthStr}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        showFeedback(adminGeneralFeedback, `Relatório CSV para ${reportMonthStr} gerado e baixado. Por favor, anexe o arquivo em um e-mail para ibisolaribipitanga@gmail.com.`, "success");
+
+    } catch (error) {
+        console.error("Erro ao gerar relatório CSV:", error);
+        showFeedback(adminGeneralFeedback, "Erro ao gerar relatório. Verifique o console.", "error");
+    }
 }
 
 
@@ -1325,7 +1447,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(tripForm) tripForm.reset();
         if(fuelEntriesContainer) fuelEntriesContainer.innerHTML = '';
         fuelEntryIdCounter = 0;
-        if(submitTripBtn) submitTripBtn.textContent = 'Salvar Viagem';
+        if(submitTripBtn) submitTripBtn.textContent = 'Salvar Frete'; // Atualizado
         if(cancelEditBtn) cancelEditBtn.style.display = 'none';
         if(driverNameInput && loggedInUserProfile) driverNameInput.value = loggedInUserProfile.username; 
         addFuelEntryToForm(); 
@@ -1376,6 +1498,9 @@ document.addEventListener('DOMContentLoaded', () => {
             updateAdminSummary(adminSummaryFilterStartDateInput?.value, adminSummaryFilterEndDateInput?.value);
         });
     }
+    if (exportAdminReportBtn) {
+        exportAdminReportBtn.addEventListener('click', handleExportAdminReport);
+    }
     if (adminLoadDriverTripsBtn && adminSelectDriver) {
         adminLoadDriverTripsBtn.addEventListener('click', () => {
             const selectedDriverUid = adminSelectDriver.value;
@@ -1399,8 +1524,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const modals = document.querySelectorAll('.modal');
     modals.forEach(modal => {
-        // const modalElement = modal as HTMLElement; // No TS, mas aqui é JS
-        if(modal) { // Em JS, apenas verificar se o modal existe
+        if(modal) { 
             modal.style.display = 'none'; 
             modal.addEventListener('click', (event) => {
                 if (event.target === modal) { 

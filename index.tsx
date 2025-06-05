@@ -1,4 +1,3 @@
-
 import { Chart, registerables, ChartConfiguration, ChartItem, ChartTypeRegistry, ChartDataset } from 'chart.js';
 // Firebase App (o núcleo do Firebase SDK) é sempre necessário e deve ser listado primeiro
 import { initializeApp, FirebaseApp } from "firebase/app";

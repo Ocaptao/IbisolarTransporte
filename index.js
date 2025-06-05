@@ -1,4 +1,5 @@
 
+
 import { Chart, registerables } from 'chart.js';
 // Firebase App (o núcleo do Firebase SDK) é sempre necessário e deve ser listado primeiro
 import { initializeApp } from "firebase/app";
@@ -42,101 +43,43 @@ const firebaseConfig = {
 
 // Inicializar Firebase
 let app;
-let authFirebase; // Renomeado para evitar conflito com a variável 'auth' já declarada no escopo global do browser
+let authFirebase; 
 let db;
 let userProfilesCollection;
 let tripsCollection;
 
 try {
     app = initializeApp(firebaseConfig);
-    authFirebase = getAuth(app); // Usando a variável renomeada
+    authFirebase = getAuth(app); 
     db = getFirestore(app);
     userProfilesCollection = collection(db, "userProfiles");
     tripsCollection = collection(db, "trips");
     console.log("Firebase inicializado com sucesso!");
 
     // Anexar o listener onAuthStateChanged somente se a autenticação inicializou com sucesso
-    onAuthStateChanged(authFirebase, async (user) => { // Usando a variável renomeada
-        console.log("onAuthStateChanged acionado. Objeto de usuário:", user ? user.uid : 'null');
-        if (user) {
-            loggedInUser = user;
-            console.log("Usuário está autenticado com UID:", user.uid);
-            try {
-                console.log("Tentando buscar perfil do usuário no Firestore para o UID:", user.uid);
-                const userProfileDocRef = doc(userProfilesCollection, user.uid);
-                const userProfileDoc = await getDoc(userProfileDocRef);
-
-                if (userProfileDoc.exists()) {
-                    if (authFirebase.currentUser && authFirebase.currentUser.uid === user.uid) { // Usando a variável renomeada
-                        loggedInUserProfile = { id: userProfileDoc.id, ...userProfileDoc.data() };
-                        console.log("Perfil do usuário encontrado no Firestore:", "Nome de usuário:", loggedInUserProfile.username, "Papel:", loggedInUserProfile.role);
-
-                        updateNavVisibility();
-                        if (loggedInUserProfile.role === 'admin') {
-                            console.log("Usuário é admin, mostrando adminView.");
-                            showView('adminView');
-                            initializeAdminView();
-                        } else {
-                            console.log("Usuário é motorista, mostrando userView.");
-                            showView('userView');
-                            initializeUserView();
-                        }
-                        if (myTripsViewBtn && myTripsViewBtn.style.display !== 'none') {
-                            console.log("Inicializando a visualização 'Minhas Viagens' para o usuário logado.");
-                            initializeMyTripsView();
-                        }
-                        if (userManagementViewBtn && userManagementViewBtn.style.display !== 'none' && loggedInUserProfile.username.toLowerCase() === 'fabio') {
-                            console.log("Usuário é Fabio (admin), inicializando a visualização 'Gerenciamento de Usuários'.");
-                            initializeUserManagementView();
-                        }
-                    } else {
-                        console.warn("Sessão do usuário alterada (ex: logout ou login de outro usuário) durante a busca do perfil para o UID:", user.uid, ". Abortando atualização da UI para esta sessão obsoleta. O novo estado de autenticação será tratado.");
-                    }
-                } else {
-                    console.error("CRÍTICO: Perfil do usuário NÃO ENCONTRADO no Firestore para o UID:", user.uid, "Email:", user.email);
-                    showFeedback(loginFeedback, `Falha ao carregar perfil (usuário ${user.email || user.uid}). Você será desconectado. Verifique o cadastro ou contate o suporte.`, "error");
-                    setTimeout(() => signOut(authFirebase), 3000); // Usando a variável renomeada
-                }
-            } catch (error) {
-                console.error("ERRO CRÍTICO ao buscar perfil do usuário para o UID:", user.uid, "Erro:", error);
-                showFeedback(loginFeedback, `Erro ao carregar dados do perfil (usuário ${user.email || user.uid}). Você será desconectado. (${error.message})`, "error");
-                setTimeout(() => signOut(authFirebase), 3000); // Usando a variável renomeada
-            }
-        } else {
-            console.log("Usuário não está autenticado (desconectado ou sessão encerrada).");
-            loggedInUser = null;
-            loggedInUserProfile = null;
-            trips = [];
-            userProfiles = [];
-            updateNavVisibility();
-            showView('loginView');
-            console.log("Usuário está desconectado, mostrando loginView.");
-        }
-        console.log("onAuthStateChanged concluiu o processamento para o usuário:", user ? user.uid : 'null');
-    });
-    console.log("Listener onAuthStateChanged anexado com sucesso.");
-
+    // Este listener foi movido para dentro do try/catch da inicialização no index.tsx
+    // e essa estrutura é mantida aqui.
 } catch (error) {
     console.error("ERRO CRÍTICO: Falha na inicialização do Firebase:", "Código:", error.code, "Mensagem:", error.message);
     alert("Erro crítico: Não foi possível conectar ao serviço de dados. Verifique a configuração do Firebase e sua conexão com a internet.");
-    showView('loginView');
+    if (typeof showView === 'function') showView('loginView'); // Tenta mostrar loginView se disponível
 }
 
 
 // --- VARIÁVEIS DE ESTADO ---
-let trips = []; // Cache local de viagens carregadas
+let trips = []; 
 let editingTripId = null;
-let currentUserForMyTripsSearch = null; // Nome de usuário
-let currentUidForMyTripsSearch = null; // UID do Firebase
+let currentUserForMyTripsSearch = null; 
+let currentUidForMyTripsSearch = null; 
 
-let userProfiles = []; // Cache local de perfis de usuário (para admin)
-let loggedInUser = null; // Usuário do Firebase Auth
-let loggedInUserProfile = null; // Perfil do usuário logado do Firestore
-let editingUserIdForAdmin = null; // UID do usuário sendo editado pelo admin
-let adminSelectedDriverName = null; // Nome de usuário
-let adminSelectedDriverUid = null; // UID do Firebase
+let userProfiles = []; 
+let loggedInUser = null; 
+let loggedInUserProfile = null; 
+let editingUserIdForAdmin = null; 
+let adminSelectedDriverName = null; 
+let adminSelectedDriverUid = null; 
 
-let adminSummaryChart = null; // Instância do gráfico
+let adminSummaryChart = null; 
 
 // --- ELEMENTOS DOM ---
 const loginView = document.getElementById('loginView');
@@ -234,30 +177,25 @@ const editUserConfirmNewPasswordInput = document.getElementById('editUserConfirm
 let fuelEntryIdCounter = 0;
 
 // --- FUNÇÕES UTILITÁRIAS ---
-function generateId() { // Para IDs de elementos HTML (ex: entradas de combustível) se necessário
+function generateId() { 
     return Date.now().toString(36) + Math.random().toString(36).substring(2);
 }
 
 function normalizeUsernameForEmail(username) {
     if (!username) return '';
     const normalized = username
-        .normalize('NFD') // Decompõe caracteres acentuados (ex: "é" para "e" + "´")
-        .replace(/[\\u0300-\\u036f]/g, '') // Remove os diacríticos (acentos)
+        .normalize('NFD') 
+        .replace(/[\\u0300-\\u036f]/g, '') 
         .toLowerCase()
-        .trim() // Remove espaços no início e fim
-        .replace(/\s+/g, '.') // Substitui um ou mais espaços por um único ponto
-        .replace(/[^a-z0-9._-]/g, ''); // Remove caracteres não permitidos (permite letras, números, ., _, -)
+        .trim() 
+        .replace(/\s+/g, '.') 
+        .replace(/[^a-z0-9._-]/g, ''); 
 
-    // Evitar múltiplos pontos consecutivos ou pontos no início/fim que podem ser problemáticos
-    let cleaned = normalized.replace(/\.+/g, '.'); // Substitui múltiplos pontos por um único
+    let cleaned = normalized.replace(/\.+/g, '.'); 
     if (cleaned.startsWith('.')) cleaned = cleaned.substring(1);
     if (cleaned.endsWith('.')) cleaned = cleaned.slice(0, -1);
 
-    // Garante que não está vazio após a limpeza
     if (!cleaned) {
-        // Se após a limpeza o nome ficar vazio (ex: nome só com caracteres especiais),
-        // gere um identificador aleatório para evitar um email inválido.
-        // Ou, idealmente, valide o username antes de chegar aqui.
         return `user.${generateId()}`;
     }
     return cleaned;
@@ -270,13 +208,10 @@ function formatDate(dateInput) {
     let dateToFormat;
 
     if (typeof dateInput === 'string') {
-        // Manipula string YYYY-MM-DD.
-        // Exemplo: "2023-10-26"
-        // new Date("2023-10-26T00:00:00Z") é correto para interpretação UTC
         dateToFormat = new Date(dateInput + 'T00:00:00Z');
-    } else if (dateInput instanceof Date) { // Verifica se já é um objeto Date
+    } else if (dateInput instanceof Date) { 
         dateToFormat = dateInput;
-    } else if (dateInput && typeof dateInput.toDate === 'function') { // Duck-typing para Timestamp do Firestore
+    } else if (dateInput && typeof dateInput.toDate === 'function') { 
         dateToFormat = dateInput.toDate();
     } else {
         console.warn("Tipo de dateInput não suportado em formatDate:", dateInput, typeof dateInput);
@@ -311,7 +246,7 @@ function showFeedback(element, message, type) {
             element.style.display = 'none';
             element.textContent = '';
         }
-    }, 7000); // Aumentado o tempo para mensagens de erro mais longas
+    }, 7000); 
 }
 
 // --- GERENCIAMENTO DE VISUALIZAÇÃO ---
@@ -410,7 +345,7 @@ async function handleRegister(event) {
 
     try {
         console.log("Chamando createUserWithEmailAndPassword com o email:", email);
-        const userCredential = await createUserWithEmailAndPassword(authFirebase, email, password); // CORRIGIDO: authFirebase
+        const userCredential = await createUserWithEmailAndPassword(authFirebase, email, password); 
         const firebaseUser = userCredential.user;
         console.log("Usuário criado na Autenticação:", firebaseUser.uid);
 
@@ -420,11 +355,10 @@ async function handleRegister(event) {
             console.log(`Registrando usuário ${rawUsername} como ADMIN porque o nome de usuário é 'fabio'.`);
         }
 
-        // Criar perfil do usuário no Firestore
         const newUserProfile = {
             uid: firebaseUser.uid,
-            username: rawUsername, // Salvar o nome de usuário original para exibição
-            email: firebaseUser.email || email, // Usar o email do Firebase Auth
+            username: rawUsername, 
+            email: firebaseUser.email || email, 
             role: roleForNewUser,
             createdAt: Timestamp.now()
         };
@@ -476,7 +410,7 @@ async function handleLogin(event) {
     const password = passwordInput.value;
     console.log("Tentando login com:", { rawUsername, normalizedUsernamePart, email });
 
-    if (!password) { // username já foi verificado
+    if (!password) { 
         showFeedback(loginFeedback, "Senha é obrigatória.", "error");
         console.log("Login abortado: senha vazia.");
         return;
@@ -484,11 +418,10 @@ async function handleLogin(event) {
 
     try {
         console.log("Chamando signInWithEmailAndPassword com o email:", email);
-        await signInWithEmailAndPassword(authFirebase, email, password); // CORRIGIDO: authFirebase
-        console.log("signInWithEmailAndPassword bem-sucedido (ou pelo menos não lançou erro imediatamente). Aguardando onAuthStateChanged.");
+        await signInWithEmailAndPassword(authFirebase, email, password); 
+        console.log("signInWithEmailAndPassword bem-sucedido. Aguardando onAuthStateChanged.");
         showFeedback(loginFeedback, "Login bem-sucedido! Redirecionando...", "success");
         if (loginForm) loginForm.reset();
-        // onAuthStateChanged irá lidar com a atualização da UI e do estado loggedInUser/loggedInUserProfile
     } catch (error) {
         console.error("ERRO CRÍTICO durante o login:", "Código:", error.code, "Mensagem:", error.message);
         if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
@@ -506,11 +439,9 @@ async function handleLogin(event) {
 async function handleLogout() {
     console.log("Tentando logout...");
     try {
-        await signOut(authFirebase); // CORRIGIDO: authFirebase
+        await signOut(authFirebase); 
         console.log("Usuário desconectado do Firebase Auth.");
-        // onAuthStateChanged irá limpar loggedInUser e loggedInUserProfile e redirecionar
         showFeedback(loginFeedback, "Você foi desconectado.", "info");
-        // Limpeza adicional da UI pode ser feita aqui ou em onAuthStateChanged
         if(myTripsTableBody) myTripsTableBody.innerHTML = '';
         if(myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = 'Nenhuma viagem para exibir...';
         if(adminDriverTripsTableBody) adminDriverTripsTableBody.innerHTML = '';
@@ -532,7 +463,67 @@ async function handleLogout() {
     }
 }
 
-// Listener de estado de autenticação está agora dentro do try/catch da inicialização do Firebase
+// Listener de estado de autenticação
+if (authFirebase) { // Adicionado verificação para garantir que authFirebase foi inicializado
+    onAuthStateChanged(authFirebase, async (user) => { 
+        console.log("onAuthStateChanged acionado. Objeto de usuário:", user ? user.uid : 'null');
+        if (user) {
+            loggedInUser = user;
+            console.log("Usuário está autenticado com UID:", user.uid);
+            try {
+                console.log("Tentando buscar perfil do usuário no Firestore para o UID:", user.uid);
+                const userProfileDocRef = doc(userProfilesCollection, user.uid);
+                const userProfileDoc = await getDoc(userProfileDocRef);
+
+                if (userProfileDoc.exists()) {
+                    if (authFirebase.currentUser && authFirebase.currentUser.uid === user.uid) { 
+                        loggedInUserProfile = { id: userProfileDoc.id, ...userProfileDoc.data() };
+                        console.log("Perfil do usuário encontrado no Firestore:", "Nome de usuário:", loggedInUserProfile.username, "Papel:", loggedInUserProfile.role);
+
+                        updateNavVisibility();
+                        if (loggedInUserProfile.role === 'admin') {
+                            console.log("Usuário é admin, mostrando adminView.");
+                            showView('adminView');
+                            initializeAdminView();
+                        } else {
+                            console.log("Usuário é motorista, mostrando userView.");
+                            showView('userView');
+                            initializeUserView();
+                        }
+                        if (myTripsViewBtn && myTripsViewBtn.style.display !== 'none') {
+                            console.log("Inicializando a visualização 'Minhas Viagens' para o usuário logado.");
+                            initializeMyTripsView();
+                        }
+                        if (userManagementViewBtn && userManagementViewBtn.style.display !== 'none' && loggedInUserProfile.username.toLowerCase() === 'fabio') {
+                            console.log("Usuário é Fabio (admin), inicializando a visualização 'Gerenciamento de Usuários'.");
+                            initializeUserManagementView();
+                        }
+                    } else {
+                        console.warn("Sessão do usuário alterada durante a busca do perfil para o UID:", user.uid, ". Abortando atualização da UI.");
+                    }
+                } else {
+                    console.error("CRÍTICO: Perfil do usuário NÃO ENCONTRADO no Firestore para o UID:", user.uid, "Email:", user.email);
+                    showFeedback(loginFeedback, `Falha ao carregar perfil (usuário ${user.email || user.uid}). Você será desconectado. Verifique o cadastro ou contate o suporte.`, "error");
+                    setTimeout(() => signOut(authFirebase), 3000); 
+                }
+            } catch (error) {
+                console.error("ERRO CRÍTICO ao buscar perfil do usuário para o UID:", user.uid, "Erro:", error);
+                showFeedback(loginFeedback, `Erro ao carregar dados do perfil (usuário ${user.email || user.uid}). Você será desconectado. (${error.message})`, "error");
+                setTimeout(() => signOut(authFirebase), 3000); 
+            }
+        } else {
+            console.log("Usuário não está autenticado (desconectado ou sessão encerrada).");
+            loggedInUser = null;
+            loggedInUserProfile = null;
+            trips = [];
+            userProfiles = [];
+            updateNavVisibility();
+            showView('loginView');
+            console.log("Usuário está desconectado, mostrando loginView.");
+        }
+        console.log("onAuthStateChanged concluiu o processamento para o usuário:", user ? user.uid : 'null');
+    });
+}
 
 
 // --- GERENCIAMENTO DE VIAGENS COM FIRESTORE ---
@@ -541,7 +532,7 @@ function addFuelEntryToForm(entry) {
     const entryId = entry ? entry.id : `fuel_${fuelEntryIdCounter++}`;
     const fuelDiv = document.createElement('div');
     fuelDiv.className = 'fuel-entry-item';
-    fuelDiv.id = entryId; // ID do elemento HTML
+    fuelDiv.id = entryId; 
     fuelDiv.innerHTML = `
         <input type="hidden" name="fuelEntryId" value="${entryId}">
         <div class="form-group">
@@ -589,7 +580,7 @@ function addFuelEntryToForm(entry) {
             entryElementToRemove.remove();
         }
     });
-    if(entry) calculateTotalFuelValue(); // Calcular se preenchendo
+    if(entry) calculateTotalFuelValue(); 
 }
 
 async function handleTripFormSubmit(event) {
@@ -605,13 +596,13 @@ async function handleTripFormSubmit(event) {
     let totalFuelCostCalculated = 0;
 
     fuelEntryElements.forEach(entryEl => {
-        const entryId = entryEl.id; // ID do elemento HTML
+        const entryId = entryEl.id; 
         const liters = parseFloat(entryEl.querySelector(`input[name="liters"]`).value) || 0;
         const valuePerLiter = parseFloat(entryEl.querySelector(`input[name="valuePerLiter"]`).value) || 0;
         const discount = parseFloat(entryEl.querySelector(`input[name="discount"]`).value) || 0;
         const totalValue = (liters * valuePerLiter) - discount;
 
-        if (liters > 0 && valuePerLiter > 0) { // Apenas adicionar entradas válidas
+        if (liters > 0 && valuePerLiter > 0) { 
             fuelEntriesFromForm.push({
                 id: entryId, 
                 liters,
@@ -668,9 +659,6 @@ async function handleTripFormSubmit(event) {
         if (editingTripId) {
             const tripRef = doc(tripsCollection, editingTripId);
             const updatePayload = { ...tripDataObjectFromForm };
-            // Se você adicionar um campo 'updatedAt' à interface Trip, defina-o aqui:
-            // updatePayload.updatedAt = Timestamp.now();
-            
             await updateDoc(tripRef, updatePayload);
             showFeedback(userFormFeedback, "Viagem atualizada com sucesso!", "success");
         } else {
@@ -695,7 +683,7 @@ async function handleTripFormSubmit(event) {
         }
         if (adminView && adminView.style.display === 'block') {
             updateAdminSummary();
-            if (adminSelectedDriverUid === loggedInUser.uid) { 
+            if (loggedInUser && adminSelectedDriverUid === loggedInUser.uid) { 
                 loadAndRenderAdminDriverTrips(adminSelectedDriverUid, loggedInUserProfile.username);
             }
         }
@@ -726,8 +714,8 @@ async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
         targetUid = currentUidForMyTripsSearch;
         targetUsername = currentUserForMyTripsSearch;
     }
-
-    if (!targetUid) {
+    
+    if (!targetUid) { 
         const msg = 'Não foi possível identificar o motorista para carregar as viagens.';
          if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = msg;
         showFeedback(myTripsFeedback, msg, "error");
@@ -897,8 +885,6 @@ function confirmDeleteTrip(tripId, driverNameForConfirm) {
             return;
         }
     } else if (!loggedInUserProfile || loggedInUserProfile.role !== 'admin' || loggedInUserProfile.username.toLowerCase() !== 'fabio') {
-        // Se a viagem não foi encontrada no cache 'trips' E o usuário não é o admin "Fabio",
-        // ele não deve poder deletar algo que não está carregado/visível para ele ou que ele não tenha permissão global.
         showFeedback(myTripsFeedback, "Viagem não encontrada ou permissão para exclusão global negada.", "error");
         return;
     }
@@ -1186,8 +1172,6 @@ function openEditUserModal(userProf) {
     editUserRoleSelect.value = userProf.role;
     editUserNewPasswordInput.value = ''; 
     editUserConfirmNewPasswordInput.value = '';
-    editUsernameDisplayInput.value = userProf.username; 
-    editUserRoleSelect.value = userProf.role; 
     editUserModal.style.display = 'flex';
     showFeedback(editUserFeedback, "", "info"); 
 }
@@ -1214,7 +1198,7 @@ async function handleEditUserFormSubmit(event) {
         await updateDoc(userProfileRef, { role: newRole }); 
 
         if (newPassword) {
-            showFeedback(editUserFeedback, "Papel do usuário atualizado. A alteração de senha por esta tela não é suportada. Use o console do Firebase ou peça ao usuário para redefinir.", "info");
+            showFeedback(editUserFeedback, "Papel do usuário atualizado. A alteração de senha por esta tela não é diretamente suportada. Se necessário, o administrador pode usar o console do Firebase ou o usuário pode redefinir sua própria senha.", "info");
         } else {
             showFeedback(editUserFeedback, "Papel do usuário atualizado com sucesso!", "success");
         }
@@ -1286,16 +1270,12 @@ function initializeUserManagementView() {
 document.addEventListener('DOMContentLoaded', () => {
     console.log("Evento DOMContentLoaded disparado.");
 
-    // Adiciona listeners para alternar entre login/cadastro ANTES da checagem do Firebase
-    // para permitir navegação básica mesmo que o Firebase falhe.
     if (showRegisterViewLink) {
         showRegisterViewLink.addEventListener('click', (e) => { e.preventDefault(); showView('registerView'); });
-        console.log("Listener de evento adicionado para showRegisterViewLink.");
     } else { console.error("showRegisterViewLink não encontrado!"); }
 
     if (showLoginViewLink) {
         showLoginViewLink.addEventListener('click', (e) => { e.preventDefault(); showView('loginView'); });
-        console.log("Listener de evento adicionado para showLoginViewLink.");
     } else { console.error("showLoginViewLink não encontrado!"); }
 
 
@@ -1304,7 +1284,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const body = document.querySelector('body');
         if (body) {
             const errorDiv = document.createElement('div');
-            errorDiv.textContent = "ERRO CRÍTICO: FALHA AO CONECTAR AOS SERVIÇOS DE DADOS. VERIFIQUE O CONSOLE E A CONFIGURAÇÃO DO FIREBASE.";
+            errorDiv.textContent = "ERRO CRÍTICO: FALHA AO CONECTAR AOS SERVIÇOS DE DADOS. VERIFIQUE O CONSOLE.";
             errorDiv.style.backgroundColor = "red";
             errorDiv.style.color = "white";
             errorDiv.style.padding = "10px";
@@ -1407,22 +1387,23 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    if(closeAdminTripDetailModalBtn) {
-        closeAdminTripDetailModalBtn.addEventListener('click', () => { if(adminTripDetailModal) adminTripDetailModal.style.display = 'none'; });
+    if(closeAdminTripDetailModalBtn && adminTripDetailModal) {
+        closeAdminTripDetailModalBtn.addEventListener('click', () => adminTripDetailModal.style.display = 'none');
     }
 
 
     if(editUserForm) editUserForm.addEventListener('submit', handleEditUserFormSubmit);
-    if(closeEditUserModalBtn) {
-        closeEditUserModalBtn.addEventListener('click', () => {if(editUserModal) editUserModal.style.display = 'none'; });
+    if(closeEditUserModalBtn && editUserModal) {
+        closeEditUserModalBtn.addEventListener('click', () => editUserModal.style.display = 'none');
     }
 
     const modals = document.querySelectorAll('.modal');
     modals.forEach(modal => {
-        if(modal) {
-            modal.style.display = 'none'; // Garantir que todos os modais comecem escondidos
+        // const modalElement = modal as HTMLElement; // No TS, mas aqui é JS
+        if(modal) { // Em JS, apenas verificar se o modal existe
+            modal.style.display = 'none'; 
             modal.addEventListener('click', (event) => {
-                if (event.target === modal) { // Se o clique foi no fundo do modal
+                if (event.target === modal) { 
                     modal.style.display = 'none';
                 }
             });

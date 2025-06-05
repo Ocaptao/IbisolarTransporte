@@ -49,7 +49,13 @@ try {
   db = getFirestore(app)
   console.log("Firebase initialized successfully!")
 } catch (error) {
-  console.error("CRITICAL ERROR: Firebase initialization failed:", error)
+  console.error(
+    "CRITICAL ERROR: Firebase initialization failed:",
+    "Code:",
+    error.code,
+    "Message:",
+    error.message
+  )
   alert(
     "Erro crítico: Não foi possível conectar ao serviço de dados. Verifique a configuração do Firebase e sua conexão com a internet."
   )
@@ -210,6 +216,31 @@ function generateId() {
   )
 }
 
+function normalizeUsernameForEmail(username) {
+  if (!username) return ""
+  const normalized = username
+    .normalize("NFD") // Decompõe caracteres acentuados (ex: "é" para "e" + "´")
+    .replace(/[\u0300-\u036f]/g, "") // Remove os diacríticos (acentos)
+    .toLowerCase()
+    .trim() // Remove espaços no início e fim
+    .replace(/\s+/g, ".") // Substitui um ou mais espaços por um único ponto
+    .replace(/[^a-z0-9._-]/g, "") // Remove caracteres não permitidos (permite letras, números, ., _, -)
+
+  // Evitar múltiplos pontos consecutivos ou pontos no início/fim que podem ser problemáticos
+  let cleaned = normalized.replace(/\.+/g, ".") // Substitui múltiplos pontos por um único
+  if (cleaned.startsWith(".")) cleaned = cleaned.substring(1)
+  if (cleaned.endsWith(".")) cleaned = cleaned.slice(0, -1)
+
+  // Garante que não está vazio após a limpeza
+  if (!cleaned) {
+    // Se após a limpeza o nome ficar vazio (ex: nome só com caracteres especiais),
+    // gere um identificador aleatório para evitar um email inválido.
+    // Ou, idealmente, valide o username antes de chegar aqui.
+    return `user.${generateId()}`
+  }
+  return cleaned
+}
+
 function formatDate(dateInput) {
   if (!dateInput) return "Data inválida"
 
@@ -334,13 +365,33 @@ async function handleRegister(event) {
     "registerConfirmPassword"
   )
 
-  const username = usernameInput.value.trim() // Usaremos como nome de exibição
-  const email = `${username.toLowerCase().replace(/\s+/g, ".")}@example.com` // Cria um email único, mas o ideal é coletar email real
+  const rawUsername = usernameInput.value.trim()
+  const normalizedUsernamePart = normalizeUsernameForEmail(rawUsername)
+
+  if (!rawUsername) {
+    showFeedback(registerFeedback, "Nome de usuário é obrigatório.", "error")
+    return
+  }
+  if (!normalizedUsernamePart) {
+    showFeedback(
+      registerFeedback,
+      "Nome de usuário inválido após normalização (ex: contém apenas caracteres especiais). Por favor, use um nome de usuário com letras ou números.",
+      "error"
+    )
+    return
+  }
+
+  const email = `${normalizedUsernamePart}@example.com`
   const password = passwordInput.value
   const confirmPassword = confirmPasswordInput.value
-  console.log("Registration details:", { username, email })
+  console.log("Registration details:", {
+    rawUsername,
+    normalizedUsernamePart,
+    email
+  })
 
-  if (!username || !password || !confirmPassword) {
+  if (!password || !confirmPassword) {
+    // username já foi verificado
     showFeedback(registerFeedback, "Todos os campos são obrigatórios.", "error")
     return
   }
@@ -358,7 +409,7 @@ async function handleRegister(event) {
   }
 
   try {
-    console.log("Calling createUserWithEmailAndPassword...")
+    console.log("Calling createUserWithEmailAndPassword with email:", email)
     const userCredential = await createUserWithEmailAndPassword(
       auth,
       email,
@@ -367,16 +418,23 @@ async function handleRegister(event) {
     const firebaseUser = userCredential.user
     console.log("User created in Auth:", firebaseUser.uid)
 
+    let roleForNewUser = "motorista"
+    if (rawUsername.toLowerCase() === "fabio") {
+      roleForNewUser = "admin"
+      console.log(
+        `Registering user ${rawUsername} as ADMIN because username is 'fabio'.`
+      )
+    }
+
     // Criar perfil do usuário no Firestore
     const newUserProfile = {
       uid: firebaseUser.uid,
-      username: username,
+      username: rawUsername, // Salvar o nome de usuário original para exibição
       email: firebaseUser.email || email, // Usar o email do Firebase Auth
-      role: "motorista", // Papel padrão
+      role: roleForNewUser,
       createdAt: Timestamp.now()
     }
     console.log("Creating user profile in Firestore:", newUserProfile)
-    // Use a importação explícita de firebaseSetDoc
     await firebaseSetDoc(
       doc(db, "userProfiles", firebaseUser.uid),
       newUserProfile
@@ -393,10 +451,9 @@ async function handleRegister(event) {
   } catch (error) {
     console.error(
       "CRITICAL ERROR during registration:",
-      error,
-      "Error Code:",
+      "Code:",
       error.code,
-      "Error Message:",
+      "Message:",
       error.message
     )
     if (error.code === "auth/email-already-in-use") {
@@ -409,6 +466,12 @@ async function handleRegister(event) {
       showFeedback(
         registerFeedback,
         "Senha muito fraca. Tente uma mais forte.",
+        "error"
+      )
+    } else if (error.code === "auth/invalid-email") {
+      showFeedback(
+        registerFeedback,
+        `O nome de usuário "${rawUsername}" resultou em um formato de e-mail inválido ("${email}"). Tente um nome de usuário diferente, com menos caracteres especiais.`,
         "error"
       )
     } else {
@@ -427,23 +490,41 @@ async function handleLogin(event) {
   const usernameInput = document.getElementById("loginUsername")
   const passwordInput = document.getElementById("loginPassword")
 
-  const username = usernameInput.value.trim()
-  const email = `${username.toLowerCase().replace(/\s+/g, ".")}@example.com`
-  const password = passwordInput.value
-  console.log("Attempting login with:", { username, email })
+  const rawUsername = usernameInput.value.trim()
+  const normalizedUsernamePart = normalizeUsernameForEmail(rawUsername)
 
-  if (!username || !password) {
+  if (!rawUsername) {
+    showFeedback(loginFeedback, "Nome de usuário é obrigatório.", "error")
+    console.log("Login aborted: username empty.")
+    return
+  }
+  if (!normalizedUsernamePart) {
     showFeedback(
       loginFeedback,
-      "Nome de usuário e senha são obrigatórios.",
+      `Nome de usuário "${rawUsername}" inválido. Use um nome com letras ou números.`,
       "error"
     )
-    console.log("Login aborted: username or password empty.")
+    console.log("Login aborted: normalized username part is empty.")
+    return
+  }
+
+  const email = `${normalizedUsernamePart}@example.com`
+  const password = passwordInput.value
+  console.log("Attempting login with:", {
+    rawUsername,
+    normalizedUsernamePart,
+    email
+  })
+
+  if (!password) {
+    // username já foi verificado
+    showFeedback(loginFeedback, "Senha é obrigatória.", "error")
+    console.log("Login aborted: password empty.")
     return
   }
 
   try {
-    console.log("Calling signInWithEmailAndPassword...")
+    console.log("Calling signInWithEmailAndPassword with email:", email)
     await signInWithEmailAndPassword(auth, email, password)
     console.log(
       "signInWithEmailAndPassword successful (or at least did not throw immediately). Waiting for onAuthStateChanged."
@@ -458,10 +539,9 @@ async function handleLogin(event) {
   } catch (error) {
     console.error(
       "CRITICAL ERROR during login:",
-      error,
-      "Error Code:",
+      "Code:",
       error.code,
-      "Error Message:",
+      "Message:",
       error.message
     )
     if (
@@ -472,6 +552,12 @@ async function handleLogin(event) {
       showFeedback(
         loginFeedback,
         "Nome de usuário ou senha incorretos.",
+        "error"
+      )
+    } else if (error.code === "auth/invalid-email") {
+      showFeedback(
+        loginFeedback,
+        `O nome de usuário "${rawUsername}" resultou em um formato de e-mail inválido ("${email}") para o login. Verifique se digitou corretamente.`,
         "error"
       )
     } else {
@@ -514,14 +600,23 @@ async function handleLogout() {
     if (fuelEntriesContainer) fuelEntriesContainer.innerHTML = ""
     fuelEntryIdCounter = 0
   } catch (error) {
-    console.error("CRITICAL ERROR during logout:", error)
+    console.error(
+      "CRITICAL ERROR during logout:",
+      "Code:",
+      error.code,
+      "Message:",
+      error.message
+    )
     showFeedback(loginFeedback, "Erro ao sair. Tente novamente.", "error")
   }
 }
 
 // Listener de estado de autenticação
 onAuthStateChanged(auth, async user => {
-  console.log("onAuthStateChanged triggered. User object:", user)
+  console.log(
+    "onAuthStateChanged triggered. User object:",
+    user ? user.uid : "null"
+  )
   if (user) {
     loggedInUser = user
     console.log("User is authenticated with UID:", user.uid)
@@ -538,7 +633,13 @@ onAuthStateChanged(auth, async user => {
           id: userProfileDoc.id,
           ...userProfileDoc.data()
         }
-        console.log("User profile found in Firestore:", loggedInUserProfile)
+        console.log(
+          "User profile found in Firestore:",
+          "Username:",
+          loggedInUserProfile.username,
+          "Role:",
+          loggedInUserProfile.role
+        )
 
         updateNavVisibility()
         if (loggedInUserProfile.role === "admin") {
@@ -576,7 +677,13 @@ onAuthStateChanged(auth, async user => {
         )
       }
     } catch (error) {
-      console.error("CRITICAL ERROR fetching user profile:", error)
+      console.error(
+        "CRITICAL ERROR fetching user profile:",
+        "Code:",
+        error.code,
+        "Message:",
+        error.message
+      )
       await handleLogout() // Forçar logout em caso de erro
       showFeedback(
         loginFeedback,
@@ -792,7 +899,13 @@ async function handleTripFormSubmit(event) {
       }
     }
   } catch (error) {
-    console.error("Error saving trip to Firestore:", error)
+    console.error(
+      "Error saving trip to Firestore:",
+      "Code:",
+      error.code,
+      "Message:",
+      error.message
+    )
     showFeedback(
       userFormFeedback,
       "Erro ao salvar viagem. Tente novamente.",
@@ -874,7 +987,10 @@ async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
   } catch (error) {
     console.error(
       `Error loading trips for ${targetUsername} from Firestore:`,
-      error
+      "Code:",
+      error.code,
+      "Message:",
+      error.message
     )
     showFeedback(
       myTripsFeedback,
@@ -1011,7 +1127,13 @@ async function loadTripForEditing(tripId) {
       )
     }
   } catch (error) {
-    console.error("Error loading trip for editing:", error)
+    console.error(
+      "Error loading trip for editing:",
+      "Code:",
+      error.code,
+      "Message:",
+      error.message
+    )
     showFeedback(
       myTripsFeedback,
       "Erro ao carregar viagem para edição.",
@@ -1089,7 +1211,13 @@ async function deleteTrip(tripId) {
       updateAdminSummary() // Se nenhuma viagem de motorista específica estiver carregada
     }
   } catch (error) {
-    console.error("Error deleting trip from Firestore:", error)
+    console.error(
+      "Error deleting trip from Firestore:",
+      "Code:",
+      error.code,
+      "Message:",
+      error.message
+    )
     showFeedback(
       myTripsFeedback,
       "Erro ao excluir viagem. Tente novamente.",
@@ -1169,7 +1297,13 @@ async function updateAdminSummary(filterStartDate, filterEndDate) {
     // const monthlyChartData = Array.from(monthlyDataMap.values()).sort((a, b) => a.month.localeCompare(b.month));
     // renderAdminSummaryChart({ totalTrips, totalFreight, totalExpenses: totalExpensesOverall, totalNetProfit: totalNetProfitOverall, monthlyChartData });
   } catch (error) {
-    console.error("Error updating admin summary:", error)
+    console.error(
+      "Error updating admin summary:",
+      "Code:",
+      error.code,
+      "Message:",
+      error.message
+    )
     showFeedback(
       adminGeneralFeedback,
       "Erro ao atualizar resumo do administrador.",
@@ -1196,7 +1330,13 @@ async function populateAdminDriverSelect() {
     })
     adminSelectDriver.innerHTML = options.join("")
   } catch (error) {
-    console.error("Error populating admin driver select:", error)
+    console.error(
+      "Error populating admin driver select:",
+      "Code:",
+      error.code,
+      "Message:",
+      error.message
+    )
     adminSelectDriver.innerHTML =
       '<option value="">-- Erro ao carregar --</option>'
   }
@@ -1244,7 +1384,10 @@ async function loadAndRenderAdminDriverTrips(driverUid, driverName) {
   } catch (error) {
     console.error(
       `Error loading trips for driver ${driverName} (UID: ${driverUid}):`,
-      error
+      "Code:",
+      error.code,
+      "Message:",
+      error.message
     )
     showFeedback(
       adminGeneralFeedback,
@@ -1380,7 +1523,13 @@ async function loadAndRenderUsersForAdmin() {
 
     renderUserManagementTable(userProfiles)
   } catch (error) {
-    console.error("Error loading users for admin:", error)
+    console.error(
+      "Error loading users for admin:",
+      "Code:",
+      error.code,
+      "Message:",
+      error.message
+    )
     showFeedback(
       userManagementFeedback,
       "Erro ao carregar lista de usuários.",
@@ -1427,7 +1576,8 @@ function openEditUserModal(userProf) {
   editUserRoleSelect.value = userProf.role
   editUserNewPasswordInput.value = "" // Limpar campos de senha
   editUserConfirmNewPasswordInput.value = ""
-  editUserForm.reset() // Garante que o form esteja limpo, exceto os valores preenchidos acima
+  // editUserForm.reset(); // Garante que o form esteja limpo, exceto os valores preenchidos acima - CUIDADO: Isso limpa tudo
+  // Explicitly set values after potential reset if it were used:
   editUsernameDisplayInput.value = userProf.username // Repopulate readonly field
   editUserRoleSelect.value = userProf.role // Repopulate role
   editUserModal.style.display = "flex"
@@ -1483,7 +1633,13 @@ async function handleEditUserFormSubmit(event) {
       closeEditUserModalBtn.click()
     }, 1500)
   } catch (error) {
-    console.error("Error updating user role/password:", error)
+    console.error(
+      "Error updating user role/password:",
+      "Code:",
+      error.code,
+      "Message:",
+      error.message
+    )
     showFeedback(
       editUserFeedback,
       "Erro ao atualizar usuário. Tente novamente.",
@@ -1638,12 +1794,12 @@ document.addEventListener("DOMContentLoaded", () => {
   if (cancelEditBtn)
     cancelEditBtn.addEventListener("click", () => {
       editingTripId = null
-      tripIdToEditInput.value = ""
-      tripForm.reset()
-      fuelEntriesContainer.innerHTML = ""
+      if (tripIdToEditInput) tripIdToEditInput.value = ""
+      if (tripForm) tripForm.reset()
+      if (fuelEntriesContainer) fuelEntriesContainer.innerHTML = ""
       fuelEntryIdCounter = 0
-      submitTripBtn.textContent = "Salvar Viagem"
-      cancelEditBtn.style.display = "none"
+      if (submitTripBtn) submitTripBtn.textContent = "Salvar Viagem"
+      if (cancelEditBtn) cancelEditBtn.style.display = "none"
       if (driverNameInput && loggedInUserProfile)
         driverNameInput.value = loggedInUserProfile.username // Pre-fill driver name
       addFuelEntryToForm() // Add one blank fuel entry
@@ -1696,7 +1852,13 @@ document.addEventListener("DOMContentLoaded", () => {
           updateDriverSummary([], driverNameToSearch) // Limpa o resumo
         }
       } catch (err) {
-        console.error("Error searching driver by name:", err)
+        console.error(
+          "Error searching driver by name:",
+          "Code:",
+          err.code,
+          "Message:",
+          err.message
+        )
         showFeedback(myTripsFeedback, "Erro ao buscar motorista.", "error")
       }
     })
@@ -1727,7 +1889,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (selectedDriverUid && selectedDriverName) {
         loadAndRenderAdminDriverTrips(selectedDriverUid, selectedDriverName)
       } else {
-        adminDriverTripsSection.style.display = "none"
+        if (adminDriverTripsSection)
+          adminDriverTripsSection.style.display = "none"
       }
     })
   }
@@ -1765,26 +1928,3 @@ document.addEventListener("DOMContentLoaded", () => {
   // Estado inicial da aplicação é controlado pelo onAuthStateChanged.
   // O onAuthStateChanged é chamado automaticamente quando o auth é inicializado.
 })
-
-// Polyfill para setDoc com merge (caso não seja importado de 'firebase/firestore')
-// A importação explícita de `firebaseSetDoc` de `firebase/firestore` no topo do arquivo é a abordagem correta.
-// Esta função setDoc local não é mais necessária.
-/*
-async function setDoc(docRef: any, data: any, options?: { merge?: boolean }) {
-    const firestore = getFirestore(); // Certifique-se que db (firestore instance) está disponível
-    const colPath = docRef.parent.path;
-    const docId = docRef.id;
-    const fullPath = `${colPath}/${docId}`;
-
-    if (options && options.merge) {
-        return updateDoc(doc(firestore, fullPath), data); // updateDoc faz merge por padrão
-    } else {
-        // Para um set completo (sobrescrever), o SDK setDoc é o correto.
-        // Se a importação direta de setDoc de 'firebase/firestore' não funcionar devido a
-        // como o esm.sh lida com os exports, esta é uma forma de garantir.
-        // No entanto, a importação direta de `setDoc` do SDK é preferível.
-        // const { setDoc: firebaseSetDoc } = await import("firebase/firestore"); // Movido para o topo
-        return firebaseSetDoc(docRef, data);
-    }
-}
-*/

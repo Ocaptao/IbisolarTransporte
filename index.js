@@ -161,6 +161,7 @@ const adminDriverTripsPlaceholder = document.getElementById('adminDriverTripsPla
 const adminTripDetailModal = document.getElementById('adminTripDetailModal');
 const closeAdminTripDetailModalBtn = document.getElementById('closeAdminTripDetailModalBtn');
 const adminTripDetailContent = document.getElementById('adminTripDetailContent');
+const printAdminTripDetailBtn = document.getElementById('printAdminTripDetailBtn');
 
 const userManagementTableBody = document.getElementById('userManagementTableBody');
 const editUserModal = document.getElementById('editUserModal');
@@ -1563,6 +1564,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if(closeAdminTripDetailModalBtn && adminTripDetailModal) {
         closeAdminTripDetailModalBtn.addEventListener('click', () => adminTripDetailModal.style.display = 'none');
+    }
+    if (printAdminTripDetailBtn) {
+        printAdminTripDetailBtn.addEventListener('click', () => {
+            if (adminTripDetailModal && adminTripDetailModal.style.display === 'flex') {
+                window.print();
+            } else {
+                console.warn("Botão de imprimir clicado, mas o modal de detalhes do frete não está visível.");
+                 showFeedback(adminGeneralFeedback, "Abra os detalhes de um frete para imprimir.", "info");
+            }
+        });
     }
 
 

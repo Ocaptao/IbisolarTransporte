@@ -282,8 +282,8 @@ function updateNavVisibility() {
     if (loggedInUser && loggedInUserProfile) {
         if(logoutBtn) logoutBtn.style.display = 'inline-block';
         if (loggedInUserProfile.role === 'admin') {
-            if(userViewBtn) userViewBtn.style.display = 'inline-block';
-            if(myTripsViewBtn) myTripsViewBtn.style.display = 'inline-block';
+            if(userViewBtn) userViewBtn.style.display = 'none'; // Admin não registra viagem por aqui
+            if(myTripsViewBtn) myTripsViewBtn.style.display = 'none'; // Admin não tem "Minhas Viagens" aqui
             if(adminViewBtn) adminViewBtn.style.display = 'inline-block';
             if (loggedInUserProfile.username.toLowerCase() === 'fabio' && userManagementViewBtn) {
                  userManagementViewBtn.style.display = 'inline-block';
@@ -366,10 +366,9 @@ async function handleRegister(event) {
         await firebaseSetDoc(doc(userProfilesCollection, firebaseUser.uid), newUserProfile);
         console.log("Perfil do usuário criado no Firestore.");
 
-
-        showFeedback(registerFeedback, "Cadastro realizado com sucesso! Faça o login.", "success");
+        showFeedback(registerFeedback, "Cadastro realizado com sucesso! Redirecionando...", "success");
         if (registerForm) registerForm.reset();
-        setTimeout(() => showView('loginView'), 1500);
+        // O onAuthStateChanged cuidará do redirecionamento para a view apropriada (userView/adminView).
 
     } catch (error) {
         console.error("ERRO CRÍTICO durante o cadastro:", "Código:", error.code, "Mensagem:", error.message);
@@ -490,6 +489,7 @@ if (authFirebase) { // Adicionado verificação para garantir que authFirebase f
                             showView('userView');
                             initializeUserView();
                         }
+                        // Esta condição agora previne initializeMyTripsView para admin, pois myTripsViewBtn estará 'none'
                         if (myTripsViewBtn && myTripsViewBtn.style.display !== 'none') {
                             console.log("Inicializando a visualização 'Minhas Viagens' para o usuário logado.");
                             initializeMyTripsView();

@@ -342,6 +342,7 @@ function updateNavVisibility() {
 // --- AUTHENTICATION WITH FIREBASE ---
 async function handleRegister(event: Event) {
     event.preventDefault();
+    console.log("Attempting registration...");
     const usernameInput = document.getElementById('registerUsername') as HTMLInputElement;
     const passwordInput = document.getElementById('registerPassword') as HTMLInputElement;
     const confirmPasswordInput = document.getElementById('registerConfirmPassword') as HTMLInputElement;
@@ -350,6 +351,8 @@ async function handleRegister(event: Event) {
     const email = `${username.toLowerCase().replace(/\s+/g, '.')}@example.com`; // Cria um email único, mas o ideal é coletar email real
     const password = passwordInput.value;
     const confirmPassword = confirmPasswordInput.value;
+    console.log("Registration details:", { username, email });
+
 
     if (!username || !password || !confirmPassword) {
         showFeedback(registerFeedback, "Todos os campos são obrigatórios.", "error");
@@ -365,8 +368,10 @@ async function handleRegister(event: Event) {
     }
 
     try {
+        console.log("Calling createUserWithEmailAndPassword...");
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const firebaseUser = userCredential.user;
+        console.log("User created in Auth:", firebaseUser.uid);
 
         // Criar perfil do usuário no Firestore
         const newUserProfile: UserProfile = {
@@ -376,8 +381,10 @@ async function handleRegister(event: Event) {
             role: 'motorista', // Papel padrão
             createdAt: Timestamp.now()
         };
+        console.log("Creating user profile in Firestore:", newUserProfile);
         // Use a importação explícita de firebaseSetDoc
         await firebaseSetDoc(doc(db, "userProfiles", firebaseUser.uid), newUserProfile);
+        console.log("User profile created in Firestore.");
 
 
         showFeedback(registerFeedback, "Cadastro realizado com sucesso! Faça o login.", "success");
@@ -385,51 +392,57 @@ async function handleRegister(event: Event) {
         setTimeout(() => showView('loginView'), 1500);
 
     } catch (error: any) {
-        console.error("Error during registration:", error);
+        console.error("CRITICAL ERROR during registration:", error, "Error Code:", error.code, "Error Message:", error.message);
         if (error.code === 'auth/email-already-in-use') {
             showFeedback(registerFeedback, "Nome de usuário (ou e-mail derivado) já existe. Tente outro.", "error");
         } else if (error.code === 'auth/weak-password') {
             showFeedback(registerFeedback, "Senha muito fraca. Tente uma mais forte.", "error");
         } else {
-            showFeedback(registerFeedback, "Erro ao registrar. Tente novamente.", "error");
+            showFeedback(registerFeedback, "Erro ao registrar. Verifique o console para detalhes.", "error");
         }
     }
 }
 
 async function handleLogin(event: Event) {
     event.preventDefault();
+    console.log("handleLogin function started.");
     const usernameInput = document.getElementById('loginUsername') as HTMLInputElement;
     const passwordInput = document.getElementById('loginPassword') as HTMLInputElement;
 
     const username = usernameInput.value.trim();
-    // Derivar o email da mesma forma que no registro para consistência
     const email = `${username.toLowerCase().replace(/\s+/g, '.')}@example.com`;
     const password = passwordInput.value;
+    console.log("Attempting login with:", { username, email });
 
     if (!username || !password) {
         showFeedback(loginFeedback, "Nome de usuário e senha são obrigatórios.", "error");
+        console.log("Login aborted: username or password empty.");
         return;
     }
 
     try {
+        console.log("Calling signInWithEmailAndPassword...");
         await signInWithEmailAndPassword(auth, email, password);
-        // onAuthStateChanged irá lidar com a atualização do UI e do estado loggedInUser/loggedInUserProfile
+        console.log("signInWithEmailAndPassword successful (or at least did not throw immediately). Waiting for onAuthStateChanged.");
         showFeedback(loginFeedback, "Login bem-sucedido! Redirecionando...", "success");
         loginForm.reset();
-        // Não precisa redirecionar aqui, onAuthStateChanged fará isso
+        // onAuthStateChanged irá lidar com a atualização do UI e do estado loggedInUser/loggedInUserProfile
     } catch (error: any) {
-        console.error("Error during login:", error);
+        console.error("CRITICAL ERROR during login:", error, "Error Code:", error.code, "Error Message:", error.message);
         if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
             showFeedback(loginFeedback, "Nome de usuário ou senha incorretos.", "error");
         } else {
-            showFeedback(loginFeedback, "Erro ao tentar fazer login. Tente novamente.", "error");
+            showFeedback(loginFeedback, "Erro ao tentar fazer login. Verifique o console para detalhes.", "error");
         }
     }
+     console.log("handleLogin function finished.");
 }
 
 async function handleLogout() {
+    console.log("Attempting logout...");
     try {
         await signOut(auth);
+        console.log("User signed out from Firebase Auth.");
         // onAuthStateChanged irá limpar loggedInUser e loggedInUserProfile e redirecionar
         showFeedback(loginFeedback, "Você foi desconectado.", "info");
         // Limpeza adicional de UI pode ser feita aqui ou em onAuthStateChanged
@@ -449,58 +462,66 @@ async function handleLogout() {
         if (fuelEntriesContainer) fuelEntriesContainer.innerHTML = '';
         fuelEntryIdCounter = 0;
     } catch (error) {
-        console.error("Error during logout:", error);
+        console.error("CRITICAL ERROR during logout:", error);
         showFeedback(loginFeedback, "Erro ao sair. Tente novamente.", "error");
     }
 }
 
 // Listener de estado de autenticação
 onAuthStateChanged(auth, async (user) => {
+    console.log("onAuthStateChanged triggered. User object:", user);
     if (user) {
         loggedInUser = user;
+        console.log("User is authenticated with UID:", user.uid);
         try {
-            const userProfileDoc = await getDoc(doc(db, "userProfiles", user.uid));
+            console.log("Attempting to fetch user profile from Firestore for UID:", user.uid);
+            const userProfileDocRef = doc(db, "userProfiles", user.uid);
+            const userProfileDoc = await getDoc(userProfileDocRef);
+
             if (userProfileDoc.exists()) {
                 loggedInUserProfile = { id: userProfileDoc.id, ...userProfileDoc.data() } as UserProfile;
-                console.log("User is logged in:", loggedInUser);
-                console.log("User profile:", loggedInUserProfile);
+                console.log("User profile found in Firestore:", loggedInUserProfile);
 
                 updateNavVisibility();
                 if (loggedInUserProfile.role === 'admin') {
+                    console.log("User is admin, showing adminView.");
                     showView('adminView');
                     initializeAdminView();
                 } else {
+                    console.log("User is motorista, showing userView.");
                     showView('userView');
                     initializeUserView();
                 }
                 if (myTripsViewBtn.style.display !== 'none') {
+                    console.log("Initializing My Trips View for logged in user.");
                     initializeMyTripsView();
                 }
                 if (userManagementViewBtn.style.display !== 'none' && loggedInUserProfile.username.toLowerCase() === 'fabio') {
+                    console.log("User is Fabio (admin), initializing User Management View.");
                     initializeUserManagementView();
                 }
 
-
             } else {
-                console.error("CRITICAL: User profile not found in Firestore for UID:", user.uid);
-                // Forçar logout se o perfil não existir, pois o app depende dele
-                await handleLogout();
-                showFeedback(loginFeedback, "Erro ao carregar perfil do usuário. Tente novamente.", "error");
+                console.error("CRITICAL: User profile NOT FOUND in Firestore for UID:", user.uid);
+                await handleLogout(); // Forçar logout se o perfil não existir
+                showFeedback(loginFeedback, "Perfil do usuário não encontrado. Faça o cadastro novamente ou contate o suporte.", "error");
             }
         } catch (error) {
-            console.error("Error fetching user profile:", error);
+            console.error("CRITICAL ERROR fetching user profile:", error);
             await handleLogout(); // Forçar logout em caso de erro
-            showFeedback(loginFeedback, "Erro ao carregar dados do usuário. Tente novamente.", "error");
+            showFeedback(loginFeedback, "Erro crítico ao carregar dados do usuário. Verifique o console.", "error");
         }
     } else {
+        console.log("User is not authenticated (logged out or session ended).");
         loggedInUser = null;
         loggedInUserProfile = null;
         trips = []; // Limpar cache de viagens
         userProfiles = []; // Limpar cache de perfis
         updateNavVisibility();
         showView('loginView');
-        console.log("User is logged out.");
+        console.log("User is logged out, showing loginView.");
     }
+    console.log("onAuthStateChanged finished processing.");
 });
 
 
@@ -1249,10 +1270,10 @@ function initializeUserManagementView() {
 
 // --- EVENT LISTENERS ---
 document.addEventListener('DOMContentLoaded', () => {
+    console.log("DOMContentLoaded event fired.");
     // Verificação de inicialização do Firebase
     if (!app || !auth || !db) {
-        console.error("Firebase não foi inicializado corretamente. O aplicativo pode não funcionar.");
-        // Opcionalmente, mostrar uma mensagem ao usuário na UI
+        console.error("CRITICAL DOMContentLoaded: Firebase not initialized correctly. App listeners not added.");
         const body = document.querySelector('body');
         if (body) {
             const errorDiv = document.createElement('div');
@@ -1270,11 +1291,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return; // Impede a adição de outros listeners se o Firebase falhou
     }
+    console.log("Firebase seems initialized, proceeding to add event listeners.");
 
 
     // Auth forms
-    if (registerForm) registerForm.addEventListener('submit', handleRegister);
-    if (loginForm) loginForm.addEventListener('submit', handleLogin);
+    if (registerForm) {
+        registerForm.addEventListener('submit', handleRegister);
+        console.log("Event listener added for registerForm.");
+    } else { console.error("registerForm not found!");}
+    if (loginForm) {
+        loginForm.addEventListener('submit', handleLogin);
+        console.log("Event listener added for loginForm.");
+    } else { console.error("loginForm not found!");}
+
     if (showRegisterViewLink) showRegisterViewLink.addEventListener('click', (e) => { e.preventDefault(); showView('registerView'); });
     if (showLoginViewLink) showLoginViewLink.addEventListener('click', (e) => { e.preventDefault(); showView('loginView'); });
     if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
@@ -1383,8 +1412,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
-
+    console.log("All DOMContentLoaded event listeners nominally set up.");
     // Estado inicial da aplicação é controlado pelo onAuthStateChanged.
+    // O onAuthStateChanged é chamado automaticamente quando o auth é inicializado.
 });
 
 // Polyfill para setDoc com merge (caso não seja importado de 'firebase/firestore')

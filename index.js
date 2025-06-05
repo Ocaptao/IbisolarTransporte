@@ -473,7 +473,7 @@ async function handleLogout() {
 if (authFirebase) { 
     onAuthStateChanged(authFirebase, async (user) => { 
         console.log("onAuthStateChanged acionado. Objeto de usuário:", user ? user.uid : 'null');
-        console.log("loggedInUserProfile ANTES da busca no onAuthStateChanged:", loggedInUserProfile);
+        // console.log("loggedInUserProfile ANTES da busca no onAuthStateChanged:", loggedInUserProfile); // Removido log redundante
         if (user) {
             loggedInUser = user;
             console.log("Usuário está autenticado com UID:", user.uid);
@@ -481,13 +481,13 @@ if (authFirebase) {
                 console.log("Tentando buscar perfil do usuário no Firestore para o UID:", user.uid);
                 const userProfileDocRef = doc(userProfilesCollection, user.uid);
                 const userProfileDoc = await getDoc(userProfileDocRef);
-                console.log("loggedInUserProfile APÓS a busca no onAuthStateChanged (antes de if exists):", loggedInUserProfile); 
+                // console.log("loggedInUserProfile APÓS a busca no onAuthStateChanged (antes de if exists):", loggedInUserProfile);  // Removido log redundante
 
                 if (userProfileDoc.exists()) {
                     if (authFirebase.currentUser && authFirebase.currentUser.uid === user.uid) { 
                         loggedInUserProfile = { id: userProfileDoc.id, ...userProfileDoc.data() };
                         console.log("Perfil do usuário encontrado no Firestore:", "Nome de usuário:", loggedInUserProfile.username, "Papel:", loggedInUserProfile.role);
-                        console.log("loggedInUserProfile ATUALIZADO:", loggedInUserProfile); 
+                        // console.log("loggedInUserProfile ATUALIZADO:", loggedInUserProfile); // Removido log redundante
 
                         updateNavVisibility();
                         if (loggedInUserProfile.role === 'admin') {
@@ -993,16 +993,19 @@ async function populateAdminDriverSelect() {
     if (!adminSelectDriver) return;
     adminSelectDriver.innerHTML = '<option value="">-- Carregando Motoristas --</option>';
     try {
+        // Garantir que userProfiles global esteja populado
         if (userProfiles.length === 0) {
             const qProfiles = query(userProfilesCollection, orderBy("username"));
             const profileSnapshot = await getDocs(qProfiles);
             profileSnapshot.forEach(doc => {
+                // Adiciona ao cache global se não existir para evitar duplicatas (embora o if externo já previna)
                 if (!userProfiles.find(p => p.uid === doc.id)) { 
                     userProfiles.push({ id: doc.id, ...doc.data() });
                 }
             });
         }
 
+        // Filtrar apenas motoristas do cache global já populado
         const motoristas = userProfiles.filter(p => p.role === 'motorista').sort((a,b) => a.username.localeCompare(b.username));
         
         const options = ['<option value="">-- Selecione um Motorista --</option>'];
@@ -1364,16 +1367,21 @@ async function handleExportAdminReport() {
             return;
         }
 
-        if (userProfiles.length === 0) {
-            const qProfiles = query(userProfilesCollection, orderBy("username"));
-            const profileSnapshot = await getDocs(qProfiles);
-            profileSnapshot.forEach(doc => {
-                if (!userProfiles.find(p => p.uid === doc.id)) {
-                    userProfiles.push({ id: doc.id, ...doc.data() });
-                }
-            });
-        }
-        const userMap = new Map(userProfiles.map(p => [p.uid, p.username]));
+        // Buscar todos os perfis de usuário para garantir que o mapa de usuários esteja completo
+        const localUserProfilesForReport = [];
+        const qProfiles = query(userProfilesCollection, orderBy("username"));
+        const profileSnapshot = await getDocs(qProfiles);
+        profileSnapshot.forEach(doc => {
+            localUserProfilesForReport.push({ uid: doc.id, ...doc.data() }); // Garante que uid está no objeto, se id for o uid.
+        });
+        
+        // Se id do documento não for o uid, e uid estiver no data():
+        // profileSnapshot.forEach(doc => {
+        //     localUserProfilesForReport.push({ ...doc.data() }); 
+        // });
+
+        const userMap = new Map(localUserProfilesForReport.map(p => [p.uid, p.username]));
+
 
         const headers = [
             "Data", "Motorista", "Tipo Carga", "Km Inicial", "Km Final", "Km Rodados", 
@@ -1384,7 +1392,7 @@ async function handleExportAdminReport() {
 
         const dataForHTML = reportTrips.map(trip => [
             formatDate(trip.date),
-            userMap.get(trip.userId) || trip.driverName, 
+            userMap.get(trip.userId) || trip.driverName, // Usa o userMap atualizado
             trip.cargoType || '',
             trip.kmInitial || 0,
             trip.kmFinal || 0,
@@ -1504,7 +1512,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!userSnapshot.empty) {
                     const foundUser = userSnapshot.docs[0].data(); 
                     currentUserForMyTripsSearch = foundUser.username;
-                    currentUidForMyTripsSearch = foundUser.uid;
+                    currentUidForMyTripsSearch = foundUser.uid; // Assumindo que o ID do documento é o UID ou que 'uid' existe no data()
                     loadAndRenderMyTrips(myTripsFilterStartDateInput?.value, myTripsFilterEndDateInput?.value);
                 } else {
                     showFeedback(myTripsFeedback, `Motorista "${driverNameToSearch}" não encontrado.`, "error");

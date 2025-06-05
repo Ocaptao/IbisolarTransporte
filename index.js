@@ -247,6 +247,16 @@ function showFeedback(element, message, type) {
     }, 7000); 
 }
 
+function escapeHtml(unsafe) {
+    if (unsafe === null || unsafe === undefined) return '';
+    return String(unsafe)
+         .replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#039;");
+}
+
 // --- GERENCIAMENTO DE VISUALIZAÇÃO ---
 function showView(viewId) {
     const views = document.querySelectorAll('.view');
@@ -471,13 +481,13 @@ if (authFirebase) {
                 console.log("Tentando buscar perfil do usuário no Firestore para o UID:", user.uid);
                 const userProfileDocRef = doc(userProfilesCollection, user.uid);
                 const userProfileDoc = await getDoc(userProfileDocRef);
-                console.log("loggedInUserProfile APÓS a busca no onAuthStateChanged (antes de if exists):", loggedInUserProfile); // Log para diagnóstico
+                console.log("loggedInUserProfile APÓS a busca no onAuthStateChanged (antes de if exists):", loggedInUserProfile); 
 
                 if (userProfileDoc.exists()) {
                     if (authFirebase.currentUser && authFirebase.currentUser.uid === user.uid) { 
                         loggedInUserProfile = { id: userProfileDoc.id, ...userProfileDoc.data() };
                         console.log("Perfil do usuário encontrado no Firestore:", "Nome de usuário:", loggedInUserProfile.username, "Papel:", loggedInUserProfile.role);
-                        console.log("loggedInUserProfile ATUALIZADO:", loggedInUserProfile); // Log para diagnóstico
+                        console.log("loggedInUserProfile ATUALIZADO:", loggedInUserProfile); 
 
                         updateNavVisibility();
                         if (loggedInUserProfile.role === 'admin') {
@@ -493,7 +503,6 @@ if (authFirebase) {
                             console.log("Inicializando a visualização 'Meus Fretes' para o usuário logado.");
                             initializeMyTripsView();
                         }
-                        // Apenas 'fabio' pode ver o Gerenciamento de Usuários
                         if (userManagementViewBtn && userManagementViewBtn.style.display !== 'none' && loggedInUserProfile.username.toLowerCase() === 'fabio') {
                             console.log("Usuário é Fabio (admin), inicializando a visualização 'Gerenciamento de Usuários'.");
                             initializeUserManagementView();
@@ -743,7 +752,7 @@ async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
             fetchedTrips.push({ id: doc.id, ...doc.data() });
         });
 
-        trips = fetchedTrips; // Atualiza cache local com os fretes filtrados/carregados
+        trips = fetchedTrips; 
 
         if (trips.length === 0) {
             if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Nenhum frete encontrado para ${targetUsername}` +
@@ -875,7 +884,6 @@ async function loadTripForEditing(tripId) {
 function confirmDeleteTrip(tripId, driverNameForConfirm) {
     if (!tripId) return;
 
-    // A variável global 'trips' pode conter os fretes da visão 'myTripsView' ou 'adminDriverTripsTable'
     const tripToDelete = trips.find(t => t.id === tripId); 
 
     if (tripToDelete) {
@@ -985,12 +993,11 @@ async function populateAdminDriverSelect() {
     if (!adminSelectDriver) return;
     adminSelectDriver.innerHTML = '<option value="">-- Carregando Motoristas --</option>';
     try {
-        // Garantir que userProfiles está populado
         if (userProfiles.length === 0) {
             const qProfiles = query(userProfilesCollection, orderBy("username"));
             const profileSnapshot = await getDocs(qProfiles);
             profileSnapshot.forEach(doc => {
-                if (!userProfiles.find(p => p.uid === doc.id)) { // Evitar duplicatas se já carregado parcialmente
+                if (!userProfiles.find(p => p.uid === doc.id)) { 
                     userProfiles.push({ id: doc.id, ...doc.data() });
                 }
             });
@@ -1032,7 +1039,7 @@ async function loadAndRenderAdminDriverTrips(driverUid, driverName) {
             driverTrips.push({ id: doc.id, ...doc.data() });
         });
 
-        trips = driverTrips; // Atualiza o cache global 'trips' com os fretes deste motorista
+        trips = driverTrips; 
 
         if (driverTrips.length === 0) {
             if (adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = `Nenhum frete encontrado para ${driverName}.`;
@@ -1232,7 +1239,7 @@ function initializeUserView() {
     fuelEntryIdCounter = 0;
     editingTripId = null;
     if (tripIdToEditInput) tripIdToEditInput.value = '';
-    if (submitTripBtn) submitTripBtn.textContent = 'Salvar Frete'; // Atualizado
+    if (submitTripBtn) submitTripBtn.textContent = 'Salvar Frete'; 
     if (cancelEditBtn) cancelEditBtn.style.display = 'none';
     if (userFormFeedback) { userFormFeedback.textContent = ''; userFormFeedback.style.display = 'none';}
 
@@ -1275,20 +1282,48 @@ function initializeUserManagementView() {
     loadAndRenderUsersForAdmin();
 }
 
-// --- FUNÇÃO DE EXPORTAÇÃO CSV ---
-function convertToCSV(dataArray, headers) {
-    const array = [headers, ...dataArray];
-    return array.map(row => {
-        return row.map(cell => {
-            const strCell = String(cell === null || cell === undefined ? '' : cell);
-            // Escapar aspas duplas dentro das células e envolver a célula em aspas se contiver vírgula ou aspas
-            const processedCell = strCell.replace(/"/g, '""');
-            if (strCell.includes(',') || strCell.includes('"') || strCell.includes('\n')) {
-                return `"${processedCell}"`;
-            }
-            return processedCell;
-        }).join(',');
-    }).join('\n');
+// --- FUNÇÃO DE EXPORTAÇÃO HTML ---
+function convertToHTMLTable(dataArray, headers, reportMonthStr) {
+    let tableHTML = `
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+            <meta charset="UTF-8">
+            <title>Relatório de Fretes ${reportMonthStr}</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background-color: #f2f2f2; font-weight: bold; }
+                tr:nth-child(even) { background-color: #f9f9f9; }
+                h2 { color: #333; }
+            </style>
+        </head>
+        <body>
+            <h2>Relatório de Fretes - Mês ${reportMonthStr}</h2>
+            <table>
+                <thead>
+                    <tr>`;
+    headers.forEach(header => {
+        tableHTML += `<th>${escapeHtml(header)}</th>`;
+    });
+    tableHTML += `
+                    </tr>
+                </thead>
+                <tbody>`;
+    dataArray.forEach(row => {
+        tableHTML += '<tr>';
+        row.forEach(cell => {
+            tableHTML += `<td>${escapeHtml(cell)}</td>`;
+        });
+        tableHTML += '</tr>';
+    });
+    tableHTML += `
+                </tbody>
+            </table>
+        </body>
+        </html>`;
+    return tableHTML;
 }
 
 async function handleExportAdminReport() {
@@ -1300,21 +1335,21 @@ async function handleExportAdminReport() {
 
     const today = new Date();
     let year = today.getFullYear();
-    let month = today.getMonth(); // 0 = Janeiro, 11 = Dezembro
+    let month = today.getMonth(); 
 
-    if (month === 0) { // Se hoje é Janeiro, o mês anterior é Dezembro do ano passado
+    if (month === 0) { 
         month = 11;
         year -= 1;
     } else {
-        month -= 1; // Mês anterior
+        month -= 1; 
     }
 
     const firstDayPrevMonth = new Date(year, month, 1);
-    const lastDayPrevMonth = new Date(year, month + 1, 0); // O dia 0 do próximo mês é o último dia do mês atual
+    const lastDayPrevMonth = new Date(year, month + 1, 0); 
 
-    const startDate = firstDayPrevMonth.toISOString().split('T')[0]; // YYYY-MM-DD
-    const endDate = lastDayPrevMonth.toISOString().split('T')[0];   // YYYY-MM-DD
-    const reportMonthStr = `${year}-${String(month + 1).padStart(2, '0')}`; // YYYY-MM
+    const startDate = firstDayPrevMonth.toISOString().split('T')[0]; 
+    const endDate = lastDayPrevMonth.toISOString().split('T')[0];   
+    const reportMonthStr = `${year}-${String(month + 1).padStart(2, '0')}`; 
 
     try {
         const q = query(tripsCollection, where("date", ">=", startDate), where("date", "<=", endDate), orderBy("date", "asc"));
@@ -1329,7 +1364,6 @@ async function handleExportAdminReport() {
             return;
         }
 
-        // Popular cache de perfis se estiver vazio, para mapear userId para username
         if (userProfiles.length === 0) {
             const qProfiles = query(userProfilesCollection, orderBy("username"));
             const profileSnapshot = await getDocs(qProfiles);
@@ -1348,9 +1382,9 @@ async function handleExportAdminReport() {
             "Despesas Totais (R$)", "Lucro Liquido (R$)", "Valor Declarado (R$)"
         ];
 
-        const dataForCSV = reportTrips.map(trip => [
+        const dataForHTML = reportTrips.map(trip => [
             formatDate(trip.date),
-            userMap.get(trip.userId) || trip.driverName, // Usa nome do perfil se disponível, senão o nome no frete
+            userMap.get(trip.userId) || trip.driverName, 
             trip.cargoType || '',
             trip.kmInitial || 0,
             trip.kmFinal || 0,
@@ -1368,21 +1402,21 @@ async function handleExportAdminReport() {
             trip.declaredValue || 0
         ]);
 
-        const csvString = convertToCSV(dataForCSV, headers);
-        const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+        const htmlString = convertToHTMLTable(dataForHTML, headers, reportMonthStr);
+        const blob = new Blob([htmlString], { type: 'text/html;charset=utf-8;' });
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
         link.setAttribute("href", url);
-        link.setAttribute("download", `Relatorio_Fretes_${reportMonthStr}.csv`);
+        link.setAttribute("download", `Relatorio_Fretes_${reportMonthStr}.html`);
         link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
 
-        showFeedback(adminGeneralFeedback, `Relatório CSV para ${reportMonthStr} gerado e baixado. Por favor, anexe o arquivo em um e-mail para ibisolaribipitanga@gmail.com.`, "success");
+        showFeedback(adminGeneralFeedback, `Relatório HTML para ${reportMonthStr} gerado e baixado. Por favor, anexe o arquivo .html em um e-mail para ibisolaribipitanga@gmail.com.`, "success");
 
     } catch (error) {
-        console.error("Erro ao gerar relatório CSV:", error);
+        console.error("Erro ao gerar relatório HTML:", error);
         showFeedback(adminGeneralFeedback, "Erro ao gerar relatório. Verifique o console.", "error");
     }
 }
@@ -1447,7 +1481,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(tripForm) tripForm.reset();
         if(fuelEntriesContainer) fuelEntriesContainer.innerHTML = '';
         fuelEntryIdCounter = 0;
-        if(submitTripBtn) submitTripBtn.textContent = 'Salvar Frete'; // Atualizado
+        if(submitTripBtn) submitTripBtn.textContent = 'Salvar Frete'; 
         if(cancelEditBtn) cancelEditBtn.style.display = 'none';
         if(driverNameInput && loggedInUserProfile) driverNameInput.value = loggedInUserProfile.username; 
         addFuelEntryToForm(); 

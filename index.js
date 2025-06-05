@@ -29,7 +29,7 @@ import {
 
 Chart.register(...registerables);
 
-// --- FIREBASE CONFIGURATION ---
+// --- CONFIGURAÇÃO DO FIREBASE ---
 const firebaseConfig = {
     apiKey: "AIzaSyC3f9S7B94TI2nCHdC4FbIVPcBVLZGkHCQ",
     authDomain: "ibisolar-transporte.firebaseapp.com",
@@ -42,105 +42,103 @@ const firebaseConfig = {
 
 // Inicializar Firebase
 let app;
-let auth;
+let authFirebase; // Renomeado para evitar conflito com a variável 'auth' já declarada no escopo global do browser
 let db;
 let userProfilesCollection;
 let tripsCollection;
 
 try {
     app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
+    authFirebase = getAuth(app); // Usando a variável renomeada
     db = getFirestore(app);
     userProfilesCollection = collection(db, "userProfiles");
     tripsCollection = collection(db, "trips");
-    console.log("Firebase initialized successfully!");
+    console.log("Firebase inicializado com sucesso!");
 
-    // Attach the onAuthStateChanged listener only if auth initialized successfully
-    onAuthStateChanged(auth, async (user) => {
-        console.log("onAuthStateChanged triggered. User object:", user ? user.uid : 'null');
+    // Anexar o listener onAuthStateChanged somente se a autenticação inicializou com sucesso
+    onAuthStateChanged(authFirebase, async (user) => { // Usando a variável renomeada
+        console.log("onAuthStateChanged acionado. Objeto de usuário:", user ? user.uid : 'null');
         if (user) {
             loggedInUser = user;
-            console.log("User is authenticated with UID:", user.uid);
+            console.log("Usuário está autenticado com UID:", user.uid);
             try {
-                console.log("Attempting to fetch user profile from Firestore for UID:", user.uid);
+                console.log("Tentando buscar perfil do usuário no Firestore para o UID:", user.uid);
                 const userProfileDocRef = doc(userProfilesCollection, user.uid);
                 const userProfileDoc = await getDoc(userProfileDocRef);
 
                 if (userProfileDoc.exists()) {
-                    if (auth.currentUser && auth.currentUser.uid === user.uid) {
+                    if (authFirebase.currentUser && authFirebase.currentUser.uid === user.uid) { // Usando a variável renomeada
                         loggedInUserProfile = { id: userProfileDoc.id, ...userProfileDoc.data() };
-                        console.log("User profile found in Firestore:", "Username:", loggedInUserProfile.username, "Role:", loggedInUserProfile.role);
+                        console.log("Perfil do usuário encontrado no Firestore:", "Nome de usuário:", loggedInUserProfile.username, "Papel:", loggedInUserProfile.role);
 
                         updateNavVisibility();
                         if (loggedInUserProfile.role === 'admin') {
-                            console.log("User is admin, showing adminView.");
+                            console.log("Usuário é admin, mostrando adminView.");
                             showView('adminView');
                             initializeAdminView();
                         } else {
-                            console.log("User is motorista, showing userView.");
+                            console.log("Usuário é motorista, mostrando userView.");
                             showView('userView');
                             initializeUserView();
                         }
                         if (myTripsViewBtn && myTripsViewBtn.style.display !== 'none') {
-                            console.log("Initializing My Trips View for logged in user.");
+                            console.log("Inicializando a visualização 'Minhas Viagens' para o usuário logado.");
                             initializeMyTripsView();
                         }
                         if (userManagementViewBtn && userManagementViewBtn.style.display !== 'none' && loggedInUserProfile.username.toLowerCase() === 'fabio') {
-                            console.log("User is Fabio (admin), initializing User Management View.");
+                            console.log("Usuário é Fabio (admin), inicializando a visualização 'Gerenciamento de Usuários'.");
                             initializeUserManagementView();
                         }
                     } else {
-                        console.warn("User session changed while fetching profile for UID:", user.uid, ". Aborting UI update.");
+                        console.warn("Sessão do usuário alterada (ex: logout ou login de outro usuário) durante a busca do perfil para o UID:", user.uid, ". Abortando atualização da UI para esta sessão obsoleta. O novo estado de autenticação será tratado.");
                     }
                 } else {
-                    console.error("CRITICAL: User profile NOT FOUND in Firestore for UID:", user.uid, "Email:", user.email);
+                    console.error("CRÍTICO: Perfil do usuário NÃO ENCONTRADO no Firestore para o UID:", user.uid, "Email:", user.email);
                     showFeedback(loginFeedback, `Falha ao carregar perfil (usuário ${user.email || user.uid}). Você será desconectado. Verifique o cadastro ou contate o suporte.`, "error");
-                    setTimeout(() => signOut(auth), 3000);
+                    setTimeout(() => signOut(authFirebase), 3000); // Usando a variável renomeada
                 }
             } catch (error) {
-                console.error("CRITICAL ERROR fetching user profile for UID:", user.uid, "Error:", error);
+                console.error("ERRO CRÍTICO ao buscar perfil do usuário para o UID:", user.uid, "Erro:", error);
                 showFeedback(loginFeedback, `Erro ao carregar dados do perfil (usuário ${user.email || user.uid}). Você será desconectado. (${error.message})`, "error");
-                setTimeout(() => signOut(auth), 3000);
+                setTimeout(() => signOut(authFirebase), 3000); // Usando a variável renomeada
             }
         } else {
-            console.log("User is not authenticated.");
+            console.log("Usuário não está autenticado (desconectado ou sessão encerrada).");
             loggedInUser = null;
             loggedInUserProfile = null;
             trips = [];
             userProfiles = [];
             updateNavVisibility();
             showView('loginView');
-            console.log("User is logged out, showing loginView.");
+            console.log("Usuário está desconectado, mostrando loginView.");
         }
-        console.log("onAuthStateChanged finished processing for user:", user ? user.uid : 'null');
+        console.log("onAuthStateChanged concluiu o processamento para o usuário:", user ? user.uid : 'null');
     });
-    console.log("onAuthStateChanged listener attached successfully.");
+    console.log("Listener onAuthStateChanged anexado com sucesso.");
 
 } catch (error) {
-    console.error("CRITICAL ERROR: Firebase initialization failed:", "Code:", error.code, "Message:", error.message);
+    console.error("ERRO CRÍTICO: Falha na inicialização do Firebase:", "Código:", error.code, "Mensagem:", error.message);
     alert("Erro crítico: Não foi possível conectar ao serviço de dados. Verifique a configuração do Firebase e sua conexão com a internet.");
-    // Fallback: try to show login view, though buttons might not work if DOMContentLoaded also detects issues.
-    // The DOMContentLoaded handler will also display a persistent error if Firebase vars are not set.
     showView('loginView');
 }
 
 
-// --- STATE VARIABLES ---
+// --- VARIÁVEIS DE ESTADO ---
 let trips = []; // Cache local de viagens carregadas
 let editingTripId = null;
-let currentUserForMyTripsSearch = null; // Username
+let currentUserForMyTripsSearch = null; // Nome de usuário
 let currentUidForMyTripsSearch = null; // UID do Firebase
 
 let userProfiles = []; // Cache local de perfis de usuário (para admin)
 let loggedInUser = null; // Usuário do Firebase Auth
 let loggedInUserProfile = null; // Perfil do usuário logado do Firestore
 let editingUserIdForAdmin = null; // UID do usuário sendo editado pelo admin
-let adminSelectedDriverName = null; // Username
+let adminSelectedDriverName = null; // Nome de usuário
 let adminSelectedDriverUid = null; // UID do Firebase
 
-let adminSummaryChart = null; // Chart instance
+let adminSummaryChart = null; // Instância do gráfico
 
-// --- DOM ELEMENTS ---
+// --- ELEMENTOS DOM ---
 const loginView = document.getElementById('loginView');
 const registerView = document.getElementById('registerView');
 const appContainer = document.getElementById('appContainer');
@@ -235,30 +233,36 @@ const editUserConfirmNewPasswordInput = document.getElementById('editUserConfirm
 
 let fuelEntryIdCounter = 0;
 
-// --- UTILITY FUNCTIONS ---
-function generateId() {
+// --- FUNÇÕES UTILITÁRIAS ---
+function generateId() { // Para IDs de elementos HTML (ex: entradas de combustível) se necessário
     return Date.now().toString(36) + Math.random().toString(36).substring(2);
 }
 
 function normalizeUsernameForEmail(username) {
     if (!username) return '';
     const normalized = username
-        .normalize('NFD')
-        .replace(/[\\u0300-\\u036f]/g, '')
+        .normalize('NFD') // Decompõe caracteres acentuados (ex: "é" para "e" + "´")
+        .replace(/[\\u0300-\\u036f]/g, '') // Remove os diacríticos (acentos)
         .toLowerCase()
-        .trim()
-        .replace(/\s+/g, '.')
-        .replace(/[^a-z0-9._-]/g, '');
+        .trim() // Remove espaços no início e fim
+        .replace(/\s+/g, '.') // Substitui um ou mais espaços por um único ponto
+        .replace(/[^a-z0-9._-]/g, ''); // Remove caracteres não permitidos (permite letras, números, ., _, -)
 
-    let cleaned = normalized.replace(/\.+/g, '.');
+    // Evitar múltiplos pontos consecutivos ou pontos no início/fim que podem ser problemáticos
+    let cleaned = normalized.replace(/\.+/g, '.'); // Substitui múltiplos pontos por um único
     if (cleaned.startsWith('.')) cleaned = cleaned.substring(1);
     if (cleaned.endsWith('.')) cleaned = cleaned.slice(0, -1);
 
+    // Garante que não está vazio após a limpeza
     if (!cleaned) {
+        // Se após a limpeza o nome ficar vazio (ex: nome só com caracteres especiais),
+        // gere um identificador aleatório para evitar um email inválido.
+        // Ou, idealmente, valide o username antes de chegar aqui.
         return `user.${generateId()}`;
     }
     return cleaned;
 }
+
 
 function formatDate(dateInput) {
     if (!dateInput) return 'Data inválida';
@@ -266,22 +270,26 @@ function formatDate(dateInput) {
     let dateToFormat;
 
     if (typeof dateInput === 'string') {
+        // Manipula string YYYY-MM-DD.
+        // Exemplo: "2023-10-26"
+        // new Date("2023-10-26T00:00:00Z") é correto para interpretação UTC
         dateToFormat = new Date(dateInput + 'T00:00:00Z');
-    } else if (dateInput instanceof Date) {
+    } else if (dateInput instanceof Date) { // Verifica se já é um objeto Date
         dateToFormat = dateInput;
-    } else if (dateInput && typeof dateInput.toDate === 'function') { // Firestore Timestamp
+    } else if (dateInput && typeof dateInput.toDate === 'function') { // Duck-typing para Timestamp do Firestore
         dateToFormat = dateInput.toDate();
     } else {
-        console.warn("Unsupported dateInput type in formatDate:", dateInput, typeof dateInput);
+        console.warn("Tipo de dateInput não suportado em formatDate:", dateInput, typeof dateInput);
         return 'Data inválida';
     }
 
     if (isNaN(dateToFormat.getTime())) {
-        console.warn("Date parsing resulted in NaN in formatDate. Original input:", dateInput);
+        console.warn("A conversão da data resultou em NaN em formatDate. Entrada original:", dateInput);
         return 'Data inválida';
     }
     return dateToFormat.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 }
+
 
 function formatCurrency(value) {
     if (value === undefined || value === null || isNaN(value)) {
@@ -292,21 +300,21 @@ function formatCurrency(value) {
 
 function showFeedback(element, message, type) {
     if (!element) {
-        console.warn("Feedback element not found for message:", message);
+        console.warn("Elemento de feedback não encontrado para a mensagem:", message);
         return;
     }
     element.textContent = message;
     element.className = `feedback-message ${type}`;
     element.style.display = 'block';
     setTimeout(() => {
-        if (element) { // Check if element still exists
+        if (element) { 
             element.style.display = 'none';
             element.textContent = '';
         }
     }, 5000);
 }
 
-// --- VIEW MANAGEMENT ---
+// --- GERENCIAMENTO DE VISUALIZAÇÃO ---
 function showView(viewId) {
     const views = document.querySelectorAll('.view');
     views.forEach(view => view.style.display = 'none');
@@ -362,10 +370,10 @@ function updateNavVisibility() {
     }
 }
 
-// --- AUTHENTICATION WITH FIREBASE ---
+// --- AUTENTICAÇÃO COM FIREBASE ---
 async function handleRegister(event) {
     event.preventDefault();
-    console.log("Attempting registration...");
+    console.log("Tentando realizar cadastro...");
     const usernameInput = document.getElementById('registerUsername');
     const passwordInput = document.getElementById('registerPassword');
     const confirmPasswordInput = document.getElementById('registerConfirmPassword');
@@ -385,7 +393,7 @@ async function handleRegister(event) {
     const email = `${normalizedUsernamePart}@example.com`;
     const password = passwordInput.value;
     const confirmPassword = confirmPasswordInput.value;
-    console.log("Registration details:", { rawUsername, normalizedUsernamePart, email });
+    console.log("Detalhes do cadastro:", { rawUsername, normalizedUsernamePart, email });
 
     if (!password || !confirmPassword) {
         showFeedback(registerFeedback, "Todos os campos são obrigatórios.", "error");
@@ -401,41 +409,44 @@ async function handleRegister(event) {
     }
 
     try {
-        console.log("Calling createUserWithEmailAndPassword with email:", email);
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        console.log("Chamando createUserWithEmailAndPassword com o email:", email);
+        const userCredential = await createUserWithEmailAndPassword(authFirebase, email, password); // CORRIGIDO: authFirebase
         const firebaseUser = userCredential.user;
-        console.log("User created in Auth:", firebaseUser.uid);
+        console.log("Usuário criado na Autenticação:", firebaseUser.uid);
 
         let roleForNewUser = 'motorista';
         if (rawUsername.toLowerCase() === 'fabio') {
             roleForNewUser = 'admin';
-            console.log(`Registering user ${rawUsername} as ADMIN because username is 'fabio'.`);
+            console.log(`Registrando usuário ${rawUsername} como ADMIN porque o nome de usuário é 'fabio'.`);
         }
 
+        // Criar perfil do usuário no Firestore
         const newUserProfile = {
             uid: firebaseUser.uid,
-            username: rawUsername,
-            email: firebaseUser.email || email,
+            username: rawUsername, // Salvar o nome de usuário original para exibição
+            email: firebaseUser.email || email, // Usar o email do Firebase Auth
             role: roleForNewUser,
             createdAt: Timestamp.now()
         };
-        console.log("Creating user profile in Firestore:", newUserProfile);
+        console.log("Criando perfil do usuário no Firestore:", newUserProfile);
         await firebaseSetDoc(doc(userProfilesCollection, firebaseUser.uid), newUserProfile);
-        console.log("User profile created in Firestore.");
+        console.log("Perfil do usuário criado no Firestore.");
+
 
         showFeedback(registerFeedback, "Cadastro realizado com sucesso! Faça o login.", "success");
         if (registerForm) registerForm.reset();
         setTimeout(() => showView('loginView'), 1500);
 
     } catch (error) {
-        console.error("CRITICAL ERROR during registration:", "Code:", error.code, "Message:", error.message);
+        console.error("ERRO CRÍTICO durante o cadastro:", "Código:", error.code, "Mensagem:", error.message);
         if (error.code === 'auth/email-already-in-use') {
             showFeedback(registerFeedback, "Nome de usuário (ou e-mail derivado) já existe. Tente outro.", "error");
         } else if (error.code === 'auth/weak-password') {
             showFeedback(registerFeedback, "Senha muito fraca. Tente uma mais forte.", "error");
         } else if (error.code === 'auth/invalid-email') {
             showFeedback(registerFeedback, `O nome de usuário "${rawUsername}" resultou em um formato de e-mail inválido ("${email}"). Tente um nome de usuário diferente, com menos caracteres especiais.`, "error");
-        } else {
+        }
+         else {
             showFeedback(registerFeedback, "Erro ao registrar. Verifique o console para detalhes.", "error");
         }
     }
@@ -443,7 +454,7 @@ async function handleRegister(event) {
 
 async function handleLogin(event) {
     event.preventDefault();
-    console.log("handleLogin function started.");
+    console.log("Função handleLogin iniciada.");
     const usernameInput = document.getElementById('loginUsername');
     const passwordInput = document.getElementById('loginPassword');
 
@@ -452,50 +463,54 @@ async function handleLogin(event) {
 
     if (!rawUsername) {
         showFeedback(loginFeedback, "Nome de usuário é obrigatório.", "error");
-        console.log("Login aborted: username empty.");
+        console.log("Login abortado: nome de usuário vazio.");
         return;
     }
-    if (!normalizedUsernamePart) {
+     if (!normalizedUsernamePart) {
         showFeedback(loginFeedback, `Nome de usuário "${rawUsername}" inválido. Use um nome com letras ou números.`, "error");
-        console.log("Login aborted: normalized username part is empty.");
+        console.log("Login abortado: parte normalizada do nome de usuário está vazia.");
         return;
     }
 
     const email = `${normalizedUsernamePart}@example.com`;
     const password = passwordInput.value;
-    console.log("Attempting login with:", { rawUsername, normalizedUsernamePart, email });
+    console.log("Tentando login com:", { rawUsername, normalizedUsernamePart, email });
 
-    if (!password) {
+    if (!password) { // username já foi verificado
         showFeedback(loginFeedback, "Senha é obrigatória.", "error");
-        console.log("Login aborted: password empty.");
+        console.log("Login abortado: senha vazia.");
         return;
     }
 
     try {
-        console.log("Calling signInWithEmailAndPassword with email:", email);
-        await signInWithEmailAndPassword(auth, email, password);
-        console.log("signInWithEmailAndPassword successful. Waiting for onAuthStateChanged.");
+        console.log("Chamando signInWithEmailAndPassword com o email:", email);
+        await signInWithEmailAndPassword(authFirebase, email, password); // CORRIGIDO: authFirebase
+        console.log("signInWithEmailAndPassword bem-sucedido (ou pelo menos não lançou erro imediatamente). Aguardando onAuthStateChanged.");
         showFeedback(loginFeedback, "Login bem-sucedido! Redirecionando...", "success");
-        if(loginForm) loginForm.reset();
+        if (loginForm) loginForm.reset();
+        // onAuthStateChanged irá lidar com a atualização da UI e do estado loggedInUser/loggedInUserProfile
     } catch (error) {
-        console.error("CRITICAL ERROR during login:", "Code:", error.code, "Message:", error.message);
+        console.error("ERRO CRÍTICO durante o login:", "Código:", error.code, "Mensagem:", error.message);
         if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
             showFeedback(loginFeedback, "Nome de usuário ou senha incorretos.", "error");
         } else if (error.code === 'auth/invalid-email') {
              showFeedback(loginFeedback, `O nome de usuário "${rawUsername}" resultou em um formato de e-mail inválido ("${email}") para o login. Verifique se digitou corretamente.`, "error");
-        } else {
+        }
+        else {
             showFeedback(loginFeedback, "Erro ao tentar fazer login. Verifique o console para detalhes.", "error");
         }
     }
-    console.log("handleLogin function finished.");
+     console.log("Função handleLogin finalizada.");
 }
 
 async function handleLogout() {
-    console.log("Attempting logout...");
+    console.log("Tentando logout...");
     try {
-        await signOut(auth);
-        console.log("User signed out from Firebase Auth.");
+        await signOut(authFirebase); // CORRIGIDO: authFirebase
+        console.log("Usuário desconectado do Firebase Auth.");
+        // onAuthStateChanged irá limpar loggedInUser e loggedInUserProfile e redirecionar
         showFeedback(loginFeedback, "Você foi desconectado.", "info");
+        // Limpeza adicional da UI pode ser feita aqui ou em onAuthStateChanged
         if(myTripsTableBody) myTripsTableBody.innerHTML = '';
         if(myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = 'Nenhuma viagem para exibir...';
         if(adminDriverTripsTableBody) adminDriverTripsTableBody.innerHTML = '';
@@ -512,17 +527,21 @@ async function handleLogout() {
         if (fuelEntriesContainer) fuelEntriesContainer.innerHTML = '';
         fuelEntryIdCounter = 0;
     } catch (error) {
-        console.error("CRITICAL ERROR during logout:", "Code:", error.code, "Message:", error.message);
+        console.error("ERRO CRÍTICO durante o logout:", "Código:", error.code, "Mensagem:", error.message);
         showFeedback(loginFeedback, "Erro ao sair. Tente novamente.", "error");
     }
 }
 
-// --- TRIP MANAGEMENT WITH FIRESTORE ---
+// Listener de estado de autenticação está agora dentro do try/catch da inicialização do Firebase
+
+
+// --- GERENCIAMENTO DE VIAGENS COM FIRESTORE ---
+
 function addFuelEntryToForm(entry) {
     const entryId = entry ? entry.id : `fuel_${fuelEntryIdCounter++}`;
     const fuelDiv = document.createElement('div');
     fuelDiv.className = 'fuel-entry-item';
-    fuelDiv.id = entryId;
+    fuelDiv.id = entryId; // ID do elemento HTML
     fuelDiv.innerHTML = `
         <input type="hidden" name="fuelEntryId" value="${entryId}">
         <div class="form-group">
@@ -543,7 +562,7 @@ function addFuelEntryToForm(entry) {
         </div>
         <button type="button" class="control-btn danger-btn small-btn remove-fuel-entry-btn" data-entry-id="${entryId}" aria-label="Remover este abastecimento">Remover</button>
     `;
-    if(fuelEntriesContainer) fuelEntriesContainer.appendChild(fuelDiv);
+    if (fuelEntriesContainer) fuelEntriesContainer.appendChild(fuelDiv);
 
     const litersInput = document.getElementById(`liters_${entryId}`);
     const valuePerLiterInput = document.getElementById(`valuePerLiter_${entryId}`);
@@ -558,9 +577,9 @@ function addFuelEntryToForm(entry) {
         totalValueInput.value = total.toFixed(2);
     }
 
-    if(litersInput) litersInput.addEventListener('input', calculateTotalFuelValue);
-    if(valuePerLiterInput) valuePerLiterInput.addEventListener('input', calculateTotalFuelValue);
-    if(discountInput) discountInput.addEventListener('input', calculateTotalFuelValue);
+    if (litersInput) litersInput.addEventListener('input', calculateTotalFuelValue);
+    if (valuePerLiterInput) valuePerLiterInput.addEventListener('input', calculateTotalFuelValue);
+    if (discountInput) discountInput.addEventListener('input', calculateTotalFuelValue);
 
     fuelDiv.querySelector('.remove-fuel-entry-btn')?.addEventListener('click', (e) => {
         const targetButton = e.target;
@@ -570,7 +589,7 @@ function addFuelEntryToForm(entry) {
             entryElementToRemove.remove();
         }
     });
-    if(entry) calculateTotalFuelValue();
+    if(entry) calculateTotalFuelValue(); // Calcular se preenchendo
 }
 
 async function handleTripFormSubmit(event) {
@@ -586,13 +605,13 @@ async function handleTripFormSubmit(event) {
     let totalFuelCostCalculated = 0;
 
     fuelEntryElements.forEach(entryEl => {
-        const entryId = entryEl.id;
+        const entryId = entryEl.id; // ID do elemento HTML
         const liters = parseFloat(entryEl.querySelector(`input[name="liters"]`).value) || 0;
         const valuePerLiter = parseFloat(entryEl.querySelector(`input[name="valuePerLiter"]`).value) || 0;
         const discount = parseFloat(entryEl.querySelector(`input[name="discount"]`).value) || 0;
         const totalValue = (liters * valuePerLiter) - discount;
 
-        if (liters > 0 && valuePerLiter > 0) {
+        if (liters > 0 && valuePerLiter > 0) { // Apenas adicionar entradas válidas
             fuelEntriesFromForm.push({
                 id: entryId, 
                 liters,
@@ -641,7 +660,7 @@ async function handleTripFormSubmit(event) {
     };
 
     try {
-        if(submitTripBtn) {
+        if (submitTripBtn) {
             submitTripBtn.disabled = true;
             submitTripBtn.textContent = 'Salvando...';
         }
@@ -649,7 +668,9 @@ async function handleTripFormSubmit(event) {
         if (editingTripId) {
             const tripRef = doc(tripsCollection, editingTripId);
             const updatePayload = { ...tripDataObjectFromForm };
-            // updatePayload.updatedAt = Timestamp.now(); // If you add an 'updatedAt' field
+            // Se você adicionar um campo 'updatedAt' à interface Trip, defina-o aqui:
+            // updatePayload.updatedAt = Timestamp.now();
+            
             await updateDoc(tripRef, updatePayload);
             showFeedback(userFormFeedback, "Viagem atualizada com sucesso!", "success");
         } else {
@@ -666,8 +687,8 @@ async function handleTripFormSubmit(event) {
         editingTripId = null;
         if(tripIdToEditInput) tripIdToEditInput.value = '';
         if (driverNameInput && loggedInUserProfile) driverNameInput.value = loggedInUserProfile.username;
-        if(submitTripBtn) submitTripBtn.textContent = 'Salvar Viagem';
-        if(cancelEditBtn) cancelEditBtn.style.display = 'none';
+        if (submitTripBtn) submitTripBtn.textContent = 'Salvar Viagem';
+        if (cancelEditBtn) cancelEditBtn.style.display = 'none';
 
         if (myTripsView && myTripsView.style.display === 'block' && (!currentUserForMyTripsSearch || currentUserForMyTripsSearch === loggedInUserProfile.username)) {
             loadAndRenderMyTrips();
@@ -680,19 +701,19 @@ async function handleTripFormSubmit(event) {
         }
 
     } catch (error) {
-        console.error("Error saving trip to Firestore:", "Code:", error.code, "Message:", error.message);
+        console.error("Erro ao salvar viagem no Firestore:", "Código:", error.code, "Mensagem:", error.message);
         showFeedback(userFormFeedback, "Erro ao salvar viagem. Tente novamente.", "error");
-        if(submitTripBtn) submitTripBtn.textContent = editingTripId ? 'Salvar Alterações' : 'Salvar Viagem';
+        if (submitTripBtn) submitTripBtn.textContent = editingTripId ? 'Salvar Alterações' : 'Salvar Viagem';
     } finally {
-        if(submitTripBtn) submitTripBtn.disabled = false;
+        if (submitTripBtn) submitTripBtn.disabled = false;
     }
 }
 
 async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
     if (!loggedInUserProfile) {
-        if(myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = 'Você precisa estar logado para ver suas viagens.';
-        if(myTripsTable) myTripsTable.style.display = 'none';
-        if(myTripsTablePlaceholder) myTripsTablePlaceholder.style.display = 'block';
+        if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = 'Você precisa estar logado para ver suas viagens.';
+        if (myTripsTable) myTripsTable.style.display = 'none';
+        if (myTripsTablePlaceholder) myTripsTablePlaceholder.style.display = 'block';
         return;
     }
 
@@ -704,21 +725,21 @@ async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
         targetUsername = currentUserForMyTripsSearch;
     }
 
-    if(myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Carregando viagens de ${targetUsername}...`;
-    if(myTripsTable) myTripsTable.style.display = 'none';
-    if(myTripsTablePlaceholder) myTripsTablePlaceholder.style.display = 'block';
-    if(myTripsTableBody) myTripsTableBody.innerHTML = '';
+    if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Carregando viagens de ${targetUsername}...`;
+    if (myTripsTable) myTripsTable.style.display = 'none';
+    if (myTripsTablePlaceholder) myTripsTablePlaceholder.style.display = 'block';
+    if (myTripsTableBody) myTripsTableBody.innerHTML = '';
 
     try {
-        let qParams = [where("userId", "==", targetUid), orderBy("date", "desc")];
+        let q = query(tripsCollection, where("userId", "==", targetUid), orderBy("date", "desc"));
 
         if (filterStartDate) {
-            qParams.push(where("date", ">=", filterStartDate));
+            q = query(q, where("date", ">=", filterStartDate));
         }
         if (filterEndDate) {
-            qParams.push(where("date", "<=", filterEndDate));
+            q = query(q, where("date", "<=", filterEndDate));
         }
-        const q = query(tripsCollection, ...qParams);
+
 
         const querySnapshot = await getDocs(q);
         const fetchedTrips = [];
@@ -729,36 +750,36 @@ async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
         trips = fetchedTrips; 
 
         if (trips.length === 0) {
-            if(myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Nenhuma viagem encontrada para ${targetUsername}` +
+            if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Nenhuma viagem encontrada para ${targetUsername}` +
                 `${(filterStartDate || filterEndDate) ? ' nos filtros aplicados.' : '.'}`;
         } else {
-            if(myTripsTable) myTripsTable.style.display = 'table';
-            if(myTripsTablePlaceholder) myTripsTablePlaceholder.style.display = 'none';
+            if (myTripsTable) myTripsTable.style.display = 'table';
+            if (myTripsTablePlaceholder) myTripsTablePlaceholder.style.display = 'none';
             renderMyTripsTable(trips);
         }
         updateDriverSummary(trips, targetUsername); 
 
     } catch (error) {
-        console.error(`Error loading trips for ${targetUsername} from Firestore:`, "Code:", error.code, "Message:", error.message);
+        console.error(`Erro ao carregar viagens de ${targetUsername} do Firestore:`, "Código:", error.code, "Mensagem:", error.message);
         showFeedback(myTripsFeedback, `Erro ao carregar viagens de ${targetUsername}.`, "error");
-        if(myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Erro ao carregar viagens de ${targetUsername}.`;
+        if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Erro ao carregar viagens de ${targetUsername}.`;
     }
 }
 
 function renderMyTripsTable(tripsToRender) {
-    if(!myTripsTableBody) return;
+    if (!myTripsTableBody) return;
     myTripsTableBody.innerHTML = '';
     if (tripsToRender.length === 0) {
-        if(myTripsTable) myTripsTable.style.display = 'none';
-        if(myTripsTablePlaceholder) {
-            myTripsTablePlaceholder.style.display = 'block';
-            myTripsTablePlaceholder.textContent = 'Nenhuma viagem para exibir com os filtros atuais.';
+        if (myTripsTable) myTripsTable.style.display = 'none';
+        if (myTripsTablePlaceholder) {
+             myTripsTablePlaceholder.style.display = 'block';
+             myTripsTablePlaceholder.textContent = 'Nenhuma viagem para exibir com os filtros atuais.';
         }
         return;
     }
 
-    if(myTripsTable) myTripsTable.style.display = 'table';
-    if(myTripsTablePlaceholder) myTripsTablePlaceholder.style.display = 'none';
+    if (myTripsTable) myTripsTable.style.display = 'table';
+    if (myTripsTablePlaceholder) myTripsTablePlaceholder.style.display = 'none';
 
     tripsToRender.forEach(trip => {
         const row = myTripsTableBody.insertRow();
@@ -784,6 +805,7 @@ function renderMyTripsTable(tripsToRender) {
             canDelete = true;
         }
 
+
         if (canDelete) {
             const deleteButton = document.createElement('button');
             deleteButton.className = 'control-btn danger-btn small-btn';
@@ -808,10 +830,10 @@ async function loadTripForEditing(tripId) {
                 return;
             }
 
-            if(tripForm) tripForm.reset(); 
-            if(fuelEntriesContainer) fuelEntriesContainer.innerHTML = ''; 
+            if (tripForm) tripForm.reset(); 
+            if (fuelEntriesContainer) fuelEntriesContainer.innerHTML = ''; 
 
-            if(tripIdToEditInput) tripIdToEditInput.value = trip.id;
+            if (tripIdToEditInput) tripIdToEditInput.value = trip.id;
             editingTripId = trip.id;
             if(driverNameInput) driverNameInput.value = trip.driverName; 
             if(tripDateInput) tripDateInput.value = trip.date; 
@@ -831,25 +853,28 @@ async function loadTripForEditing(tripId) {
             if(expenseDescriptionInput) expenseDescriptionInput.value = trip.expenseDescription || '';
             if(declaredValueInput) declaredValueInput.value = trip.declaredValue?.toString() || '';
 
-            if(submitTripBtn) submitTripBtn.textContent = 'Salvar Alterações';
-            if(cancelEditBtn) cancelEditBtn.style.display = 'inline-block';
+
+            if (submitTripBtn) submitTripBtn.textContent = 'Salvar Alterações';
+            if (cancelEditBtn) cancelEditBtn.style.display = 'inline-block';
             showView('userView'); 
-            if(userView) userView.scrollIntoView({ behavior: 'smooth' });
+            if (userView) userView.scrollIntoView({ behavior: 'smooth' });
             showFeedback(userFormFeedback, `Editando viagem de ${trip.driverName} do dia ${formatDate(trip.date)}.`, "info");
 
         } else {
             showFeedback(myTripsFeedback, "Viagem não encontrada para edição.", "error");
         }
     } catch (error) {
-        console.error("Error loading trip for editing:", "Code:", error.code, "Message:", error.message);
+        console.error("Erro ao carregar viagem para edição:", "Código:", error.code, "Mensagem:", error.message);
         showFeedback(myTripsFeedback, "Erro ao carregar viagem para edição.", "error");
     }
 }
 
+
 function confirmDeleteTrip(tripId, driverNameForConfirm) {
     if (!tripId) return;
 
-    const tripToDelete = trips.find(t => t.id === tripId);
+    const tripToDelete = trips.find(t => t.id === tripId) || 
+                        (adminView && adminView.style.display === 'block' ? trips.find(t=>t.id === tripId) : null); 
 
     if (tripToDelete) {
          if (loggedInUser.uid !== tripToDelete.userId &&
@@ -857,11 +882,11 @@ function confirmDeleteTrip(tripId, driverNameForConfirm) {
             showFeedback(myTripsFeedback, "Você não tem permissão para excluir esta viagem.", "error");
             return;
         }
-    } else if (!(loggedInUserProfile?.role === 'admin' && loggedInUserProfile.username.toLowerCase() === 'fabio')) {
-        // If trip not found in local cache and user is not super admin, deny.
-        showFeedback(myTripsFeedback, "Viagem não encontrada ou permissão negada para exclusão direta.", "error");
+    } else if (loggedInUserProfile?.role !== 'admin' || loggedInUserProfile.username.toLowerCase() !== 'fabio') {
+        showFeedback(myTripsFeedback, "Viagem não encontrada ou permissão negada.", "error");
         return;
     }
+
 
     if (confirm(`Tem certeza que deseja excluir a viagem de ${driverNameForConfirm}? Esta ação não pode ser desfeita.`)) {
         deleteTrip(tripId);
@@ -883,7 +908,7 @@ async function deleteTrip(tripId) {
         }
 
     } catch (error) {
-        console.error("Error deleting trip from Firestore:", "Code:", error.code, "Message:", error.message);
+        console.error("Erro ao excluir viagem do Firestore:", "Código:", error.code, "Mensagem:", error.message);
         showFeedback(myTripsFeedback, "Erro ao excluir viagem. Tente novamente.", "error");
     }
 }
@@ -902,7 +927,7 @@ function updateDriverSummary(summaryTrips, driverDisplayName) {
     if (driverTotalFreightParticipatedEl) driverTotalFreightParticipatedEl.textContent = formatCurrency(totalFreight);
     if (driverTotalEarningsEl) driverTotalEarningsEl.textContent = formatCurrency(totalEarnings);
 
-    if (driverSummaryContainer) {
+    if (driverSummaryContainer){
         const summaryTitle = driverSummaryContainer.querySelector('h3');
         if (summaryTitle) {
             if (loggedInUserProfile?.role === 'admin' && currentUserForMyTripsSearch && currentUserForMyTripsSearch !== loggedInUserProfile.username) {
@@ -914,13 +939,15 @@ function updateDriverSummary(summaryTrips, driverDisplayName) {
     }
 }
 
-// --- ADMIN PANEL FUNCTIONS ---
+
+// --- FUNÇÕES DO PAINEL ADMIN ---
 async function updateAdminSummary(filterStartDate, filterEndDate) {
-    let qParams = [orderBy("date", "desc")];
-    if (filterStartDate) qParams.push(where("date", ">=", filterStartDate));
-    if (filterEndDate) qParams.push(where("date", "<=", filterEndDate));
-    
-    const q = query(tripsCollection, ...qParams);
+    if (!adminTotalTripsEl || !adminTotalFreightEl || !adminTotalExpensesEl || !adminTotalNetProfitEl) return;
+
+    let q = query(tripsCollection, orderBy("date", "desc"));
+
+    if (filterStartDate) q = query(q, where("date", ">=", filterStartDate));
+    if (filterEndDate) q = query(q, where("date", "<=", filterEndDate));
 
     try {
         const querySnapshot = await getDocs(q);
@@ -930,20 +957,20 @@ async function updateAdminSummary(filterStartDate, filterEndDate) {
         let totalNetProfitOverall = 0; 
 
         querySnapshot.forEach((doc) => {
-            const trip = doc.data();
+            const trip = doc.data(); 
             totalTrips++;
             totalFreight += trip.freightValue;
             totalExpensesOverall += trip.totalExpenses;
             totalNetProfitOverall += trip.netProfit;
         });
 
-        if(adminTotalTripsEl) adminTotalTripsEl.textContent = totalTrips.toString();
-        if(adminTotalFreightEl) adminTotalFreightEl.textContent = formatCurrency(totalFreight);
-        if(adminTotalExpensesEl) adminTotalExpensesEl.textContent = formatCurrency(totalExpensesOverall);
-        if(adminTotalNetProfitEl) adminTotalNetProfitEl.textContent = formatCurrency(totalNetProfitOverall);
+        adminTotalTripsEl.textContent = totalTrips.toString();
+        adminTotalFreightEl.textContent = formatCurrency(totalFreight);
+        adminTotalExpensesEl.textContent = formatCurrency(totalExpensesOverall);
+        adminTotalNetProfitEl.textContent = formatCurrency(totalNetProfitOverall);
 
     } catch (error) {
-        console.error("Error updating admin summary:", "Code:", error.code, "Message:", error.message);
+        console.error("Erro ao atualizar resumo do administrador:", "Código:", error.code, "Mensagem:", error.message);
         showFeedback(adminGeneralFeedback, "Erro ao atualizar resumo do administrador.", "error");
     }
 }
@@ -956,30 +983,30 @@ async function populateAdminDriverSelect() {
         const querySnapshot = await getDocs(q);
         const options = ['<option value="">-- Selecione um Motorista --</option>'];
         querySnapshot.forEach((doc) => {
-            const user = doc.data();
+            const user = doc.data(); 
             options.push(`<option value="${user.uid}">${user.username}</option>`);
         });
         adminSelectDriver.innerHTML = options.join('');
     } catch (error) {
-        console.error("Error populating admin driver select:", "Code:", error.code, "Message:", error.message);
+        console.error("Erro ao popular select de motoristas do admin:", "Código:", error.code, "Mensagem:", error.message);
         adminSelectDriver.innerHTML = '<option value="">-- Erro ao carregar --</option>';
     }
 }
 
 async function loadAndRenderAdminDriverTrips(driverUid, driverName) {
     if (!driverUid) {
-        if(adminDriverTripsSection) adminDriverTripsSection.style.display = 'none';
+        if (adminDriverTripsSection) adminDriverTripsSection.style.display = 'none';
         return;
     }
     adminSelectedDriverUid = driverUid;
     adminSelectedDriverName = driverName;
 
-    if(adminSelectedDriverNameDisplay) adminSelectedDriverNameDisplay.textContent = `Viagens de ${driverName}`;
-    if(adminDriverTripsTableBody) adminDriverTripsTableBody.innerHTML = '';
-    if(adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = `Carregando viagens de ${driverName}...`;
-    if(adminDriverTripsTable) adminDriverTripsTable.style.display = 'none';
-    if(adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.style.display = 'block';
-    if(adminDriverTripsSection) adminDriverTripsSection.style.display = 'block';
+    if (adminSelectedDriverNameDisplay) adminSelectedDriverNameDisplay.textContent = `Viagens de ${driverName}`;
+    if (adminDriverTripsTableBody) adminDriverTripsTableBody.innerHTML = '';
+    if (adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = `Carregando viagens de ${driverName}...`;
+    if (adminDriverTripsTable) adminDriverTripsTable.style.display = 'none';
+    if (adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.style.display = 'block';
+    if (adminDriverTripsSection) adminDriverTripsSection.style.display = 'block';
 
     try {
         const q = query(tripsCollection, where("userId", "==", driverUid), orderBy("date", "desc"));
@@ -989,25 +1016,25 @@ async function loadAndRenderAdminDriverTrips(driverUid, driverName) {
             driverTrips.push({ id: doc.id, ...doc.data() });
         });
 
-        trips = driverTrips; // Overwrite global trips with specific driver's trips for admin context
+        trips = driverTrips; 
 
         if (driverTrips.length === 0) {
-            if(adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = `Nenhuma viagem encontrada para ${driverName}.`;
+            if (adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = `Nenhuma viagem encontrada para ${driverName}.`;
         } else {
-            if(adminDriverTripsTable) adminDriverTripsTable.style.display = 'table';
-            if(adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.style.display = 'none';
+            if (adminDriverTripsTable) adminDriverTripsTable.style.display = 'table';
+            if (adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.style.display = 'none';
         }
         renderAdminDriverTripsTable(driverTrips);
 
     } catch (error) {
-        console.error(`Error loading trips for driver ${driverName} (UID: ${driverUid}):`, "Code:", error.code, "Message:", error.message);
+        console.error(`Erro ao carregar viagens para o motorista ${driverName} (UID: ${driverUid}):`, "Código:", error.code, "Mensagem:", error.message);
         showFeedback(adminGeneralFeedback, `Erro ao carregar viagens de ${driverName}.`, "error");
-        if(adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = `Erro ao carregar viagens de ${driverName}.`;
+        if (adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = `Erro ao carregar viagens de ${driverName}.`;
     }
 }
 
 function renderAdminDriverTripsTable(driverTripsToRender) {
-    if(!adminDriverTripsTableBody) return;
+    if (!adminDriverTripsTableBody) return;
     adminDriverTripsTableBody.innerHTML = '';
     driverTripsToRender.forEach(trip => {
         const row = adminDriverTripsTableBody.insertRow();
@@ -1026,6 +1053,7 @@ function renderAdminDriverTripsTable(driverTripsToRender) {
 }
 
 function showAdminTripDetailModal(trip) {
+    if (!adminTripDetailContent || !adminTripDetailModal) return;
     let fuelDetailsHtml = '<h4>Abastecimentos</h4>';
     if (trip.fuelEntries && trip.fuelEntries.length > 0) {
         trip.fuelEntries.forEach(entry => {
@@ -1041,51 +1069,50 @@ function showAdminTripDetailModal(trip) {
         fuelDetailsHtml += '<p>Nenhum abastecimento registrado.</p>';
     }
 
-    if(adminTripDetailContent) {
-        adminTripDetailContent.innerHTML = `
-            <div class="trip-detail-section">
-                <h4>Informações Gerais</h4>
-                <p><strong>Motorista:</strong> ${trip.driverName}</p>
-                <p><strong>Data:</strong> ${formatDate(trip.date)}</p>
-                <p><strong>Tipo de Carga:</strong> ${trip.cargoType || 'N/A'}</p>
-                <p><strong>Km Inicial:</strong> ${trip.kmInitial || 'N/A'}</p>
-                <p><strong>Km Final:</strong> ${trip.kmFinal || 'N/A'}</p>
-                <p><strong>Km Rodados:</strong> ${trip.kmDriven || 'N/A'}</p>
-                <p><strong>Peso (Kg):</strong> ${trip.weight || 'N/A'}</p>
-                <p><strong>Valor Unidade:</strong> ${formatCurrency(trip.unitValue)}</p>
-            </div>
-            <div class="trip-detail-section">
-                ${fuelDetailsHtml}
-            </div>
-            <div class="trip-detail-section">
-                <h4>Outras Despesas</h4>
-                <p><strong>Arla-32:</strong> ${formatCurrency(trip.arla32Cost)}</p>
-                <p><strong>Pedágio:</strong> ${formatCurrency(trip.tollCost)}</p>
-                <p><strong>Comissão (Motorista):</strong> ${formatCurrency(trip.commissionCost)}</p>
-                <p><strong>Outras Despesas Adicionais:</strong> ${formatCurrency(trip.otherExpenses)}</p>
-                <p><strong>Descrição (Outras Despesas):</strong> ${trip.expenseDescription || 'Nenhuma'}</p>
-            </div>
-            <div class="trip-detail-section trip-financial-summary">
-                <h4>Resumo Financeiro da Viagem</h4>
-                <p><strong>Valor do Frete:</strong> ${formatCurrency(trip.freightValue)}</p>
-                <p><strong>Total de Combustível:</strong> ${formatCurrency(trip.totalFuelCost)}</p>
-                <p><strong>Despesas Totais:</strong> ${formatCurrency(trip.totalExpenses)}</p>
-                <p><strong>Lucro Líquido da Viagem:</strong> <strong class="${trip.netProfit >= 0 ? 'profit' : 'loss'}">${formatCurrency(trip.netProfit)}</strong></p>
-                <p><strong>Valor Declarado (Manual):</strong> ${formatCurrency(trip.declaredValue)}</p>
-            </div>
-        `;
-    }
-    if(adminTripDetailModal) adminTripDetailModal.style.display = 'flex';
+    adminTripDetailContent.innerHTML = `
+        <div class="trip-detail-section">
+            <h4>Informações Gerais</h4>
+            <p><strong>Motorista:</strong> ${trip.driverName}</p>
+            <p><strong>Data:</strong> ${formatDate(trip.date)}</p>
+            <p><strong>Tipo de Carga:</strong> ${trip.cargoType || 'N/A'}</p>
+            <p><strong>Km Inicial:</strong> ${trip.kmInitial || 'N/A'}</p>
+            <p><strong>Km Final:</strong> ${trip.kmFinal || 'N/A'}</p>
+            <p><strong>Km Rodados:</strong> ${trip.kmDriven || 'N/A'}</p>
+            <p><strong>Peso (Kg):</strong> ${trip.weight || 'N/A'}</p>
+            <p><strong>Valor Unidade:</strong> ${formatCurrency(trip.unitValue)}</p>
+        </div>
+        <div class="trip-detail-section">
+            ${fuelDetailsHtml}
+        </div>
+        <div class="trip-detail-section">
+            <h4>Outras Despesas</h4>
+            <p><strong>Arla-32:</strong> ${formatCurrency(trip.arla32Cost)}</p>
+            <p><strong>Pedágio:</strong> ${formatCurrency(trip.tollCost)}</p>
+            <p><strong>Comissão (Motorista):</strong> ${formatCurrency(trip.commissionCost)}</p>
+            <p><strong>Outras Despesas Adicionais:</strong> ${formatCurrency(trip.otherExpenses)}</p>
+            <p><strong>Descrição (Outras Despesas):</strong> ${trip.expenseDescription || 'Nenhuma'}</p>
+        </div>
+        <div class="trip-detail-section trip-financial-summary">
+            <h4>Resumo Financeiro da Viagem</h4>
+            <p><strong>Valor do Frete:</strong> ${formatCurrency(trip.freightValue)}</p>
+            <p><strong>Total de Combustível:</strong> ${formatCurrency(trip.totalFuelCost)}</p>
+            <p><strong>Despesas Totais:</strong> ${formatCurrency(trip.totalExpenses)}</p>
+            <p><strong>Lucro Líquido da Viagem:</strong> <strong class="${trip.netProfit >= 0 ? 'profit' : 'loss'}">${formatCurrency(trip.netProfit)}</strong></p>
+            <p><strong>Valor Declarado (Manual):</strong> ${formatCurrency(trip.declaredValue)}</p>
+        </div>
+    `;
+    adminTripDetailModal.style.display = 'flex';
 }
 
-// --- USER MANAGEMENT FUNCTIONS (Admin Fabio) ---
+// --- FUNÇÕES DE GERENCIAMENTO DE USUÁRIOS (Admin Fabio) ---
 async function loadAndRenderUsersForAdmin() {
+    if (!userManagementTableBody) return;
     if (!loggedInUserProfile || loggedInUserProfile.role !== 'admin' || loggedInUserProfile.username.toLowerCase() !== 'fabio') {
-        if(userManagementTableBody) userManagementTableBody.innerHTML = '<tr><td colspan="3">Acesso negado.</td></tr>';
+        userManagementTableBody.innerHTML = '<tr><td colspan="3">Acesso negado.</td></tr>';
         return;
     }
 
-    if(userManagementTableBody) userManagementTableBody.innerHTML = '<tr><td colspan="3">Carregando usuários...</td></tr>';
+    userManagementTableBody.innerHTML = '<tr><td colspan="3">Carregando usuários...</td></tr>';
     try {
         const q = query(userProfilesCollection, orderBy("username"));
         const querySnapshot = await getDocs(q);
@@ -1096,14 +1123,14 @@ async function loadAndRenderUsersForAdmin() {
 
         renderUserManagementTable(userProfiles);
     } catch (error) {
-        console.error("Error loading users for admin:", "Code:", error.code, "Message:", error.message);
+        console.error("Erro ao carregar usuários para admin:", "Código:", error.code, "Mensagem:", error.message);
         showFeedback(userManagementFeedback, "Erro ao carregar lista de usuários.", "error");
-        if(userManagementTableBody) userManagementTableBody.innerHTML = '<tr><td colspan="3">Erro ao carregar usuários.</td></tr>';
+        userManagementTableBody.innerHTML = '<tr><td colspan="3">Erro ao carregar usuários.</td></tr>';
     }
 }
 
 function renderUserManagementTable(usersToRender) {
-    if(!userManagementTableBody) return;
+    if (!userManagementTableBody) return;
     userManagementTableBody.innerHTML = '';
     if (usersToRender.length === 0) {
         userManagementTableBody.innerHTML = '<tr><td colspan="3">Nenhum usuário cadastrado.</td></tr>';
@@ -1125,19 +1152,23 @@ function renderUserManagementTable(usersToRender) {
 }
 
 function openEditUserModal(userProf) {
+    if (!editUserIdInput || !editUsernameDisplayInput || !editUserRoleSelect || !editUserNewPasswordInput || !editUserConfirmNewPasswordInput || !editUserModal) return;
+
     editingUserIdForAdmin = userProf.uid; 
-    if(editUserIdInput) editUserIdInput.value = userProf.uid; 
-    if(editUsernameDisplayInput) editUsernameDisplayInput.value = userProf.username;
-    if(editUserRoleSelect) editUserRoleSelect.value = userProf.role;
-    if(editUserNewPasswordInput) editUserNewPasswordInput.value = ''; 
-    if(editUserConfirmNewPasswordInput) editUserConfirmNewPasswordInput.value = '';
-    if(editUserModal) editUserModal.style.display = 'flex';
+    editUserIdInput.value = userProf.uid; 
+    editUsernameDisplayInput.value = userProf.username;
+    editUserRoleSelect.value = userProf.role;
+    editUserNewPasswordInput.value = ''; 
+    editUserConfirmNewPasswordInput.value = '';
+    editUsernameDisplayInput.value = userProf.username; 
+    editUserRoleSelect.value = userProf.role; 
+    editUserModal.style.display = 'flex';
     showFeedback(editUserFeedback, "", "info"); 
 }
 
 async function handleEditUserFormSubmit(event) {
     event.preventDefault();
-    if (!editingUserIdForAdmin) return;
+    if (!editingUserIdForAdmin || !editUserRoleSelect || !editUserNewPasswordInput || !editUserConfirmNewPasswordInput) return;
 
     const newRole = editUserRoleSelect.value;
     const newPassword = editUserNewPasswordInput.value;
@@ -1154,28 +1185,27 @@ async function handleEditUserFormSubmit(event) {
 
     try {
         const userProfileRef = doc(userProfilesCollection, editingUserIdForAdmin);
-        await updateDoc(userProfileRef, { role: newRole });
+        await updateDoc(userProfileRef, { role: newRole }); 
 
         if (newPassword) {
-            // Password update via client SDK for other users is generally not recommended/possible without re-authentication.
-            // This part might need to be handled via Firebase Admin SDK on a backend or Firebase Console.
-            showFeedback(editUserFeedback, "Papel do usuário atualizado. A alteração de senha por esta tela não é suportada diretamente pelo SDK do cliente para outros usuários. Use o console do Firebase ou peça ao usuário para redefinir.", "info");
+            showFeedback(editUserFeedback, "Papel do usuário atualizado. A alteração de senha por esta tela não é suportada. Use o console do Firebase ou peça ao usuário para redefinir.", "info");
         } else {
             showFeedback(editUserFeedback, "Papel do usuário atualizado com sucesso!", "success");
         }
 
         loadAndRenderUsersForAdmin(); 
         setTimeout(() => {
-            if(closeEditUserModalBtn) closeEditUserModalBtn.click();
+            if (closeEditUserModalBtn) closeEditUserModalBtn.click();
         }, 1500);
 
     } catch (error) {
-        console.error("Error updating user role/password:", "Code:", error.code, "Message:", error.message);
+        console.error("Erro ao atualizar papel/senha do usuário:", "Código:", error.code, "Mensagem:", error.message);
         showFeedback(editUserFeedback, "Erro ao atualizar usuário. Tente novamente.", "error");
     }
 }
 
-// --- INITIALIZATION FUNCTIONS FOR VIEWS ---
+
+// --- FUNÇÕES DE INICIALIZAÇÃO PARA VISUALIZAÇÕES ---
 function initializeUserView() {
     if (tripForm) tripForm.reset();
     if (fuelEntriesContainer) fuelEntriesContainer.innerHTML = '';
@@ -1225,15 +1255,30 @@ function initializeUserManagementView() {
     loadAndRenderUsersForAdmin();
 }
 
-// --- EVENT LISTENERS ---
+
+// --- OUVINTES DE EVENTOS ---
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("DOMContentLoaded event fired.");
-    if (!app || !auth || !db || !userProfilesCollection || !tripsCollection) {
-        console.error("CRITICAL DOMContentLoaded: Firebase not initialized correctly. App listeners not added. Variables: ", {app, auth, db, userProfilesCollection, tripsCollection});
+    console.log("Evento DOMContentLoaded disparado.");
+
+    // Adiciona listeners para alternar entre login/cadastro ANTES da checagem do Firebase
+    // para permitir navegação básica mesmo que o Firebase falhe.
+    if (showRegisterViewLink) {
+        showRegisterViewLink.addEventListener('click', (e) => { e.preventDefault(); showView('registerView'); });
+        console.log("Listener de evento adicionado para showRegisterViewLink.");
+    } else { console.error("showRegisterViewLink não encontrado!"); }
+
+    if (showLoginViewLink) {
+        showLoginViewLink.addEventListener('click', (e) => { e.preventDefault(); showView('loginView'); });
+        console.log("Listener de evento adicionado para showLoginViewLink.");
+    } else { console.error("showLoginViewLink não encontrado!"); }
+
+
+    if (!app || !authFirebase || !db || !userProfilesCollection || !tripsCollection) {
+        console.error("CRÍTICO DOMContentLoaded: Firebase não inicializado corretamente ou coleções não definidas. Listeners da aplicação não adicionados.");
         const body = document.querySelector('body');
         if (body) {
             const errorDiv = document.createElement('div');
-            errorDiv.textContent = "ERRO CRÍTICO: FALHA AO CONECTAR AOS SERVIÇOS DE DADOS. VERIFIQUE O CONSOLE (F12).";
+            errorDiv.textContent = "ERRO CRÍTICO: FALHA AO CONECTAR AOS SERVIÇOS DE DADOS. VERIFIQUE O CONSOLE E A CONFIGURAÇÃO DO FIREBASE.";
             errorDiv.style.backgroundColor = "red";
             errorDiv.style.color = "white";
             errorDiv.style.padding = "10px";
@@ -1247,12 +1292,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return; 
     }
-    console.log("Firebase seems initialized, proceeding to add event listeners.");
+    console.log("Firebase parece inicializado, prosseguindo para adicionar listeners de eventos.");
 
-    if (registerForm) registerForm.addEventListener('submit', handleRegister);
-    if (loginForm) loginForm.addEventListener('submit', handleLogin);
-    if (showRegisterViewLink) showRegisterViewLink.addEventListener('click', (e) => { e.preventDefault(); showView('registerView'); });
-    if (showLoginViewLink) showLoginViewLink.addEventListener('click', (e) => { e.preventDefault(); showView('loginView'); });
+
+    if (registerForm) {
+        registerForm.addEventListener('submit', handleRegister);
+        console.log("Listener de evento adicionado para registerForm.");
+    } else { console.error("registerForm não encontrado!");}
+    if (loginForm) {
+        loginForm.addEventListener('submit', handleLogin);
+        console.log("Listener de evento adicionado para loginForm.");
+    } else { console.error("loginForm não encontrado!");}
+
     if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
 
     if (userViewBtn) userViewBtn.addEventListener('click', () => { showView('userView'); initializeUserView(); });
@@ -1289,20 +1340,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 const qUser = query(userProfilesCollection, where("username", "==", driverNameToSearch));
                 const userSnapshot = await getDocs(qUser);
                 if (!userSnapshot.empty) {
-                    const foundUser = userSnapshot.docs[0].data();
+                    const foundUser = userSnapshot.docs[0].data(); 
                     currentUserForMyTripsSearch = foundUser.username;
                     currentUidForMyTripsSearch = foundUser.uid;
                     loadAndRenderMyTrips(myTripsFilterStartDateInput?.value, myTripsFilterEndDateInput?.value);
                 } else {
                     showFeedback(myTripsFeedback, `Motorista "${driverNameToSearch}" não encontrado.`, "error");
-                    if(myTripsTableBody) myTripsTableBody.innerHTML = '';
-                    if(myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Nenhum motorista encontrado com o nome "${driverNameToSearch}".`;
-                    if(myTripsTable) myTripsTable.style.display = 'none';
-                    if(myTripsTablePlaceholder) myTripsTablePlaceholder.style.display = 'block';
+                    if (myTripsTableBody) myTripsTableBody.innerHTML = '';
+                    if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Nenhum motorista encontrado com o nome "${driverNameToSearch}".`;
+                    if (myTripsTable) myTripsTable.style.display = 'none';
+                    if (myTripsTablePlaceholder) myTripsTablePlaceholder.style.display = 'block';
                     updateDriverSummary([], driverNameToSearch); 
                 }
             } catch(err) {
-                console.error("Error searching driver by name:", "Code:", err.code, "Message:", err.message);
+                console.error("Erro ao buscar motorista por nome:", "Código:", err.code, "Mensagem:", err.message);
                 showFeedback(myTripsFeedback, "Erro ao buscar motorista.", "error");
             }
         });
@@ -1312,6 +1363,7 @@ document.addEventListener('DOMContentLoaded', () => {
             loadAndRenderMyTrips(myTripsFilterStartDateInput?.value, myTripsFilterEndDateInput?.value);
         });
     }
+
 
     if (applyAdminSummaryFilterBtn) {
         applyAdminSummaryFilterBtn.addEventListener('click', () => {
@@ -1330,24 +1382,25 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     if(closeAdminTripDetailModalBtn) {
-        closeAdminTripDetailModalBtn.addEventListener('click', () => {if(adminTripDetailModal) adminTripDetailModal.style.display = 'none'});
+        closeAdminTripDetailModalBtn.addEventListener('click', () => { if(adminTripDetailModal) adminTripDetailModal.style.display = 'none'; });
     }
+
 
     if(editUserForm) editUserForm.addEventListener('submit', handleEditUserFormSubmit);
     if(closeEditUserModalBtn) {
-        closeEditUserModalBtn.addEventListener('click', () => {if(editUserModal) editUserModal.style.display = 'none'});
+        closeEditUserModalBtn.addEventListener('click', () => {if(editUserModal) editUserModal.style.display = 'none'; });
     }
 
     const modals = document.querySelectorAll('.modal');
     modals.forEach(modal => {
         if(modal) {
-            // modal.style.display = 'none'; // Already hidden by default HTML/CSS
+            modal.style.display = 'none';
             modal.addEventListener('click', (event) => {
                 if (event.target === modal) {
-                    (modal as HTMLElement).style.display = 'none';
+                    modal.style.display = 'none';
                 }
             });
         }
     });
-    console.log("All DOMContentLoaded event listeners nominally set up.");
+    console.log("Todos os listeners de evento do DOMContentLoaded nominalmente configurados.");
 });

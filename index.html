@@ -1,0 +1,420 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle de Despesas de Viagem</title>
+    <link rel="stylesheet" href="index.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script type="importmap">
+    {
+        "imports": {
+        "chart.js": "https://esm.sh/chart.js@4.4.0/auto",
+        "@google/genai": "https://esm.sh/@google/genai@^0.7.0"
+        }
+    }
+    </script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+    <!-- Tela de Login -->
+    <section id="loginView" class="auth-view">
+        <div class="auth-container">
+            <div class="login-logo-container">
+                <img src="/logo_ibisolar.png" alt="Logo IBISOLAR">
+            </div>
+            <h2>Login</h2>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="loginUsername">Nome de Usuário:</label>
+                    <input type="text" id="loginUsername" name="loginUsername" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Senha:</label>
+                    <input type="password" id="loginPassword" name="loginPassword" required>
+                </div>
+                <button type="submit" class="submit-btn full-width-btn">Entrar</button>
+            </form>
+            <p id="loginFeedback" class="feedback-message" aria-live="polite"></p>
+            <p class="auth-switch">Não tem uma conta? <a href="#" id="showRegisterViewLink">Cadastre-se</a></p>
+        </div>
+    </section>
+
+    <!-- Tela de Cadastro -->
+    <section id="registerView" class="auth-view" style="display: none;">
+        <div class="auth-container">
+            <h2>Cadastro</h2>
+            <form id="registerForm">
+                <div class="form-group">
+                    <label for="registerUsername">Nome de Usuário:</label>
+                    <input type="text" id="registerUsername" name="registerUsername" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerPassword">Senha:</label>
+                    <input type="password" id="registerPassword" name="registerPassword" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerConfirmPassword">Confirmar Senha:</label>
+                    <input type="password" id="registerConfirmPassword" name="registerConfirmPassword" required>
+                </div>
+                <!-- Campo Tipo de Conta Removido -->
+                <button type="submit" class="submit-btn full-width-btn">Cadastrar</button>
+            </form>
+            <p id="registerFeedback" class="feedback-message" aria-live="polite"></p>
+            <p class="auth-switch">Já tem uma conta? <a href="#" id="showLoginViewLink">Faça Login</a></p>
+        </div>
+    </section>
+
+    <!-- Container Principal da Aplicação (inicialmente oculto) -->
+    <div id="appContainer" style="display: none;">
+        <header>
+            <h1>Controle de Despesas de Viagem</h1>
+            <nav>
+                <button id="userViewBtn" class="nav-btn" aria-pressed="false" style="display: none;">Registrar Viagem</button>
+                <button id="myTripsViewBtn" class="nav-btn" aria-pressed="false" style="display: none;">Minhas Viagens</button>
+                <button id="adminViewBtn" class="nav-btn" aria-pressed="false" style="display: none;">Painel do Administrador</button>
+                <button id="userManagementViewBtn" class="nav-btn" aria-pressed="false" style="display: none;">Gerenciar Usuários</button>
+                <button id="logoutBtn" class="nav-btn danger-btn" style="display: none;">Sair</button>
+            </nav>
+        </header>
+
+        <main>
+            <section id="userView" class="view" aria-labelledby="user-view-title">
+                <h2 id="user-view-title">Registrar Nova Viagem</h2>
+                <form id="tripForm">
+                    <input type="hidden" id="tripIdToEdit" name="tripIdToEdit">
+                    <fieldset>
+                        <legend>Informações Gerais da Viagem</legend>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="tripDate">Data:</label>
+                                <input type="date" id="tripDate" name="tripDate" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="driverName">Motorista:</label>
+                                <input type="text" id="driverName" name="driverName" placeholder="ex: João Silva" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="cargoType">Tipo de Carga:</label>
+                                <input type="text" id="cargoType" name="cargoType" placeholder="ex: Grãos, Eletrônicos">
+                            </div>
+                            <div class="form-group">
+                                <label for="kmInitial">Km Inicial:</label>
+                                <input type="number" id="kmInitial" name="kmInitial" min="0" step="any" placeholder="0">
+                            </div>
+                            <div class="form-group">
+                                <label for="kmFinal">Km Final:</label>
+                                <input type="number" id="kmFinal" name="kmFinal" min="0" step="any" placeholder="0">
+                            </div>
+                            <div class="form-group">
+                                <label for="weight">Peso (Kg):</label>
+                                <input type="number" id="weight" name="weight" min="0" step="any" placeholder="0">
+                            </div>
+                            <div class="form-group">
+                                <label for="unitValue">V. Unidade (R$):</label>
+                                <input type="number" id="unitValue" name="unitValue" min="0" step="0.01" placeholder="0,00">
+                            </div>
+                            <div class="form-group">
+                                <label for="freightValue">Valor Frete (R$):</label>
+                                <input type="number" id="freightValue" name="freightValue" min="0" step="0.01" placeholder="0,00" required>
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>Despesas de Combustível</legend>
+                        <div id="fuelEntriesContainer">
+                            <!-- Fuel entries will be dynamically injected here by JavaScript -->
+                        </div>
+                        <button type="button" id="addFuelEntryBtn" class="control-btn secondary-btn full-width-btn">Adicionar Abastecimento</button>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>Outras Despesas</legend>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="arla32Cost">Arla-32 (R$):</label>
+                                <input type="number" id="arla32Cost" name="arla32Cost" min="0" step="0.01" placeholder="0,00">
+                            </div>
+                            <div class="form-group">
+                                <label for="tollCost">Pedágio (R$):</label>
+                                <input type="number" id="tollCost" name="tollCost" min="0" step="0.01" placeholder="0,00">
+                            </div>
+                            <div class="form-group">
+                                <label for="commissionCost">Comissão (R$):</label>
+                                <input type="number" id="commissionCost" name="commissionCost" min="0" step="0.01" placeholder="0,00">
+                            </div>
+                            <div class="form-group">
+                                <label for="otherExpenses">Outras Despesas Adicionais (R$):</label>
+                                <input type="number" id="otherExpenses" name="otherExpenses" min="0" step="0.01" placeholder="0,00">
+                            </div>
+                            <div class="form-group full-width">
+                                <label for="expenseDescription">Descrição (Outras Despesas Adicionais):</label>
+                                <input type="text" id="expenseDescription" name="expenseDescription" placeholder="ex: Estacionamento, Refeição">
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>Resumo Financeiro da Viagem</legend>
+                        <div class="form-group full-width">
+                            <label for="declaredValue">Valor Declarado (Informado Manualmente):</label>
+                            <input type="number" id="declaredValue" name="declaredValue" min="0" step="0.01" placeholder="0,00">
+                        </div>
+                    </fieldset>
+
+                    <div class="form-actions">
+                        <button type="submit" id="submitTripBtn" class="submit-btn">Salvar Viagem</button>
+                        <button type="button" id="cancelEditBtn" class="control-btn secondary-btn" style="display: none;">Cancelar Edição</button>
+                    </div>
+                    <p id="userFormFeedback" class="feedback-message" aria-live="polite"></p>
+                </form>
+            </section>
+
+            <section id="myTripsView" class="view" aria-labelledby="my-trips-view-title">
+                <h2 id="my-trips-view-title">Minhas Viagens</h2>
+
+                <!-- Resumo do Motorista -->
+                <div id="driverSummaryContainer" class="summary-section">
+                    <h3>Seu Resumo de Viagens</h3>
+                    <div class="summary-metrics">
+                        <div class="metric-card">
+                            <h4>Viagens Realizadas</h4>
+                            <p id="driverTotalTripsEl">0</p>
+                        </div>
+                        <div class="metric-card">
+                            <h4>Valor Total dos Fretes (suas viagens)</h4>
+                            <p id="driverTotalFreightParticipatedEl">R$ 0,00</p>
+                        </div>
+                        <div class="metric-card">
+                            <h4>Seu Ganho Total (Comissões)</h4>
+                            <p id="driverTotalEarningsEl">R$ 0,00</p>
+                        </div>
+                    </div>
+                    <!-- Chart container removed -->
+                </div>
+
+                <div id="myTripsDriverNameContainer" class="dashboard-controls">
+                    <div class="form-group">
+                        <label for="myTripsDriverNameInput">Nome do Motorista para Busca (Admin):</label>
+                        <input type="text" id="myTripsDriverNameInput" placeholder="Digite nome para buscar">
+                    </div>
+                    <button id="loadMyTripsBtn" class="control-btn">Buscar Viagens do Motorista</button>
+                </div>
+
+                <div id="myTripsFilterControls" style="display: none;">
+                     <h3>Filtrar Viagens e Resumo</h3>
+                    <div class="filter-grid">
+                        <div class="form-group">
+                            <label for="myTripsFilterStartDate">Data Inicial:</label>
+                            <input type="date" id="myTripsFilterStartDate">
+                        </div>
+                        <div class="form-group">
+                            <label for="myTripsFilterEndDate">Data Final:</label>
+                            <input type="date" id="myTripsFilterEndDate">
+                        </div>
+                    </div>
+                    <button id="applyMyTripsFilterBtn" class="control-btn">Aplicar Filtro de Data</button>
+                </div>
+
+                <p id="myTripsFeedback" class="feedback-message" aria-live="polite"></p>
+                <div id="myTripsTableContainer">
+                    <table id="myTripsTable">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Tipo de Carga</th>
+                                <th>Valor Frete (R$)</th>
+                                <th>Despesas Totais (R$)</th>
+                                <th>Comissão (R$)</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="myTripsTableBody"></tbody>
+                    </table>
+                    <p id="myTripsTablePlaceholder">Nenhuma viagem para exibir. Motoristas: suas viagens e resumo serão carregados automaticamente. Administradores: usem a busca.</p>
+                </div>
+            </section>
+
+            <section id="adminView" class="view" aria-labelledby="admin-view-title">
+                <h2 id="admin-view-title">Painel do Administrador</h2>
+
+                <!-- Resumo Geral do Administrador -->
+                <div id="adminSummaryContainer" class="summary-section">
+                    <h3>Resumo Geral das Operações</h3>
+                    <div class="dashboard-controls">
+                        <div class="filter-grid">
+                            <div class="form-group">
+                                <label for="adminSummaryFilterStartDate">Data Inicial do Resumo:</label>
+                                <input type="date" id="adminSummaryFilterStartDate">
+                            </div>
+                            <div class="form-group">
+                                <label for="adminSummaryFilterEndDate">Data Final do Resumo:</label>
+                                <input type="date" id="adminSummaryFilterEndDate">
+                            </div>
+                        </div>
+                        <button id="applyAdminSummaryFilterBtn" class="control-btn">Atualizar Resumo Geral</button>
+                    </div>
+                    <div class="summary-metrics">
+                        <div class="metric-card">
+                            <h4>Total de Viagens</h4>
+                            <p id="adminTotalTripsEl">0</p>
+                        </div>
+                        <div class="metric-card">
+                            <h4>Receita Bruta Total (Fretes)</h4>
+                            <p id="adminTotalFreightEl">R$ 0,00</p>
+                        </div>
+                        <div class="metric-card">
+                            <h4>Despesas Totais</h4>
+                            <p id="adminTotalExpensesEl">R$ 0,00</p>
+                        </div>
+                        <div class="metric-card">
+                            <h4>Lucro Líquido Total</h4>
+                            <p id="adminTotalNetProfitEl">R$ 0,00</p>
+                        </div>
+                    </div>
+                    <!-- Admin Chart Container Removed -->
+                    <!--
+                    <div class="chart-container">
+                        <h4>Desempenho Financeiro Mensal (Geral)</h4>
+                        <canvas id="adminSummaryChartCanvas"></canvas>
+                    </div>
+                    -->
+                </div>
+
+                <h3>Detalhes de Viagens por Motorista</h3>
+                <div id="adminDriverSelectorContainer" class="dashboard-controls">
+                    <div class="form-group">
+                        <label for="adminSelectDriver">Selecionar Motorista:</label>
+                        <select id="adminSelectDriver">
+                            <option value="">-- Selecione um Motorista --</option>
+                        </select>
+                    </div>
+                    <button id="adminLoadDriverTripsBtn" class="control-btn">Carregar Viagens</button>
+                </div>
+
+                <div id="adminDriverTripsSection" style="display: none;">
+                    <h3 id="adminSelectedDriverNameDisplay">Viagens de [Motorista]</h3>
+                    <table id="adminDriverTripsTable">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Tipo de Carga</th>
+                                <th>Lucro Líquido (R$)</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminDriverTripsTableBody"></tbody>
+                    </table>
+                    <p id="adminDriverTripsPlaceholder">Nenhuma viagem encontrada para este motorista.</p>
+                </div>
+                <p id="adminGeneralFeedback" class="feedback-message" aria-live="polite"></p>
+            </section>
+
+            <!-- Tela de Gerenciamento de Usuários (Admin Fabio) -->
+            <section id="userManagementView" class="view" aria-labelledby="user-management-title">
+                <h2 id="user-management-title">Gerenciamento de Usuários</h2>
+
+                <fieldset id="addUserByAdminFieldset">
+                    <legend>Adicionar Novo Usuário</legend>
+                    <form id="addUserByAdminForm">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="addAdminUsername">Nome de Usuário:</label>
+                                <input type="text" id="addAdminUsername" name="addAdminUsername" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="addAdminPassword">Senha:</label>
+                                <input type="password" id="addAdminPassword" name="addAdminPassword" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="addAdminConfirmPassword">Confirmar Senha:</label>
+                                <input type="password" id="addAdminConfirmPassword" name="addAdminConfirmPassword" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="addAdminRole">Tipo de Conta:</label>
+                                <select id="addAdminRole" name="addAdminRole">
+                                    <option value="motorista">Motorista</option>
+                                    <option value="admin">Administrador</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button type="submit" class="submit-btn">Adicionar Usuário</button>
+                    </form>
+                    <p id="addUserFeedback" class="feedback-message" aria-live="polite"></p>
+                </fieldset>
+
+                <h3>Usuários Cadastrados</h3>
+                <p id="userManagementFeedback" class="feedback-message" aria-live="polite"></p>
+                <div id="userManagementTableContainer">
+                    <table id="userManagementTable">
+                        <thead>
+                            <tr>
+                                <th>Nome de Usuário</th>
+                                <th>Papel</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="userManagementTableBody">
+                            <!-- User data will be injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+         <!-- Modal de Edição de Usuário -->
+        <div id="editUserModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close-modal-btn" id="closeEditUserModalBtn">&times;</span>
+                <h3>Editar Usuário</h3>
+                <form id="editUserForm">
+                    <input type="hidden" id="editUserId">
+                    <div class="form-group">
+                        <label for="editUsernameDisplay">Nome de Usuário:</label>
+                        <input type="text" id="editUsernameDisplay" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label for="editUserRole">Papel:</label>
+                        <select id="editUserRole">
+                            <option value="motorista">Motorista</option>
+                            <option value="admin">Administrador</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="editUserNewPassword">Nova Senha (deixe em branco para não alterar):</label>
+                        <input type="password" id="editUserNewPassword">
+                    </div>
+                    <div class="form-group">
+                        <label for="editUserConfirmNewPassword">Confirmar Nova Senha:</label>
+                        <input type="password" id="editUserConfirmNewPassword">
+                    </div>
+                    <button type="submit" class="submit-btn">Salvar Alterações</button>
+                </form>
+                <p id="editUserFeedback" class="feedback-message" aria-live="polite"></p>
+            </div>
+        </div>
+
+        <!-- Modal de Detalhes da Viagem (Admin) -->
+        <div id="adminTripDetailModal" class="modal" style="display: none;">
+            <div class="modal-content large-modal">
+                <span class="close-modal-btn" id="closeAdminTripDetailModalBtn">&times;</span>
+                <h3>Detalhes da Viagem</h3>
+                <div id="adminTripDetailContent">
+                    <!-- Trip details will be rendered here by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+
+        <footer>
+            <p>&copy; 2024 Controle de Despesas de Viagem. Todos os direitos reservados.</p>
+        </footer>
+    </div> <!-- Fim do appContainer -->
+
+    <script type="module" src="index.tsx"></script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

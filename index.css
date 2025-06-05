@@ -1,0 +1,590 @@
+
+body {
+    font-family: 'Roboto', sans-serif;
+    margin: 0;
+    background-color: #f4f7f9;
+    color: #333;
+    line-height: 1.6;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* Estilos para Telas de Autenticação */
+.auth-view {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 1rem;
+    box-sizing: border-box;
+}
+
+.auth-container {
+    background-color: #ffffff;
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    width: 100%;
+    max-width: 400px;
+}
+
+.login-logo-container {
+    text-align: center; /* Centers the inline-block image */
+    margin-bottom: 1.5rem; /* Space below the logo */
+}
+
+.login-logo-container img {
+    max-width: 220px; /* Adjust as needed */
+    height: auto;     /* Maintain aspect ratio */
+    display: inline-block; /* Allows text-align to center it */
+}
+
+.auth-container h2 {
+    text-align: center;
+    color: #2c3e50;
+    margin-top: 0;
+    margin-bottom: 1.5rem;
+}
+
+.auth-switch {
+    text-align: center;
+    margin-top: 1rem;
+    font-size: 0.9rem;
+}
+
+.auth-switch a {
+    color: #3498db;
+    text-decoration: none;
+    font-weight: 500;
+}
+.auth-switch a:hover {
+    text-decoration: underline;
+}
+
+/* Container da Aplicação Principal */
+#appContainer {
+    display: flex; /* Changed from none to flex to manage layout */
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+
+header {
+    background-color: #2c3e50;
+    color: #ecf0f1;
+    padding: 1rem 2rem;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+header h1 {
+    margin: 0;
+    font-size: 1.8rem;
+    font-weight: 500;
+}
+
+nav {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.nav-btn {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    padding: 0.6rem 1.2rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background-color 0.3s ease;
+}
+
+.nav-btn:hover {
+    background-color: #2980b9;
+}
+
+.nav-btn.active {
+    background-color: #1abc9c;
+    font-weight: bold;
+}
+
+main {
+    flex-grow: 1;
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.view {
+    display: none;
+    background-color: #ffffff;
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+    margin-bottom: 2rem;
+}
+
+.view.active-view {
+    display: block;
+}
+
+h2 {
+    color: #2c3e50;
+    margin-top: 0;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid #e0e0e0;
+    padding-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+h3 {
+    color: #34495e;
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+    font-weight: 500;
+}
+
+fieldset {
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    background-color: #fdfdfd;
+}
+
+fieldset legend {
+    font-weight: 500;
+    color: #2c3e50;
+    padding: 0 0.5rem;
+    font-size: 1.1rem;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+#fuelEntriesContainer .fuel-entry-item {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.75rem;
+    align-items: flex-end;
+    padding: 0.75rem;
+    margin-bottom: 1rem;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    background-color: #f9f9f9;
+}
+
+#fuelEntriesContainer .fuel-entry-item .form-group {
+    margin-bottom: 0;
+}
+
+.remove-fuel-entry-btn {
+    padding: 0.5rem 0.8rem;
+    height: fit-content;
+    margin-top: auto;
+    margin-bottom: 0.1rem;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    min-width: 80px;
+}
+
+
+.full-width-btn {
+    display: block;
+    width: 100%;
+    margin-top: 1rem;
+}
+
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 1rem; /* Added default margin for auth forms */
+}
+
+.form-group.full-width {
+    grid-column: 1 / -1;
+}
+
+.form-group label {
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: #555;
+    font-size: 0.9rem;
+}
+
+.form-group input[type="text"],
+.form-group input[type="date"],
+.form-group input[type="number"],
+.form-group input[type="password"],
+.form-group select {
+    padding: 0.75rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1rem;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.form-group input[readonly] {
+    background-color: #e9ecef; /* Light grey background */
+    cursor: not-allowed;      /* Indicates it's not editable */
+    opacity: 0.8;             /* Slightly faded appearance */
+}
+
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.submit-btn, .control-btn {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    padding: 0.8rem 1.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 500;
+    transition: background-color 0.3s ease;
+}
+
+.submit-btn:hover, .control-btn:hover {
+    background-color: #2980b9;
+}
+
+.secondary-btn {
+    background-color: #95a5a6;
+}
+.secondary-btn:hover {
+    background-color: #7f8c8d;
+}
+
+.danger-btn {
+    background-color: #e74c3c;
+}
+.danger-btn:hover {
+    background-color: #c0392b;
+}
+
+.small-btn {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+}
+
+.feedback-message {
+    margin-top: 1rem;
+    padding: 0.75rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    display: none;
+}
+
+.feedback-message.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+.feedback-message.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+.feedback-message.info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+
+.dashboard-controls {
+    background-color: #ecf0f1;
+    padding: 1.5rem;
+    border-radius: 6px;
+    margin-bottom: 2rem;
+}
+#adminDriverSelectorContainer {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+#adminDriverSelectorContainer .form-group {
+    flex-grow: 1;
+    margin-bottom: 0;
+}
+#adminDriverSelectorContainer button {
+    padding: 0.75rem 1.5rem;
+}
+
+
+.filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.filter-buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.filter-buttons .control-btn { margin-top: 0; }
+
+/* User Management - Add User Form */
+#addUserByAdminFieldset {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+}
+#addUserByAdminFieldset legend {
+    font-size: 1.2rem;
+}
+#addUserByAdminForm .form-grid {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+#addUserByAdminForm button[type="submit"] {
+    grid-column: 1 / -1; /* Make button span full width if grid allows */
+    margin-top: 0.5rem;
+}
+
+/* Admin Panel Refactor */
+#adminDriverTripsSection h3 {
+    margin-top: 0;
+    color: #2c3e50;
+}
+#adminDriverTripsTable {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+#adminDriverTripsTable th, #adminDriverTripsTable td {
+    border: 1px solid #ddd;
+    padding: 0.75rem;
+    text-align: left;
+    font-size: 0.9rem;
+    vertical-align: middle;
+}
+#adminDriverTripsTable th {
+    background-color: #e9edf0;
+    font-weight: 500;
+}
+#adminDriverTripsTable tbody tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+#adminDriverTripsTable tbody tr:hover {
+    background-color: #f1f1f1;
+}
+#adminDriverTripsPlaceholder {
+    text-align: center;
+    padding: 1rem;
+    color: #777;
+    font-style: italic;
+}
+
+/* Trip Detail Modal */
+#adminTripDetailModal .modal-content.large-modal {
+    max-width: 800px; /* Larger modal for trip details */
+    max-height: 80vh;
+    overflow-y: auto;
+}
+#adminTripDetailContent h4 {
+    color: #2c3e50;
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 0.3rem;
+}
+#adminTripDetailContent h4:first-child {
+    margin-top: 0;
+}
+#adminTripDetailContent p {
+    margin: 0.3rem 0;
+    font-size: 0.95rem;
+}
+#adminTripDetailContent p strong {
+    color: #555;
+}
+#adminTripDetailContent .trip-detail-section {
+    margin-bottom: 1.5rem;
+    background-color: #f9f9f9;
+    padding: 1rem;
+    border-radius: 4px;
+}
+#adminTripDetailContent .fuel-entry-detail-item {
+    border: 1px solid #e0e0e0;
+    padding: 0.8rem;
+    margin-bottom: 0.8rem;
+    border-radius: 4px;
+}
+#adminTripDetailContent .trip-financial-summary p {
+    font-size: 1.05rem;
+}
+#adminTripDetailContent .trip-financial-summary strong.profit { color: #27ae60; }
+#adminTripDetailContent .trip-financial-summary strong.loss { color: #e74c3c; }
+
+
+/* User Management Table & Admin Tables */
+#userManagementTableContainer, #adminDriverTripsSection { margin-top: 2rem; }
+#userManagementTable, #adminDriverTripsTable { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+#userManagementTable th, #userManagementTable td, #adminDriverTripsTable th, #adminDriverTripsTable td {
+    border: 1px solid #ddd; padding: 0.75rem; text-align: left; font-size: 0.9rem; vertical-align: middle;
+}
+#userManagementTable th, #adminDriverTripsTable th { background-color: #e9edf0; font-weight: 500; }
+#userManagementTable th:hover, #adminDriverTripsTable th:hover { background-color: #dde3e7; }
+#userManagementTable tbody tr:nth-child(even), #adminDriverTripsTable tbody tr:nth-child(even) { background-color: #f9f9f9; }
+#userManagementTable tbody tr:hover, #adminDriverTripsTable tbody tr:hover { background-color: #f1f1f1; }
+
+
+/* General Tables */
+#myTripsTableContainer { margin-top: 2rem; }
+#myTripsTable { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+#myTripsTable th, #myTripsTable td { border: 1px solid #ddd; padding: 0.75rem; text-align: left; font-size: 0.9rem; vertical-align: middle; }
+#myTripsTable th { background-color: #e9edf0; font-weight: 500; position: relative; }
+#myTripsTable th:hover { background-color: #dde3e7; }
+#myTripsTable tbody tr:nth-child(even) { background-color: #f9f9f9; }
+#myTripsTable tbody tr:hover { background-color: #f1f1f1; }
+
+#tablePlaceholder, #myTripsTablePlaceholder, #adminDriverTripsPlaceholder { text-align: center; padding: 1rem; color: #777; font-style: italic; display: block; }
+#myTripsTable, #adminDriverTripsTable { display: none; } /* Initially hidden */
+
+
+footer { background-color: #34495e; color: #ecf0f1; text-align: center; padding: 1rem; font-size: 0.85rem; }
+
+#myTripsView .dashboard-controls .form-group { margin-bottom: 1rem; }
+#myTripsView .dashboard-controls button#loadMyTripsBtn { margin-top: 0; }
+#myTripsFilterControls { margin-top: 1.5rem; margin-bottom: 1.5rem; padding: 1rem; background-color: #f9f9f9; border-radius: 4px; }
+#myTripsFilterControls h3 { margin-top: 0; }
+
+/* Modal Styles */
+.modal {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+.modal-content {
+    background-color: white;
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    width: 90%;
+    max-width: 500px;
+    position: relative;
+}
+.close-modal-btn {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 1.5rem;
+    font-weight: bold;
+    cursor: pointer;
+    color: #777;
+}
+.close-modal-btn:hover {
+    color: #333;
+}
+
+/* Summary Section Styles */
+.summary-section {
+    background-color: #e9edf0;
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+.summary-section h3 {
+    color: #2c3e50;
+    margin-top: 0;
+    border-bottom: 1px solid #d0d9e0;
+    padding-bottom: 0.5rem;
+}
+.summary-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+    margin-bottom: 1.5rem;
+}
+.metric-card {
+    background-color: #ffffff;
+    padding: 1rem;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    text-align: center;
+}
+.metric-card h4 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    font-size: 0.95rem;
+    color: #555;
+    font-weight: 500;
+}
+.metric-card p {
+    margin: 0;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #3498db;
+}
+.metric-card p.profit { color: #27ae60; }
+.metric-card p.loss { color: #e74c3c; }
+
+.chart-container { /* Styles for chart container, though admin chart is removed */
+    background-color: #ffffff;
+    padding: 1.5rem;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    margin-top: 1.5rem;
+}
+.chart-container h4 {
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+    color: #34495e;
+}
+#adminSummaryContainer .dashboard-controls {
+    background-color: transparent; /* Override for admin summary filters */
+    padding: 0;
+    margin-bottom: 1rem;
+}
+#adminSummaryContainer .dashboard-controls .filter-grid {
+    margin-bottom: 0.5rem;
+}
+
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    header { padding: 1rem; }
+    header h1 { font-size: 1.5rem; }
+    nav { flex-direction: column; align-items: center; }
+    .nav-btn { width: 90%; margin: 0.25rem 0; }
+
+    main { padding: 1rem; }
+    .view { padding: 1.5rem; }
+    .form-grid, .filter-grid, .summary-container,
+    #fuelEntriesContainer .fuel-entry-item,
+    #addUserByAdminForm .form-grid,
+    .summary-metrics {
+        grid-template-columns: 1fr;
+    }
+    #adminDriverSelectorContainer {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    #adminDriverSelectorContainer .form-group,
+    #adminDriverSelectorContainer button {
+        width: 100%;
+    }
+    .form-actions { flex-direction: column; }
+    .form-actions .submit-btn, .form-actions .control-btn { width: 100%; }
+}

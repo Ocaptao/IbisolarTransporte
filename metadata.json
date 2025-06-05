@@ -1,0 +1,7 @@
+
+{
+  "name": "Controle de Despesas de Viagem",
+  "description": "Uma aplicação para usuários registrarem despesas de viagem e para administradores analisarem dados de viagens, despesas e lucros.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}

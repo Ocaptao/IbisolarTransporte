@@ -1,15 +1,15 @@
 
 import { Chart, registerables } from 'chart.js';
 // Firebase App (o núcleo do Firebase SDK) é sempre necessário e deve ser listado primeiro
-import { initializeApp } from "firebase/app"; // ATUALIZADO
+import { initializeApp } from "firebase/app";
 import {
     getAuth,
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
     signOut,
     onAuthStateChanged,
-    // updatePassword as updateUserPasswordInAuth, // Not currently used, commented out for JS
-} from "firebase/auth"; // ATUALIZADO
+    // updatePassword as updateUserPasswordInAuth, // Removido por não estar em uso
+} from "firebase/auth";
 import {
     getFirestore,
     collection,
@@ -23,9 +23,9 @@ import {
     where,
     Timestamp,
     orderBy,
-    // writeBatch, // Not currently used
+    // writeBatch, // Removido por não estar em uso
     setDoc as firebaseSetDoc,
-} from "firebase/firestore"; // ATUALIZADO
+} from "firebase/firestore";
 
 Chart.register(...registerables);
 

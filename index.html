@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Controle de Despesas de Viagem</title>
+    <title>Controle de Frete</title>
     <link rel="stylesheet" href="index.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -73,10 +73,10 @@
     <!-- Container Principal da Aplicação (inicialmente oculto) -->
     <div id="appContainer" style="display: none;">
         <header>
-            <h1>Controle de Despesas de Viagem</h1>
+            <h1>Controle de Frete</h1>
             <nav>
-                <button id="userViewBtn" class="nav-btn" aria-pressed="false" style="display: none;">Registrar Viagem</button>
-                <button id="myTripsViewBtn" class="nav-btn" aria-pressed="false" style="display: none;">Minhas Viagens</button>
+                <button id="userViewBtn" class="nav-btn" aria-pressed="false" style="display: none;">Registrar Frete</button>
+                <button id="myTripsViewBtn" class="nav-btn" aria-pressed="false" style="display: none;">Meus Fretes</button>
                 <button id="adminViewBtn" class="nav-btn" aria-pressed="false" style="display: none;">Painel do Administrador</button>
                 <button id="userManagementViewBtn" class="nav-btn" aria-pressed="false" style="display: none;">Gerenciar Usuários</button>
                 <button id="logoutBtn" class="nav-btn danger-btn" style="display: none;">Sair</button>
@@ -85,11 +85,11 @@
 
         <main>
             <section id="userView" class="view" aria-labelledby="user-view-title">
-                <h2 id="user-view-title">Registrar Nova Viagem</h2>
+                <h2 id="user-view-title">Registrar Novo Frete</h2>
                 <form id="tripForm">
                     <input type="hidden" id="tripIdToEdit" name="tripIdToEdit">
                     <fieldset>
-                        <legend>Informações Gerais da Viagem</legend>
+                        <legend>Informações Gerais do Frete</legend>
                         <div class="form-grid">
                             <div class="form-group">
                                 <label for="tripDate">Data:</label>
@@ -127,7 +127,7 @@
                     </fieldset>
 
                     <fieldset>
-                        <legend>Despesas de Combustível</legend>
+                        <legend>Despesas com Combustível</legend>
                         <div id="fuelEntriesContainer">
                             <!-- Fuel entries will be dynamically injected here by JavaScript -->
                         </div>
@@ -161,15 +161,15 @@
                     </fieldset>
 
                     <fieldset>
-                        <legend>Resumo Financeiro da Viagem</legend>
+                        <legend>Resumo Financeiro do Frete</legend>
                         <div class="form-group full-width">
-                            <label for="declaredValue">Valor Declarado (Informado Manualmente):</label>
+                            <label for="declaredValue">Valor Declarado:</label>
                             <input type="number" id="declaredValue" name="declaredValue" min="0" step="0.01" placeholder="0,00">
                         </div>
                     </fieldset>
 
                     <div class="form-actions">
-                        <button type="submit" id="submitTripBtn" class="submit-btn">Salvar Viagem</button>
+                        <button type="submit" id="submitTripBtn" class="submit-btn">Salvar Frete</button>
                         <button type="button" id="cancelEditBtn" class="control-btn secondary-btn" style="display: none;">Cancelar Edição</button>
                     </div>
                     <p id="userFormFeedback" class="feedback-message" aria-live="polite"></p>
@@ -177,17 +177,17 @@
             </section>
 
             <section id="myTripsView" class="view" aria-labelledby="my-trips-view-title">
-                <h2 id="my-trips-view-title">Minhas Viagens</h2>
+                <h2 id="my-trips-view-title">Meus Fretes</h2>
 
                 <div id="driverSummaryContainer" class="summary-section">
-                    <h3>Seu Resumo de Viagens</h3>
+                    <h3>Seu Resumo de Fretes</h3>
                     <div class="summary-metrics">
                         <div class="metric-card">
-                            <h4>Viagens Realizadas</h4>
+                            <h4>Fretes Realizados</h4>
                             <p id="driverTotalTripsEl">0</p>
                         </div>
                         <div class="metric-card">
-                            <h4>Valor Total dos Fretes (suas viagens)</h4>
+                            <h4>Valor Total dos Fretes (seus fretes)</h4>
                             <p id="driverTotalFreightParticipatedEl">R$ 0,00</p>
                         </div>
                         <div class="metric-card">
@@ -202,11 +202,11 @@
                         <label for="myTripsDriverNameInput">Nome do Motorista para Busca (Admin):</label>
                         <input type="text" id="myTripsDriverNameInput" placeholder="Digite nome para buscar">
                     </div>
-                    <button id="loadMyTripsBtn" class="control-btn">Buscar Viagens do Motorista</button>
+                    <button id="loadMyTripsBtn" class="control-btn">Buscar Fretes do Motorista</button>
                 </div>
 
                 <div id="myTripsFilterControls" style="display: none;">
-                     <h3>Filtrar Viagens e Resumo</h3>
+                     <h3>Filtrar Fretes e Resumo</h3>
                     <div class="filter-grid">
                         <div class="form-group">
                             <label for="myTripsFilterStartDate">Data Inicial:</label>
@@ -235,7 +235,7 @@
                         </thead>
                         <tbody id="myTripsTableBody"></tbody>
                     </table>
-                    <p id="myTripsTablePlaceholder">Nenhuma viagem para exibir. Suas viagens e resumo serão carregados automaticamente.</p>
+                    <p id="myTripsTablePlaceholder">Nenhum frete para exibir. Seus fretes e resumo serão carregados automaticamente.</p>
                 </div>
             </section>
 
@@ -243,7 +243,7 @@
                 <h2 id="admin-view-title">Painel do Administrador</h2>
 
                 <div id="adminSummaryContainer" class="summary-section">
-                    <h3>Resumo Geral das Operações</h3>
+                    <h3>Resumo Geral de Fretes</h3>
                     <div class="dashboard-controls">
                         <div class="filter-grid">
                             <div class="form-group">
@@ -256,10 +256,11 @@
                             </div>
                         </div>
                         <button id="applyAdminSummaryFilterBtn" class="control-btn">Atualizar Resumo Geral</button>
+                        <button id="exportAdminReportBtn" class="control-btn secondary-btn" style="margin-top: 10px;">Exportar Relatório Mensal (Excel/CSV)</button>
                     </div>
                     <div class="summary-metrics">
                         <div class="metric-card">
-                            <h4>Total de Viagens</h4>
+                            <h4>Total de Fretes</h4>
                             <p id="adminTotalTripsEl">0</p>
                         </div>
                         <div class="metric-card">
@@ -277,7 +278,7 @@
                     </div>
                  </div>
 
-                <h3>Detalhes de Viagens por Motorista</h3>
+                <h3>Detalhes de Fretes por Motorista</h3>
                 <div id="adminDriverSelectorContainer" class="dashboard-controls">
                     <div class="form-group">
                         <label for="adminSelectDriver">Selecionar Motorista:</label>
@@ -285,11 +286,11 @@
                             <option value="">-- Selecione um Motorista --</option>
                         </select>
                     </div>
-                    <button id="adminLoadDriverTripsBtn" class="control-btn">Carregar Viagens</button>
+                    <button id="adminLoadDriverTripsBtn" class="control-btn">Carregar Fretes</button>
                 </div>
 
                 <div id="adminDriverTripsSection" style="display: none;">
-                    <h3 id="adminSelectedDriverNameDisplay">Viagens de [Motorista]</h3>
+                    <h3 id="adminSelectedDriverNameDisplay">Fretes de [Motorista]</h3>
                     <table id="adminDriverTripsTable">
                         <thead>
                             <tr>
@@ -301,14 +302,13 @@
                         </thead>
                         <tbody id="adminDriverTripsTableBody"></tbody>
                     </table>
-                    <p id="adminDriverTripsPlaceholder">Nenhuma viagem encontrada para este motorista.</p>
+                    <p id="adminDriverTripsPlaceholder">Nenhum frete encontrado para este motorista.</p>
                 </div>
                 <p id="adminGeneralFeedback" class="feedback-message" aria-live="polite"></p>
             </section>
 
             <section id="userManagementView" class="view" aria-labelledby="user-management-title">
                 <h2 id="user-management-title">Gerenciamento de Usuários</h2>
-                <!-- Formulário de adicionar usuário pelo admin foi removido -->
                 <h3>Usuários Cadastrados</h3>
                 <p id="userManagementFeedback" class="feedback-message" aria-live="polite"></p>
                 <div id="userManagementTableContainer">
@@ -330,7 +330,7 @@
                 <span class="close-modal-btn" id="closeEditUserModalBtn">&times;</span>
                 <h3>Editar Usuário</h3>
                 <form id="editUserForm">
-                    <input type="hidden" id="editUserId"> <!-- Armazenará o UID do Firebase -->
+                    <input type="hidden" id="editUserId"> 
                     <div class="form-group">
                         <label for="editUsernameDisplay">Nome de Usuário (não editável):</label>
                         <input type="text" id="editUsernameDisplay" readonly>
@@ -359,13 +359,13 @@
         <div id="adminTripDetailModal" class="modal" style="display: none;">
             <div class="modal-content large-modal">
                 <span class="close-modal-btn" id="closeAdminTripDetailModalBtn">&times;</span>
-                <h3>Detalhes da Viagem</h3>
+                <h3>Detalhes do Frete</h3>
                 <div id="adminTripDetailContent"></div>
             </div>
         </div>
 
         <footer>
-            <p>&copy; 2024 Controle de Despesas de Viagem. Todos os direitos reservados.</p>
+            <p>&copy; 2024 Controle de Frete. Todos os direitos reservados.</p>
         </footer>
     </div>
 

@@ -47,7 +47,6 @@ let db;
 let userProfilesCollection;
 let tripsCollection;
 
-
 try {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
@@ -55,10 +54,76 @@ try {
     userProfilesCollection = collection(db, "userProfiles");
     tripsCollection = collection(db, "trips");
     console.log("Firebase initialized successfully!");
+
+    // Attach the onAuthStateChanged listener only if auth initialized successfully
+    onAuthStateChanged(auth, async (user) => {
+        console.log("onAuthStateChanged triggered. User object:", user ? user.uid : 'null');
+        if (user) {
+            loggedInUser = user;
+            console.log("User is authenticated with UID:", user.uid);
+            try {
+                console.log("Attempting to fetch user profile from Firestore for UID:", user.uid);
+                const userProfileDocRef = doc(userProfilesCollection, user.uid);
+                const userProfileDoc = await getDoc(userProfileDocRef);
+
+                if (userProfileDoc.exists()) {
+                    if (auth.currentUser && auth.currentUser.uid === user.uid) {
+                        loggedInUserProfile = { id: userProfileDoc.id, ...userProfileDoc.data() };
+                        console.log("User profile found in Firestore:", "Username:", loggedInUserProfile.username, "Role:", loggedInUserProfile.role);
+
+                        updateNavVisibility();
+                        if (loggedInUserProfile.role === 'admin') {
+                            console.log("User is admin, showing adminView.");
+                            showView('adminView');
+                            initializeAdminView();
+                        } else {
+                            console.log("User is motorista, showing userView.");
+                            showView('userView');
+                            initializeUserView();
+                        }
+                        if (myTripsViewBtn && myTripsViewBtn.style.display !== 'none') {
+                            console.log("Initializing My Trips View for logged in user.");
+                            initializeMyTripsView();
+                        }
+                        if (userManagementViewBtn && userManagementViewBtn.style.display !== 'none' && loggedInUserProfile.username.toLowerCase() === 'fabio') {
+                            console.log("User is Fabio (admin), initializing User Management View.");
+                            initializeUserManagementView();
+                        }
+                    } else {
+                        console.warn("User session changed while fetching profile for UID:", user.uid, ". Aborting UI update.");
+                    }
+                } else {
+                    console.error("CRITICAL: User profile NOT FOUND in Firestore for UID:", user.uid, "Email:", user.email);
+                    showFeedback(loginFeedback, `Falha ao carregar perfil (usuário ${user.email || user.uid}). Você será desconectado. Verifique o cadastro ou contate o suporte.`, "error");
+                    setTimeout(() => signOut(auth), 3000);
+                }
+            } catch (error) {
+                console.error("CRITICAL ERROR fetching user profile for UID:", user.uid, "Error:", error);
+                showFeedback(loginFeedback, `Erro ao carregar dados do perfil (usuário ${user.email || user.uid}). Você será desconectado. (${error.message})`, "error");
+                setTimeout(() => signOut(auth), 3000);
+            }
+        } else {
+            console.log("User is not authenticated.");
+            loggedInUser = null;
+            loggedInUserProfile = null;
+            trips = [];
+            userProfiles = [];
+            updateNavVisibility();
+            showView('loginView');
+            console.log("User is logged out, showing loginView.");
+        }
+        console.log("onAuthStateChanged finished processing for user:", user ? user.uid : 'null');
+    });
+    console.log("onAuthStateChanged listener attached successfully.");
+
 } catch (error) {
     console.error("CRITICAL ERROR: Firebase initialization failed:", "Code:", error.code, "Message:", error.message);
     alert("Erro crítico: Não foi possível conectar ao serviço de dados. Verifique a configuração do Firebase e sua conexão com a internet.");
+    // Fallback: try to show login view, though buttons might not work if DOMContentLoaded also detects issues.
+    // The DOMContentLoaded handler will also display a persistent error if Firebase vars are not set.
+    showView('loginView');
 }
+
 
 // --- STATE VARIABLES ---
 let trips = []; // Cache local de viagens carregadas
@@ -451,65 +516,6 @@ async function handleLogout() {
         showFeedback(loginFeedback, "Erro ao sair. Tente novamente.", "error");
     }
 }
-
-onAuthStateChanged(auth, async (user) => {
-    console.log("onAuthStateChanged triggered. User object:", user ? user.uid : 'null');
-    if (user) {
-        loggedInUser = user;
-        console.log("User is authenticated with UID:", user.uid);
-        try {
-            console.log("Attempting to fetch user profile from Firestore for UID:", user.uid);
-            const userProfileDocRef = doc(userProfilesCollection, user.uid);
-            const userProfileDoc = await getDoc(userProfileDocRef);
-
-            if (userProfileDoc.exists()) {
-                if (auth.currentUser && auth.currentUser.uid === user.uid) {
-                    loggedInUserProfile = { id: userProfileDoc.id, ...userProfileDoc.data() };
-                    console.log("User profile found in Firestore:", "Username:", loggedInUserProfile.username, "Role:", loggedInUserProfile.role);
-
-                    updateNavVisibility();
-                    if (loggedInUserProfile.role === 'admin') {
-                        console.log("User is admin, showing adminView.");
-                        showView('adminView');
-                        initializeAdminView();
-                    } else {
-                        console.log("User is motorista, showing userView.");
-                        showView('userView');
-                        initializeUserView();
-                    }
-                    if (myTripsViewBtn && myTripsViewBtn.style.display !== 'none') {
-                        console.log("Initializing My Trips View for logged in user.");
-                        initializeMyTripsView();
-                    }
-                    if (userManagementViewBtn && userManagementViewBtn.style.display !== 'none' && loggedInUserProfile.username.toLowerCase() === 'fabio') {
-                        console.log("User is Fabio (admin), initializing User Management View.");
-                        initializeUserManagementView();
-                    }
-                } else {
-                    console.warn("User session changed while fetching profile for UID:", user.uid, ". Aborting UI update.");
-                }
-            } else {
-                console.error("CRITICAL: User profile NOT FOUND in Firestore for UID:", user.uid, "Email:", user.email);
-                showFeedback(loginFeedback, `Falha ao carregar perfil (usuário ${user.email || user.uid}). Você será desconectado. Verifique o cadastro ou contate o suporte.`, "error");
-                setTimeout(() => signOut(auth), 3000);
-            }
-        } catch (error) {
-            console.error("CRITICAL ERROR fetching user profile for UID:", user.uid, "Error:", error);
-            showFeedback(loginFeedback, `Erro ao carregar dados do perfil (usuário ${user.email || user.uid}). Você será desconectado. (${error.message})`, "error");
-            setTimeout(() => signOut(auth), 3000);
-        }
-    } else {
-        console.log("User is not authenticated.");
-        loggedInUser = null;
-        loggedInUserProfile = null;
-        trips = [];
-        userProfiles = [];
-        updateNavVisibility();
-        showView('loginView');
-        console.log("User is logged out, showing loginView.");
-    }
-    console.log("onAuthStateChanged finished processing for user:", user ? user.uid : 'null');
-});
 
 // --- TRIP MANAGEMENT WITH FIRESTORE ---
 function addFuelEntryToForm(entry) {
@@ -1335,10 +1341,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const modals = document.querySelectorAll('.modal');
     modals.forEach(modal => {
         if(modal) {
-            modal.style.display = 'none'; // Ensure all modals are hidden initially
+            // modal.style.display = 'none'; // Already hidden by default HTML/CSS
             modal.addEventListener('click', (event) => {
                 if (event.target === modal) {
-                    modal.style.display = 'none';
+                    (modal as HTMLElement).style.display = 'none';
                 }
             });
         }

@@ -311,7 +311,7 @@ function showFeedback(element, message, type) {
             element.style.display = 'none';
             element.textContent = '';
         }
-    }, 5000);
+    }, 7000); // Aumentado o tempo para mensagens de erro mais longas
 }
 
 // --- GERENCIAMENTO DE VISUALIZAÇÃO ---
@@ -710,10 +710,12 @@ async function handleTripFormSubmit(event) {
 }
 
 async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
-    if (!loggedInUserProfile) {
-        if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = 'Você precisa estar logado para ver suas viagens.';
+    if (!loggedInUser || !loggedInUserProfile) {
+        const msg = 'Você precisa estar logado e seu perfil carregado para ver suas viagens.';
+        if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = msg;
         if (myTripsTable) myTripsTable.style.display = 'none';
         if (myTripsTablePlaceholder) myTripsTablePlaceholder.style.display = 'block';
+        showFeedback(myTripsFeedback, msg, "error");
         return;
     }
 
@@ -723,6 +725,13 @@ async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
     if (loggedInUserProfile.role === 'admin' && currentUidForMyTripsSearch && currentUserForMyTripsSearch) {
         targetUid = currentUidForMyTripsSearch;
         targetUsername = currentUserForMyTripsSearch;
+    }
+
+    if (!targetUid) {
+        const msg = 'Não foi possível identificar o motorista para carregar as viagens.';
+         if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = msg;
+        showFeedback(myTripsFeedback, msg, "error");
+        return;
     }
 
     if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Carregando viagens de ${targetUsername}...`;
@@ -739,7 +748,6 @@ async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
         if (filterEndDate) {
             q = query(q, where("date", "<=", filterEndDate));
         }
-
 
         const querySnapshot = await getDocs(q);
         const fetchedTrips = [];
@@ -760,9 +768,15 @@ async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
         updateDriverSummary(trips, targetUsername); 
 
     } catch (error) {
-        console.error(`Erro ao carregar viagens de ${targetUsername} do Firestore:`, "Código:", error.code, "Mensagem:", error.message);
-        showFeedback(myTripsFeedback, `Erro ao carregar viagens de ${targetUsername}.`, "error");
-        if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Erro ao carregar viagens de ${targetUsername}.`;
+        console.error(`ERRO CRÍTICO ao carregar viagens de ${targetUsername} do Firestore:`, "Código:", error.code, "Mensagem:", error.message, "Detalhes:", error);
+        let userMessage = `Erro ao carregar viagens de ${targetUsername}. Verifique o console para mais detalhes.`;
+        if (error.code === 'failed-precondition') {
+            userMessage = `Erro ao carregar viagens de ${targetUsername}: Provavelmente um índice está faltando no Firestore. Por favor, verifique o console do navegador (F12) para um link ou mensagem de erro detalhada do Firebase que pode incluir um link para criar o índice necessário.`;
+        } else if (error.code === 'permission-denied') {
+            userMessage = `Erro ao carregar viagens de ${targetUsername}: Permissão negada. Verifique as regras de segurança do Firestore.`;
+        }
+        showFeedback(myTripsFeedback, userMessage, "error");
+        if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = userMessage;
     }
 }
 
@@ -825,7 +839,7 @@ async function loadTripForEditing(tripId) {
         if (tripDoc.exists()) {
             const trip = { id: tripDoc.id, ...tripDoc.data() };
 
-            if (loggedInUser.uid !== trip.userId && loggedInUserProfile?.role !== 'admin') {
+            if (!loggedInUser || (loggedInUser.uid !== trip.userId && loggedInUserProfile?.role !== 'admin')) {
                 showFeedback(userFormFeedback, "Você não tem permissão para editar esta viagem.", "error");
                 return;
             }
@@ -877,13 +891,15 @@ function confirmDeleteTrip(tripId, driverNameForConfirm) {
                         (adminView && adminView.style.display === 'block' ? trips.find(t=>t.id === tripId) : null); 
 
     if (tripToDelete) {
-         if (loggedInUser.uid !== tripToDelete.userId &&
-            !(loggedInUserProfile?.role === 'admin' && loggedInUserProfile.username.toLowerCase() === 'fabio')) {
+         if (!loggedInUser || (loggedInUser.uid !== tripToDelete.userId &&
+            !(loggedInUserProfile?.role === 'admin' && loggedInUserProfile.username.toLowerCase() === 'fabio'))) {
             showFeedback(myTripsFeedback, "Você não tem permissão para excluir esta viagem.", "error");
             return;
         }
-    } else if (loggedInUserProfile?.role !== 'admin' || loggedInUserProfile.username.toLowerCase() !== 'fabio') {
-        showFeedback(myTripsFeedback, "Viagem não encontrada ou permissão negada.", "error");
+    } else if (!loggedInUserProfile || loggedInUserProfile.role !== 'admin' || loggedInUserProfile.username.toLowerCase() !== 'fabio') {
+        // Se a viagem não foi encontrada no cache 'trips' E o usuário não é o admin "Fabio",
+        // ele não deve poder deletar algo que não está carregado/visível para ele ou que ele não tenha permissão global.
+        showFeedback(myTripsFeedback, "Viagem não encontrada ou permissão para exclusão global negada.", "error");
         return;
     }
 
@@ -970,8 +986,12 @@ async function updateAdminSummary(filterStartDate, filterEndDate) {
         adminTotalNetProfitEl.textContent = formatCurrency(totalNetProfitOverall);
 
     } catch (error) {
-        console.error("Erro ao atualizar resumo do administrador:", "Código:", error.code, "Mensagem:", error.message);
-        showFeedback(adminGeneralFeedback, "Erro ao atualizar resumo do administrador.", "error");
+        console.error("ERRO CRÍTICO ao atualizar resumo do administrador:", "Código:", error.code, "Mensagem:", error.message, "Detalhes:", error);
+        let userMessage = "Erro ao atualizar resumo do administrador. Verifique o console para mais detalhes.";
+         if (error.code === 'failed-precondition') {
+            userMessage = "Erro ao atualizar resumo: Provavelmente um índice está faltando no Firestore. Verifique o console do navegador (F12) para um link ou mensagem de erro detalhada.";
+        }
+        showFeedback(adminGeneralFeedback, userMessage, "error");
     }
 }
 
@@ -1027,9 +1047,15 @@ async function loadAndRenderAdminDriverTrips(driverUid, driverName) {
         renderAdminDriverTripsTable(driverTrips);
 
     } catch (error) {
-        console.error(`Erro ao carregar viagens para o motorista ${driverName} (UID: ${driverUid}):`, "Código:", error.code, "Mensagem:", error.message);
-        showFeedback(adminGeneralFeedback, `Erro ao carregar viagens de ${driverName}.`, "error");
-        if (adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = `Erro ao carregar viagens de ${driverName}.`;
+        console.error(`ERRO CRÍTICO ao carregar viagens para o motorista ${driverName} (UID: ${driverUid}):`, "Código:", error.code, "Mensagem:", error.message, "Detalhes:", error);
+        let userMessage = `Erro ao carregar viagens de ${driverName}. Verifique o console para mais detalhes.`;
+        if (error.code === 'failed-precondition') {
+            userMessage = `Erro ao carregar viagens de ${driverName}: Provavelmente um índice está faltando no Firestore. Verifique o console do navegador (F12) para um link ou mensagem de erro detalhada.`;
+        } else if (error.code === 'permission-denied') {
+            userMessage = `Erro ao carregar viagens de ${driverName}: Permissão negada. Verifique as regras de segurança do Firestore.`;
+        }
+        showFeedback(adminGeneralFeedback, userMessage, "error");
+        if (adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = userMessage;
     }
 }
 
@@ -1394,9 +1420,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const modals = document.querySelectorAll('.modal');
     modals.forEach(modal => {
         if(modal) {
-            modal.style.display = 'none';
+            modal.style.display = 'none'; // Garantir que todos os modais comecem escondidos
             modal.addEventListener('click', (event) => {
-                if (event.target === modal) {
+                if (event.target === modal) { // Se o clique foi no fundo do modal
                     modal.style.display = 'none';
                 }
             });

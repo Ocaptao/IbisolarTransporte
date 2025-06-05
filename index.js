@@ -321,7 +321,7 @@ async function handleRegister(event) {
     const passwordInput = document.getElementById('registerPassword');
     const confirmPasswordInput = document.getElementById('registerConfirmPassword');
 
-    const rawUsername = usernameInput.value.trim();
+    const rawUsername = usernameInput.value.trim(); // Será minúsculo devido ao listener de input
     const normalizedUsernamePart = normalizeUsernameForEmail(rawUsername);
 
     if (!rawUsername) {
@@ -358,14 +358,15 @@ async function handleRegister(event) {
         console.log("Usuário criado na Autenticação:", firebaseUser.uid);
 
         let roleForNewUser = 'motorista';
-        if (rawUsername.toLowerCase() === 'fabio') {
+        // A checagem por 'fabio' deve ser feita no rawUsername (que agora será lowercase)
+        if (rawUsername === 'fabio') { 
             roleForNewUser = 'admin';
             console.log(`Registrando usuário ${rawUsername} como ADMIN porque o nome de usuário é 'fabio'.`);
         }
 
         const newUserProfile = {
             uid: firebaseUser.uid,
-            username: rawUsername, 
+            username: rawUsername, // Salvar o nome de usuário já em minúsculas
             email: firebaseUser.email || email, 
             role: roleForNewUser,
             createdAt: Timestamp.now()
@@ -473,7 +474,6 @@ async function handleLogout() {
 if (authFirebase) { 
     onAuthStateChanged(authFirebase, async (user) => { 
         console.log("onAuthStateChanged acionado. Objeto de usuário:", user ? user.uid : 'null');
-        // console.log("loggedInUserProfile ANTES da busca no onAuthStateChanged:", loggedInUserProfile); // Removido log redundante
         if (user) {
             loggedInUser = user;
             console.log("Usuário está autenticado com UID:", user.uid);
@@ -481,13 +481,11 @@ if (authFirebase) {
                 console.log("Tentando buscar perfil do usuário no Firestore para o UID:", user.uid);
                 const userProfileDocRef = doc(userProfilesCollection, user.uid);
                 const userProfileDoc = await getDoc(userProfileDocRef);
-                // console.log("loggedInUserProfile APÓS a busca no onAuthStateChanged (antes de if exists):", loggedInUserProfile);  // Removido log redundante
 
                 if (userProfileDoc.exists()) {
                     if (authFirebase.currentUser && authFirebase.currentUser.uid === user.uid) { 
                         loggedInUserProfile = { id: userProfileDoc.id, ...userProfileDoc.data() };
                         console.log("Perfil do usuário encontrado no Firestore:", "Nome de usuário:", loggedInUserProfile.username, "Papel:", loggedInUserProfile.role);
-                        // console.log("loggedInUserProfile ATUALIZADO:", loggedInUserProfile); // Removido log redundante
 
                         updateNavVisibility();
                         if (loggedInUserProfile.role === 'admin') {
@@ -503,7 +501,8 @@ if (authFirebase) {
                             console.log("Inicializando a visualização 'Meus Fretes' para o usuário logado.");
                             initializeMyTripsView();
                         }
-                        if (userManagementViewBtn && userManagementViewBtn.style.display !== 'none' && loggedInUserProfile.username.toLowerCase() === 'fabio') {
+                        // A verificação de 'fabio' agora usa o username do perfil (que pode ser minúsculo)
+                        if (userManagementViewBtn && userManagementViewBtn.style.display !== 'none' && loggedInUserProfile.username === 'fabio') {
                             console.log("Usuário é Fabio (admin), inicializando a visualização 'Gerenciamento de Usuários'.");
                             initializeUserManagementView();
                         }
@@ -812,7 +811,8 @@ function renderMyTripsTable(tripsToRender) {
         if (loggedInUserProfile && loggedInUser && trip.userId === loggedInUser.uid) { 
             canDelete = true;
         }
-        if (loggedInUserProfile && loggedInUserProfile.role === 'admin' && loggedInUserProfile.username.toLowerCase() === 'fabio') {
+        // A verificação de 'fabio' agora usa o username do perfil (que pode ser minúsculo)
+        if (loggedInUserProfile && loggedInUserProfile.role === 'admin' && loggedInUserProfile.username === 'fabio') {
             canDelete = true;
         }
 
@@ -887,12 +887,13 @@ function confirmDeleteTrip(tripId, driverNameForConfirm) {
     const tripToDelete = trips.find(t => t.id === tripId); 
 
     if (tripToDelete) {
+         // A verificação de 'fabio' agora usa o username do perfil (que pode ser minúsculo)
          if (!loggedInUser || (loggedInUser.uid !== tripToDelete.userId &&
-            !(loggedInUserProfile?.role === 'admin' && loggedInUserProfile.username.toLowerCase() === 'fabio'))) {
+            !(loggedInUserProfile?.role === 'admin' && loggedInUserProfile.username === 'fabio'))) {
             showFeedback(myTripsFeedback, "Você não tem permissão para excluir este frete.", "error");
             return;
         }
-    } else if (!loggedInUserProfile || loggedInUserProfile.role !== 'admin' || loggedInUserProfile.username.toLowerCase() !== 'fabio') {
+    } else if (!loggedInUserProfile || loggedInUserProfile.role !== 'admin' || loggedInUserProfile.username !== 'fabio') {
         showFeedback(myTripsFeedback, "Frete não encontrado ou permissão para exclusão global negada.", "error");
         return;
     }
@@ -1139,7 +1140,8 @@ function showAdminTripDetailModal(trip) {
 // --- FUNÇÕES DE GERENCIAMENTO DE USUÁRIOS (Admin Fabio) ---
 async function loadAndRenderUsersForAdmin() {
     if (!userManagementTableBody) return;
-    if (!loggedInUserProfile || loggedInUserProfile.role !== 'admin' || loggedInUserProfile.username.toLowerCase() !== 'fabio') {
+    // A verificação de 'fabio' agora usa o username do perfil (que pode ser minúsculo)
+    if (!loggedInUserProfile || loggedInUserProfile.role !== 'admin' || loggedInUserProfile.username !== 'fabio') {
         userManagementTableBody.innerHTML = '<tr><td colspan="3">Acesso negado.</td></tr>';
         return;
     }
@@ -1281,7 +1283,8 @@ function initializeAdminView() {
 }
 
 function initializeUserManagementView() {
-     if (!loggedInUserProfile || loggedInUserProfile.role !== 'admin' || loggedInUserProfile.username.toLowerCase() !== 'fabio') return;
+     // A verificação de 'fabio' agora usa o username do perfil (que pode ser minúsculo)
+     if (!loggedInUserProfile || loggedInUserProfile.role !== 'admin' || loggedInUserProfile.username !== 'fabio') return;
     loadAndRenderUsersForAdmin();
 }
 
@@ -1367,19 +1370,13 @@ async function handleExportAdminReport() {
             return;
         }
 
-        // Buscar todos os perfis de usuário para garantir que o mapa de usuários esteja completo
         const localUserProfilesForReport = [];
         const qProfiles = query(userProfilesCollection, orderBy("username"));
         const profileSnapshot = await getDocs(qProfiles);
         profileSnapshot.forEach(doc => {
-            localUserProfilesForReport.push({ uid: doc.id, ...doc.data() }); // Garante que uid está no objeto, se id for o uid.
+            localUserProfilesForReport.push({ uid: doc.id, ...doc.data() }); 
         });
         
-        // Se id do documento não for o uid, e uid estiver no data():
-        // profileSnapshot.forEach(doc => {
-        //     localUserProfilesForReport.push({ ...doc.data() }); 
-        // });
-
         const userMap = new Map(localUserProfilesForReport.map(p => [p.uid, p.username]));
 
 
@@ -1392,7 +1389,7 @@ async function handleExportAdminReport() {
 
         const dataForHTML = reportTrips.map(trip => [
             formatDate(trip.date),
-            userMap.get(trip.userId) || trip.driverName, // Usa o userMap atualizado
+            userMap.get(trip.userId) || trip.driverName,
             trip.cargoType || '',
             trip.kmInitial || 0,
             trip.kmFinal || 0,
@@ -1433,6 +1430,16 @@ async function handleExportAdminReport() {
 // --- OUVINTES DE EVENTOS ---
 document.addEventListener('DOMContentLoaded', () => {
     console.log("Evento DOMContentLoaded disparado.");
+
+    const registerUsernameInput = document.getElementById('registerUsername');
+    if (registerUsernameInput) {
+        registerUsernameInput.addEventListener('input', function() {
+            this.value = this.value.toLowerCase();
+        });
+        console.log("Listener de evento 'input' adicionado a registerUsername para conversão para minúsculas.");
+    } else {
+        console.error("Campo registerUsername não encontrado para adicionar listener de conversão para minúsculas.");
+    }
 
     if (showRegisterViewLink) {
         showRegisterViewLink.addEventListener('click', (e) => { e.preventDefault(); showView('registerView'); });
@@ -1507,12 +1514,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             try {
-                const qUser = query(userProfilesCollection, where("username", "==", driverNameToSearch));
+                const qUser = query(userProfilesCollection, where("username", "==", driverNameToSearch)); // username já deve estar minúsculo no DB se o input forçar lowercase
                 const userSnapshot = await getDocs(qUser);
                 if (!userSnapshot.empty) {
                     const foundUser = userSnapshot.docs[0].data(); 
                     currentUserForMyTripsSearch = foundUser.username;
-                    currentUidForMyTripsSearch = foundUser.uid; // Assumindo que o ID do documento é o UID ou que 'uid' existe no data()
+                    currentUidForMyTripsSearch = foundUser.uid; 
                     loadAndRenderMyTrips(myTripsFilterStartDateInput?.value, myTripsFilterEndDateInput?.value);
                 } else {
                     showFeedback(myTripsFeedback, `Motorista "${driverNameToSearch}" não encontrado.`, "error");

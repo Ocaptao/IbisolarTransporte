@@ -51,8 +51,8 @@ try {
     auth = getAuth(app);
     db = getFirestore(app);
     console.log("Firebase initialized successfully!");
-} catch (error) {
-    console.error("CRITICAL ERROR: Firebase initialization failed:", error);
+} catch (error: any) {
+    console.error("CRITICAL ERROR: Firebase initialization failed:", "Code:", error.code, "Message:", error.message);
     alert("Erro crítico: Não foi possível conectar ao serviço de dados. Verifique a configuração do Firebase e sua conexão com a internet.");
 }
 
@@ -234,6 +234,32 @@ function generateId(): string { // Para IDs de elementos HTML (ex: fuel entries)
     return Date.now().toString(36) + Math.random().toString(36).substring(2);
 }
 
+function normalizeUsernameForEmail(username: string): string {
+    if (!username) return '';
+    const normalized = username
+        .normalize('NFD') // Decompõe caracteres acentuados (ex: "é" para "e" + "´")
+        .replace(/[\u0300-\u036f]/g, '') // Remove os diacríticos (acentos)
+        .toLowerCase()
+        .trim() // Remove espaços no início e fim
+        .replace(/\s+/g, '.') // Substitui um ou mais espaços por um único ponto
+        .replace(/[^a-z0-9._-]/g, ''); // Remove caracteres não permitidos (permite letras, números, ., _, -)
+
+    // Evitar múltiplos pontos consecutivos ou pontos no início/fim que podem ser problemáticos
+    let cleaned = normalized.replace(/\.+/g, '.'); // Substitui múltiplos pontos por um único
+    if (cleaned.startsWith('.')) cleaned = cleaned.substring(1);
+    if (cleaned.endsWith('.')) cleaned = cleaned.slice(0, -1);
+
+    // Garante que não está vazio após a limpeza
+    if (!cleaned) {
+        // Se após a limpeza o nome ficar vazio (ex: nome só com caracteres especiais),
+        // gere um identificador aleatório para evitar um email inválido.
+        // Ou, idealmente, valide o username antes de chegar aqui.
+        return `user.${generateId()}`;
+    }
+    return cleaned;
+}
+
+
 function formatDate(dateInput: string | Timestamp | Date | null | undefined): string {
     if (!dateInput) return 'Data inválida';
 
@@ -347,14 +373,25 @@ async function handleRegister(event: Event) {
     const passwordInput = document.getElementById('registerPassword') as HTMLInputElement;
     const confirmPasswordInput = document.getElementById('registerConfirmPassword') as HTMLInputElement;
 
-    const username = usernameInput.value.trim(); // Usaremos como nome de exibição
-    const email = `${username.toLowerCase().replace(/\s+/g, '.')}@example.com`; // Cria um email único, mas o ideal é coletar email real
+    const rawUsername = usernameInput.value.trim();
+    const normalizedUsernamePart = normalizeUsernameForEmail(rawUsername);
+
+    if (!rawUsername) {
+        showFeedback(registerFeedback, "Nome de usuário é obrigatório.", "error");
+        return;
+    }
+    if (!normalizedUsernamePart) {
+        showFeedback(registerFeedback, "Nome de usuário inválido após normalização (ex: contém apenas caracteres especiais). Por favor, use um nome de usuário com letras ou números.", "error");
+        return;
+    }
+
+    const email = `${normalizedUsernamePart}@example.com`;
     const password = passwordInput.value;
     const confirmPassword = confirmPasswordInput.value;
-    console.log("Registration details:", { username, email });
+    console.log("Registration details:", { rawUsername, normalizedUsernamePart, email });
 
 
-    if (!username || !password || !confirmPassword) {
+    if (!password || !confirmPassword) { // username já foi verificado
         showFeedback(registerFeedback, "Todos os campos são obrigatórios.", "error");
         return;
     }
@@ -368,21 +405,26 @@ async function handleRegister(event: Event) {
     }
 
     try {
-        console.log("Calling createUserWithEmailAndPassword...");
+        console.log("Calling createUserWithEmailAndPassword with email:", email);
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const firebaseUser = userCredential.user;
         console.log("User created in Auth:", firebaseUser.uid);
 
+        let roleForNewUser: 'motorista' | 'admin' = 'motorista';
+        if (rawUsername.toLowerCase() === 'fabio') {
+            roleForNewUser = 'admin';
+            console.log(`Registering user ${rawUsername} as ADMIN because username is 'fabio'.`);
+        }
+
         // Criar perfil do usuário no Firestore
         const newUserProfile: UserProfile = {
             uid: firebaseUser.uid,
-            username: username,
+            username: rawUsername, // Salvar o nome de usuário original para exibição
             email: firebaseUser.email || email, // Usar o email do Firebase Auth
-            role: 'motorista', // Papel padrão
+            role: roleForNewUser, 
             createdAt: Timestamp.now()
         };
         console.log("Creating user profile in Firestore:", newUserProfile);
-        // Use a importação explícita de firebaseSetDoc
         await firebaseSetDoc(doc(db, "userProfiles", firebaseUser.uid), newUserProfile);
         console.log("User profile created in Firestore.");
 
@@ -392,12 +434,15 @@ async function handleRegister(event: Event) {
         setTimeout(() => showView('loginView'), 1500);
 
     } catch (error: any) {
-        console.error("CRITICAL ERROR during registration:", error, "Error Code:", error.code, "Error Message:", error.message);
+        console.error("CRITICAL ERROR during registration:", "Code:", error.code, "Message:", error.message);
         if (error.code === 'auth/email-already-in-use') {
             showFeedback(registerFeedback, "Nome de usuário (ou e-mail derivado) já existe. Tente outro.", "error");
         } else if (error.code === 'auth/weak-password') {
             showFeedback(registerFeedback, "Senha muito fraca. Tente uma mais forte.", "error");
-        } else {
+        } else if (error.code === 'auth/invalid-email') {
+            showFeedback(registerFeedback, `O nome de usuário "${rawUsername}" resultou em um formato de e-mail inválido ("${email}"). Tente um nome de usuário diferente, com menos caracteres especiais.`, "error");
+        }
+         else {
             showFeedback(registerFeedback, "Erro ao registrar. Verifique o console para detalhes.", "error");
         }
     }
@@ -409,29 +454,45 @@ async function handleLogin(event: Event) {
     const usernameInput = document.getElementById('loginUsername') as HTMLInputElement;
     const passwordInput = document.getElementById('loginPassword') as HTMLInputElement;
 
-    const username = usernameInput.value.trim();
-    const email = `${username.toLowerCase().replace(/\s+/g, '.')}@example.com`;
-    const password = passwordInput.value;
-    console.log("Attempting login with:", { username, email });
+    const rawUsername = usernameInput.value.trim();
+    const normalizedUsernamePart = normalizeUsernameForEmail(rawUsername);
 
-    if (!username || !password) {
-        showFeedback(loginFeedback, "Nome de usuário e senha são obrigatórios.", "error");
-        console.log("Login aborted: username or password empty.");
+    if (!rawUsername) {
+        showFeedback(loginFeedback, "Nome de usuário é obrigatório.", "error");
+        console.log("Login aborted: username empty.");
+        return;
+    }
+     if (!normalizedUsernamePart) {
+        showFeedback(loginFeedback, `Nome de usuário "${rawUsername}" inválido. Use um nome com letras ou números.`, "error");
+        console.log("Login aborted: normalized username part is empty.");
+        return;
+    }
+
+    const email = `${normalizedUsernamePart}@example.com`;
+    const password = passwordInput.value;
+    console.log("Attempting login with:", { rawUsername, normalizedUsernamePart, email });
+
+    if (!password) { // username já foi verificado
+        showFeedback(loginFeedback, "Senha é obrigatória.", "error");
+        console.log("Login aborted: password empty.");
         return;
     }
 
     try {
-        console.log("Calling signInWithEmailAndPassword...");
+        console.log("Calling signInWithEmailAndPassword with email:", email);
         await signInWithEmailAndPassword(auth, email, password);
         console.log("signInWithEmailAndPassword successful (or at least did not throw immediately). Waiting for onAuthStateChanged.");
         showFeedback(loginFeedback, "Login bem-sucedido! Redirecionando...", "success");
         loginForm.reset();
         // onAuthStateChanged irá lidar com a atualização do UI e do estado loggedInUser/loggedInUserProfile
     } catch (error: any) {
-        console.error("CRITICAL ERROR during login:", error, "Error Code:", error.code, "Error Message:", error.message);
+        console.error("CRITICAL ERROR during login:", "Code:", error.code, "Message:", error.message);
         if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
             showFeedback(loginFeedback, "Nome de usuário ou senha incorretos.", "error");
-        } else {
+        } else if (error.code === 'auth/invalid-email') {
+             showFeedback(loginFeedback, `O nome de usuário "${rawUsername}" resultou em um formato de e-mail inválido ("${email}") para o login. Verifique se digitou corretamente.`, "error");
+        }
+        else {
             showFeedback(loginFeedback, "Erro ao tentar fazer login. Verifique o console para detalhes.", "error");
         }
     }
@@ -461,15 +522,15 @@ async function handleLogout() {
         if (tripForm) tripForm.reset();
         if (fuelEntriesContainer) fuelEntriesContainer.innerHTML = '';
         fuelEntryIdCounter = 0;
-    } catch (error) {
-        console.error("CRITICAL ERROR during logout:", error);
+    } catch (error: any) {
+        console.error("CRITICAL ERROR during logout:", "Code:", error.code, "Message:", error.message);
         showFeedback(loginFeedback, "Erro ao sair. Tente novamente.", "error");
     }
 }
 
 // Listener de estado de autenticação
 onAuthStateChanged(auth, async (user) => {
-    console.log("onAuthStateChanged triggered. User object:", user);
+    console.log("onAuthStateChanged triggered. User object:", user ? user.uid : 'null');
     if (user) {
         loggedInUser = user;
         console.log("User is authenticated with UID:", user.uid);
@@ -480,7 +541,7 @@ onAuthStateChanged(auth, async (user) => {
 
             if (userProfileDoc.exists()) {
                 loggedInUserProfile = { id: userProfileDoc.id, ...userProfileDoc.data() } as UserProfile;
-                console.log("User profile found in Firestore:", loggedInUserProfile);
+                console.log("User profile found in Firestore:", "Username:", loggedInUserProfile.username, "Role:", loggedInUserProfile.role);
 
                 updateNavVisibility();
                 if (loggedInUserProfile.role === 'admin') {
@@ -506,8 +567,8 @@ onAuthStateChanged(auth, async (user) => {
                 await handleLogout(); // Forçar logout se o perfil não existir
                 showFeedback(loginFeedback, "Perfil do usuário não encontrado. Faça o cadastro novamente ou contate o suporte.", "error");
             }
-        } catch (error) {
-            console.error("CRITICAL ERROR fetching user profile:", error);
+        } catch (error: any) {
+            console.error("CRITICAL ERROR fetching user profile:", "Code:", error.code, "Message:", error.message);
             await handleLogout(); // Forçar logout em caso de erro
             showFeedback(loginFeedback, "Erro crítico ao carregar dados do usuário. Verifique o console.", "error");
         }
@@ -684,8 +745,8 @@ async function handleTripFormSubmit(event: Event) {
             }
         }
 
-    } catch (error) {
-        console.error("Error saving trip to Firestore:", error);
+    } catch (error: any) {
+        console.error("Error saving trip to Firestore:", "Code:", error.code, "Message:", error.message);
         showFeedback(userFormFeedback, "Erro ao salvar viagem. Tente novamente.", "error");
         submitTripBtn.textContent = editingTripId ? 'Salvar Alterações' : 'Salvar Viagem';
     } finally {
@@ -748,8 +809,8 @@ async function loadAndRenderMyTrips(filterStartDate?: string, filterEndDate?: st
         }
         updateDriverSummary(trips, targetUsername); // Atualiza o resumo com as viagens filtradas/carregadas
 
-    } catch (error) {
-        console.error(`Error loading trips for ${targetUsername} from Firestore:`, error);
+    } catch (error: any) {
+        console.error(`Error loading trips for ${targetUsername} from Firestore:`, "Code:", error.code, "Message:", error.message);
         showFeedback(myTripsFeedback, `Erro ao carregar viagens de ${targetUsername}.`, "error");
         myTripsTablePlaceholder.textContent = `Erro ao carregar viagens de ${targetUsername}.`;
     }
@@ -851,8 +912,8 @@ async function loadTripForEditing(tripId: string) {
         } else {
             showFeedback(myTripsFeedback, "Viagem não encontrada para edição.", "error");
         }
-    } catch (error) {
-        console.error("Error loading trip for editing:", error);
+    } catch (error: any) {
+        console.error("Error loading trip for editing:", "Code:", error.code, "Message:", error.message);
         showFeedback(myTripsFeedback, "Erro ao carregar viagem para edição.", "error");
     }
 }
@@ -899,8 +960,8 @@ async function deleteTrip(tripId: string) {
             updateAdminSummary(); // Se nenhuma viagem de motorista específica estiver carregada
         }
 
-    } catch (error) {
-        console.error("Error deleting trip from Firestore:", error);
+    } catch (error: any) {
+        console.error("Error deleting trip from Firestore:", "Code:", error.code, "Message:", error.message);
         showFeedback(myTripsFeedback, "Erro ao excluir viagem. Tente novamente.", "error");
     }
 }
@@ -971,8 +1032,8 @@ async function updateAdminSummary(filterStartDate?: string, filterEndDate?: stri
         // const monthlyChartData = Array.from(monthlyDataMap.values()).sort((a, b) => a.month.localeCompare(b.month));
         // renderAdminSummaryChart({ totalTrips, totalFreight, totalExpenses: totalExpensesOverall, totalNetProfit: totalNetProfitOverall, monthlyChartData });
 
-    } catch (error) {
-        console.error("Error updating admin summary:", error);
+    } catch (error: any) {
+        console.error("Error updating admin summary:", "Code:", error.code, "Message:", error.message);
         showFeedback(adminGeneralFeedback, "Erro ao atualizar resumo do administrador.", "error");
     }
 }
@@ -989,8 +1050,8 @@ async function populateAdminDriverSelect() {
             options.push(`<option value="${user.uid}">${user.username}</option>`);
         });
         adminSelectDriver.innerHTML = options.join('');
-    } catch (error) {
-        console.error("Error populating admin driver select:", error);
+    } catch (error: any) {
+        console.error("Error populating admin driver select:", "Code:", error.code, "Message:", error.message);
         adminSelectDriver.innerHTML = '<option value="">-- Erro ao carregar --</option>';
     }
 }
@@ -1028,8 +1089,8 @@ async function loadAndRenderAdminDriverTrips(driverUid: string, driverName: stri
         }
         renderAdminDriverTripsTable(driverTrips);
 
-    } catch (error) {
-        console.error(`Error loading trips for driver ${driverName} (UID: ${driverUid}):`, error);
+    } catch (error: any) {
+        console.error(`Error loading trips for driver ${driverName} (UID: ${driverUid}):`, "Code:", error.code, "Message:", error.message);
         showFeedback(adminGeneralFeedback, `Erro ao carregar viagens de ${driverName}.`, "error");
         adminDriverTripsPlaceholder.textContent = `Erro ao carregar viagens de ${driverName}.`;
     }
@@ -1124,8 +1185,8 @@ async function loadAndRenderUsersForAdmin() {
         });
 
         renderUserManagementTable(userProfiles);
-    } catch (error) {
-        console.error("Error loading users for admin:", error);
+    } catch (error: any) {
+        console.error("Error loading users for admin:", "Code:", error.code, "Message:", error.message);
         showFeedback(userManagementFeedback, "Erro ao carregar lista de usuários.", "error");
         userManagementTableBody.innerHTML = '<tr><td colspan="3">Erro ao carregar usuários.</td></tr>';
     }
@@ -1162,7 +1223,8 @@ function openEditUserModal(userProf: UserProfile) {
     editUserRoleSelect.value = userProf.role;
     editUserNewPasswordInput.value = ''; // Limpar campos de senha
     editUserConfirmNewPasswordInput.value = '';
-    editUserForm.reset(); // Garante que o form esteja limpo, exceto os valores preenchidos acima
+    // editUserForm.reset(); // Garante que o form esteja limpo, exceto os valores preenchidos acima - CUIDADO: Isso limpa tudo
+    // Explicitly set values after potential reset if it were used:
     editUsernameDisplayInput.value = userProf.username; // Repopulate readonly field
     editUserRoleSelect.value = userProf.role; // Repopulate role
     editUserModal.style.display = 'flex';
@@ -1206,8 +1268,8 @@ async function handleEditUserFormSubmit(event: Event) {
             closeEditUserModalBtn.click();
         }, 1500);
 
-    } catch (error) {
-        console.error("Error updating user role/password:", error);
+    } catch (error: any) {
+        console.error("Error updating user role/password:", "Code:", error.code, "Message:", error.message);
         showFeedback(editUserFeedback, "Erro ao atualizar usuário. Tente novamente.", "error");
     }
 }
@@ -1319,12 +1381,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (addFuelEntryBtn) addFuelEntryBtn.addEventListener('click', () => addFuelEntryToForm());
     if (cancelEditBtn) cancelEditBtn.addEventListener('click', () => {
         editingTripId = null;
-        tripIdToEditInput.value = '';
-        tripForm.reset();
-        fuelEntriesContainer.innerHTML = '';
+        if(tripIdToEditInput) tripIdToEditInput.value = '';
+        if(tripForm) tripForm.reset();
+        if(fuelEntriesContainer) fuelEntriesContainer.innerHTML = '';
         fuelEntryIdCounter = 0;
-        submitTripBtn.textContent = 'Salvar Viagem';
-        cancelEditBtn.style.display = 'none';
+        if(submitTripBtn) submitTripBtn.textContent = 'Salvar Viagem';
+        if(cancelEditBtn) cancelEditBtn.style.display = 'none';
         if(driverNameInput && loggedInUserProfile) driverNameInput.value = loggedInUserProfile.username; // Pre-fill driver name
         addFuelEntryToForm(); // Add one blank fuel entry
         showFeedback(userFormFeedback, "Edição cancelada.", "info");
@@ -1358,8 +1420,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     myTripsTablePlaceholder.style.display = 'block';
                     updateDriverSummary([], driverNameToSearch); // Limpa o resumo
                 }
-            } catch(err) {
-                console.error("Error searching driver by name:", err);
+            } catch(err: any) {
+                console.error("Error searching driver by name:", "Code:", err.code, "Message:", err.message);
                 showFeedback(myTripsFeedback, "Erro ao buscar motorista.", "error");
             }
         });
@@ -1384,7 +1446,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (selectedDriverUid && selectedDriverName) {
                 loadAndRenderAdminDriverTrips(selectedDriverUid, selectedDriverName);
             } else {
-                adminDriverTripsSection.style.display = 'none';
+                if(adminDriverTripsSection) adminDriverTripsSection.style.display = 'none';
             }
         });
     }
@@ -1416,26 +1478,3 @@ document.addEventListener('DOMContentLoaded', () => {
     // Estado inicial da aplicação é controlado pelo onAuthStateChanged.
     // O onAuthStateChanged é chamado automaticamente quando o auth é inicializado.
 });
-
-// Polyfill para setDoc com merge (caso não seja importado de 'firebase/firestore')
-// A importação explícita de `firebaseSetDoc` de `firebase/firestore` no topo do arquivo é a abordagem correta.
-// Esta função setDoc local não é mais necessária.
-/*
-async function setDoc(docRef: any, data: any, options?: { merge?: boolean }) {
-    const firestore = getFirestore(); // Certifique-se que db (firestore instance) está disponível
-    const colPath = docRef.parent.path;
-    const docId = docRef.id;
-    const fullPath = `${colPath}/${docId}`;
-
-    if (options && options.merge) {
-        return updateDoc(doc(firestore, fullPath), data); // updateDoc faz merge por padrão
-    } else {
-        // Para um set completo (sobrescrever), o SDK setDoc é o correto.
-        // Se a importação direta de setDoc de 'firebase/firestore' não funcionar devido a
-        // como o esm.sh lida com os exports, esta é uma forma de garantir.
-        // No entanto, a importação direta de `setDoc` do SDK é preferível.
-        // const { setDoc: firebaseSetDoc } = await import("firebase/firestore"); // Movido para o topo
-        return firebaseSetDoc(docRef, data);
-    }
-}
-*/

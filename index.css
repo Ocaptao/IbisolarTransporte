@@ -1,4 +1,5 @@
 
+
 body {
     font-family: 'Roboto', sans-serif;
     margin: 0;
@@ -33,7 +34,7 @@ body {
 
 .login-bg-logo {
     position: absolute;
-    top: 4.3rem; /* Adjusted to align with the H2's bottom border */
+    top: 2.8rem; /* Adjusted to center behind H2 text */
     left: 50%;
     transform: translate(-50%, -50%);
     width: 100%; /* Occupy the width of the auth-container */
@@ -66,10 +67,12 @@ body {
     z-index: 1; /* Ensure it's above the logo */
 }
 
-/* Specific to loginView H2 for border as requested for line reference */
+/* Specific to loginView H2 */
 #loginView .auth-container h2 {
-    border-bottom: 2px solid #e0e0e0; /* This is the "line" */
-    padding-bottom: 0.5rem;
+    /* border-bottom: 2px solid #e0e0e0; REMOVED */
+    /* padding-bottom: 0.5rem; REMOVED */
+    font-family: 'Cloud Lucent', sans-serif; 
+    font-weight: bold; 
 }
 
 

@@ -34,7 +34,7 @@ body {
 
 .login-bg-logo {
     position: absolute;
-    top: 2.8rem; /* Adjusted to center behind H2 text */
+    top: 3.1rem; /* Adjusted to center behind new H2 text size */
     left: 50%;
     transform: translate(-50%, -50%);
     width: 100%; /* Occupy the width of the auth-container */
@@ -69,10 +69,12 @@ body {
 
 /* Specific to loginView H2 */
 #loginView .auth-container h2 {
-    /* border-bottom: 2px solid #e0e0e0; REMOVED */
-    /* padding-bottom: 0.5rem; REMOVED */
     font-family: 'Cloud Lucent', sans-serif; 
     font-weight: bold; 
+    font-size: 2.2rem; /* Increased font size */
+    letter-spacing: 0.05em; /* Added letter spacing */
+    border-bottom: none; /* Explicitly remove border */
+    padding-bottom: 0; /* Explicitly remove padding */
 }
 
 

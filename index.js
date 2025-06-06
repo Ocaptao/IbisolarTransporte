@@ -1,5 +1,6 @@
 
 
+
 import { Chart, registerables } from 'chart.js';
 // Firebase App (o núcleo do Firebase SDK) é sempre necessário e deve ser listado primeiro
 import { initializeApp } from "@firebase/app";
@@ -111,7 +112,7 @@ const userManagementView = document.getElementById('userManagementView');
 const tripIdToEditInput = document.getElementById('tripIdToEdit');
 const tripDateInput = document.getElementById('tripDate');
 const driverNameInput = document.getElementById('driverName');
-const cargoTypeInput = document.getElementById('cargoType');
+// const cargoTypeInput = document.getElementById('cargoType'); // Removido
 const kmInitialInput = document.getElementById('kmInitial');
 const kmFinalInput = document.getElementById('kmFinal');
 const weightInput = document.getElementById('weight');
@@ -687,7 +688,7 @@ async function handleTripFormSubmit(event) {
         userId: loggedInUser.uid,
         driverName: (formData.get('driverName')).trim() || loggedInUserProfile.username, // Nome original, não capitalizado no BD
         date: formData.get('tripDate'),
-        cargoType: formData.get('cargoType') || '',
+        // cargoType: formData.get('cargoType') || '', // Removido
         kmInitial: kmInitialVal,
         kmFinal: kmFinalVal,
         kmDriven: kmDrivenVal,
@@ -845,7 +846,7 @@ function renderMyTripsTable(tripsToRender) {
     tripsToRender.forEach(trip => {
         const row = myTripsTableBody.insertRow();
         row.insertCell().textContent = formatDisplayDate(trip.date);
-        row.insertCell().textContent = trip.cargoType || 'N/A';
+        // row.insertCell().textContent = trip.cargoType || 'N/A'; // Removido
         row.insertCell().textContent = formatCurrency(trip.freightValue);
         row.insertCell().textContent = formatCurrency(trip.totalExpenses);
         row.insertCell().textContent = formatCurrency(trip.commissionCost); 
@@ -898,7 +899,7 @@ async function loadTripForEditing(tripId) {
             editingTripId = trip.id;
             if(driverNameInput) driverNameInput.value = capitalizeName(trip.driverName); 
             if(tripDateInput) tripDateInput.value = trip.date; 
-            if(cargoTypeInput) cargoTypeInput.value = trip.cargoType || '';
+            // if(cargoTypeInput) cargoTypeInput.value = trip.cargoType || ''; // Removido
             if(kmInitialInput) kmInitialInput.value = trip.kmInitial?.toString() || '';
             if(kmFinalInput) kmFinalInput.value = trip.kmFinal?.toString() || '';
             if(weightInput) weightInput.value = trip.weight?.toString() || '';
@@ -1230,7 +1231,7 @@ function showAdminTripDetailModal(trip) {
             <h4>Informações Gerais</h4>
             <p><strong>Motorista:</strong> ${escapeHtml(capitalizeName(trip.driverName))}</p>
             <p><strong>Data:</strong> ${formatDisplayDate(trip.date)}</p>
-            <p><strong>Tipo de Carga:</strong> ${escapeHtml(trip.cargoType) || 'N/A'}</p>
+            <!-- <p><strong>Tipo de Carga:</strong> ${escapeHtml(trip.cargoType) || 'N/A'}</p> --><!-- Removido -->
             <p><strong>Km Inicial:</strong> ${formatGenericNumber(trip.kmInitial, 0, 0)}</p>
             <p><strong>Km Final:</strong> ${formatGenericNumber(trip.kmFinal, 0, 0)}</p>
             <p><strong>Km Rodados:</strong> ${formatGenericNumber(trip.kmDriven, 0, 0)}</p>
@@ -1561,11 +1562,13 @@ function initializeUserManagementView() {
 async function handleExcelFileImport() {
     if (!excelFileInput || !excelImportFeedback || !importExcelBtn) {
         console.error("Elementos de importação de Excel não encontrados.");
+        if (importExcelBtn) importExcelBtn.disabled = false;
         return;
     }
     const file = excelFileInput.files ? excelFileInput.files[0] : null;
     if (!file) {
         showFeedback(excelImportFeedback, "Por favor, selecione um arquivo Excel.", "error");
+        if (importExcelBtn) importExcelBtn.disabled = false;
         return;
     }
 
@@ -1579,128 +1582,132 @@ async function handleExcelFileImport() {
             const workbook = XLSX.read(data, { type: 'array', cellDates: true });
             const firstSheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[firstSheetName];
-            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false }); // raw:false to get formatted strings
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
 
             if (jsonData.length < 2) {
                 showFeedback(excelImportFeedback, "Planilha vazia ou sem dados após o cabeçalho.", "error");
+                if (importExcelBtn) importExcelBtn.disabled = false;
+                if (excelFileInput) excelFileInput.value = '';
                 return;
             }
 
-            const headers = jsonData[0].map(h => String(h).trim().toLowerCase());
-            const rows = jsonData.slice(1);
+            const headersFromSheet = jsonData[0].map(h => String(h || '').trim().toLowerCase());
+            console.log("Cabeçalhos lidos da planilha (normalizados):", headersFromSheet);
 
-            const expectedHeaders = {
-                data: "data",
-                motorista: "motorista",
-                tipo_carga: "tipo carga", // Normalized
-                km_inicial: "km inicial",
-                km_final: "km final",
-                peso_kg: "peso (kg)", // Allow variations
-                valor_unidade_rs: "v. unidade (r$)",
-                valor_frete_rs: "valor frete (r$)",
-                litros1: "litros1",
-                valor_litro1: "valor/litro1",
-                desconto1: "desconto1",
-                litros2: "litros2",
-                valor_litro2: "valor/litro2",
-                desconto2: "desconto2",
-                litros3: "litros3",
-                valor_litro3: "valor/litro3",
-                desconto3: "desconto3",
-                arla32_rs: "arla-32 (r$)",
-                pedagio_rs: "pedagio (r$)",
-                comissao_rs: "comissao (r$)",
-                outras_despesas_rs: "outras despesas (r$)",
-                descricao_outras_despesas: "descricao outras despesas",
-                valor_declarado_rs: "valor declarado (r$)"
+            const internalToSheetHeaderMap = {
+                data: ["data"],
+                motorista: ["motorista"],
+                valor_frete: ["valor frete (r$)", "valor frete"],
+                // tipo_carga: ["tipo carga"], // Removido
+                km_inicial: ["km inicial", "km inicial"],
+                km_final: ["km final", "km final"],
+                peso: ["peso (kg)", "peso"],
+                valor_unidade: ["v. unidade (r$)", "valor unidade", "v. unidade"],
+                litros1: ["litros1", "litros 1"], valor_litro1: ["valor/litro1", "valor/litro 1", "valor litro1", "valor litro 1"], desconto1: ["desconto1", "desconto 1"],
+                litros2: ["litros2", "litros 2"], valor_litro2: ["valor/litro2", "valor/litro 2", "valor litro2", "valor litro 2"], desconto2: ["desconto2", "desconto 2"],
+                litros3: ["litros3", "litros 3"], valor_litro3: ["valor/litro3", "valor/litro 3", "valor litro3", "valor litro 3"], desconto3: ["desconto3", "desconto 3"],
+                arla32_cost: ["arla-32 (r$)", "arla-32", "arla", "arla 32", "arla32"],
+                toll_cost: ["pedagio (r$)", "pedagio"],
+                commission_cost: ["comissao (r$)", "comissao", "comissão"],
+                other_expenses: ["outras despesas (r$)", "outras despesas"],
+                expense_description: ["descricao outras despesas", "descrição outras despesas", "desc. outras despesas"],
+                declared_value: ["valor declarado (r$)", "valor declarado"]
             };
-            
-            // Find actual index of each expected header
-            const headerMap = {};
-            Object.keys(expectedHeaders).forEach(key => {
-                const index = headers.indexOf(expectedHeaders[key]);
-                if (index !== -1) {
-                    headerMap[key] = index;
+
+            const requiredInternalKeys = ['data', 'motorista', 'valor_frete'];
+            const headerMap = {}; // Mapeia chave interna para índice na planilha
+            const missingRequiredHeadersForMessage = [];
+
+            Object.keys(internalToSheetHeaderMap).forEach(internalKey => {
+                const possibleSheetNames = internalToSheetHeaderMap[internalKey];
+                let foundIndex = -1;
+                for (const sheetNameVariant of possibleSheetNames) {
+                    const index = headersFromSheet.indexOf(sheetNameVariant.toLowerCase());
+                    if (index !== -1) {
+                        foundIndex = index;
+                        break;
+                    }
+                }
+                if (foundIndex !== -1) {
+                    headerMap[internalKey] = foundIndex;
                 } else {
-                     // Try some variations for common headers like "Valor Frete" instead of "Valor Frete (R$)"
-                    if (key === 'valor_frete_rs' && headers.indexOf('valor frete') !== -1) headerMap[key] = headers.indexOf('valor frete');
-                    else if (key === 'peso_kg' && headers.indexOf('peso') !== -1) headerMap[key] = headers.indexOf('peso');
-                    else if (key === 'arla32_rs' && headers.indexOf('arla-32') !== -1) headerMap[key] = headers.indexOf('arla-32');
-                    else if (key === 'pedagio_rs' && headers.indexOf('pedagio') !== -1) headerMap[key] = headers.indexOf('pedagio');
-                    else if (key === 'comissao_rs' && headers.indexOf('comissao') !== -1) headerMap[key] = headers.indexOf('comissao');
-                    else if (key === 'outras_despesas_rs' && headers.indexOf('outras despesas') !== -1) headerMap[key] = headers.indexOf('outras despesas');
-                    else if (key === 'valor_declarado_rs' && headers.indexOf('valor declarado') !== -1) headerMap[key] = headers.indexOf('valor declarado');
-                    else {
-                        console.warn(`Cabeçalho esperado "${expectedHeaders[key]}" não encontrado na planilha.`);
+                    console.warn(`Mapeamento para "${internalKey}" (esperando um de: [${possibleSheetNames.join(', ')}]) não encontrado nos cabeçalhos da planilha: [${headersFromSheet.join(', ')}]`);
+                    if (requiredInternalKeys.includes(internalKey)) {
+                        missingRequiredHeadersForMessage.push(possibleSheetNames[0]); // Adiciona o nome primário esperado à lista de faltantes
                     }
                 }
             });
+            console.log("Mapa de cabeçalhos gerado (headerMap - chave_interna: indice_planilha):", headerMap);
 
-            if (headerMap.data === undefined || headerMap.motorista === undefined || headerMap.valor_frete_rs === undefined) {
-                showFeedback(excelImportFeedback, "Cabeçalhos obrigatórios (Data, Motorista, Valor Frete (R$)) não encontrados na planilha.", "error");
+            if (missingRequiredHeadersForMessage.length > 0) {
+                const message = `Cabeçalho(s) obrigatório(s) não encontrado(s) na planilha: ${missingRequiredHeadersForMessage.join(', ')}. Por favor, verifique se sua planilha contém estes cabeçalhos na primeira linha. Cabeçalhos lidos da sua planilha: [${headersFromSheet.join(', ')}]`;
+                showFeedback(excelImportFeedback, message, "error");
+                if (importExcelBtn) importExcelBtn.disabled = false;
+                if (excelFileInput) excelFileInput.value = '';
                 return;
             }
-
+            
             const qProfiles = query(userProfilesCollection, where("role", "==", "motorista"));
             const profileSnapshot = await getDocs(qProfiles);
             const motoristaProfiles = new Map();
             profileSnapshot.forEach(doc => {
                 const profile = doc.data();
-                motoristaProfiles.set(profile.username.toLowerCase(), profile.uid);
+                motoristaProfiles.set(profile.username.trim().toLowerCase(), profile.uid);
             });
 
             const batch = writeBatch(db);
             let importedCount = 0;
             const errorMessages = [];
+            const rows = jsonData.slice(1);
 
             for (let i = 0; i < rows.length; i++) {
-                const row = rows[i];
-                const tripData = {};
+                const rowArray = rows[i];
+                const tripEntry = {}; // Use um objeto simples para construir o frete
 
-                const motoristaNome = String(row[headerMap.motorista] || '').trim();
-                const motoristaUid = motoristaProfiles.get(motoristaNome.toLowerCase());
+                const motoristaNomeOriginal = String(rowArray[headerMap.motorista] || '').trim();
+                const motoristaUid = motoristaProfiles.get(motoristaNomeOriginal.toLowerCase());
 
                 if (!motoristaUid) {
-                    errorMessages.push(`Linha ${i + 2}: Motorista "${motoristaNome}" não encontrado no sistema. Frete ignorado.`);
+                    errorMessages.push(`Linha ${i + 2}: Motorista "${motoristaNomeOriginal}" não encontrado no sistema. Frete ignorado.`);
                     continue;
                 }
-                tripData.userId = motoristaUid;
-                tripData.driverName = motoristaNome; // Store original name from sheet
+                tripEntry.userId = motoristaUid;
+                tripEntry.driverName = motoristaNomeOriginal; 
 
-                const dateValue = row[headerMap.data];
-                tripData.date = formatDate(dateValue); // formatDate now returns YYYY-MM-DD
-                if (tripData.date === 'Data inválida') {
-                     errorMessages.push(`Linha ${i + 2}: Data inválida "${dateValue}". Frete ignorado.`);
+                const dateValueFromSheet = rowArray[headerMap.data];
+                tripEntry.date = formatDate(dateValueFromSheet);
+                if (tripEntry.date === 'Data inválida') {
+                     errorMessages.push(`Linha ${i + 2}: Data "${dateValueFromSheet}" inválida. Frete ignorado.`);
                     continue;
                 }
                 
-                tripData.freightValue = parseFloat(row[headerMap.valor_frete_rs]) || 0;
-                if (tripData.freightValue <= 0) {
-                     errorMessages.push(`Linha ${i + 2}: Valor do Frete inválido ou zero. Frete ignorado.`);
+                tripEntry.freightValue = parseFloat(String(rowArray[headerMap.valor_frete] || '0').replace(',', '.')) || 0;
+                if (tripEntry.freightValue <= 0) {
+                     errorMessages.push(`Linha ${i + 2}: Valor do Frete (R$ ${rowArray[headerMap.valor_frete]}) inválido ou zero. Frete ignorado.`);
                     continue;
                 }
                 
-                tripData.cargoType = String(row[headerMap.tipo_carga] || '').trim();
-                tripData.kmInitial = parseFloat(row[headerMap.km_inicial]) || 0;
-                tripData.kmFinal = parseFloat(row[headerMap.km_final]) || 0;
-                tripData.kmDriven = (tripData.kmFinal > tripData.kmInitial) ? tripData.kmFinal - tripData.kmInitial : 0;
-                tripData.weight = parseFloat(row[headerMap.peso_kg]) || 0;
-                tripData.unitValue = parseFloat(row[headerMap.valor_unidade_rs]) || 0;
+                // tripEntry.cargoType = String(rowArray[headerMap.tipo_carga] || '').trim(); // Removido
+                tripEntry.kmInitial = parseFloat(String(rowArray[headerMap.km_inicial] || '0').replace(',', '.')) || 0;
+                tripEntry.kmFinal = parseFloat(String(rowArray[headerMap.km_final] || '0').replace(',', '.')) || 0;
+                tripEntry.kmDriven = (tripEntry.kmFinal > tripEntry.kmInitial) ? tripEntry.kmFinal - tripEntry.kmInitial : 0;
+                tripEntry.weight = parseFloat(String(rowArray[headerMap.peso] || '0').replace(',', '.')) || 0;
+                tripEntry.unitValue = parseFloat(String(rowArray[headerMap.valor_unidade] || '0').replace(',', '.')) || 0;
 
-                tripData.fuelEntries = [];
+                tripEntry.fuelEntries = [];
                 let totalFuelCostCalculated = 0;
-                for (let j = 1; j <= 3; j++) { // Check for up to 3 fuel entries
+                for (let j = 1; j <= 3; j++) {
                     const litrosKey = `litros${j}`;
                     const valorLitroKey = `valor_litro${j}`;
                     const descontoKey = `desconto${j}`;
 
-                    if (headerMap[litrosKey] !== undefined && headerMap[valorLitroKey] !== undefined) {
-                        const liters = parseFloat(row[headerMap[litrosKey]]) || 0;
-                        const valuePerLiter = parseFloat(row[headerMap[valorLitroKey]]) || 0;
-                        const discount = parseFloat(row[headerMap[descontoKey]]) || 0;
+                    if (headerMap[litrosKey] !== undefined && headerMap[valorLitroKey] !== undefined && rowArray[headerMap[litrosKey]]) {
+                        const liters = parseFloat(String(rowArray[headerMap[litrosKey]] || '0').replace(',', '.')) || 0;
+                        const valuePerLiter = parseFloat(String(rowArray[headerMap[valorLitroKey]] || '0').replace(',', '.')) || 0;
+                        const discount = parseFloat(String(rowArray[headerMap[descontoKey]] || '0').replace(',', '.')) || 0;
                         if (liters > 0 && valuePerLiter > 0) {
                             const totalValue = (liters * valuePerLiter) - discount;
-                            tripData.fuelEntries.push({
+                            tripEntry.fuelEntries.push({
                                 id: `imported_fuel_${i}_${j}`,
                                 liters,
                                 valuePerLiter,
@@ -1711,21 +1718,21 @@ async function handleExcelFileImport() {
                         }
                     }
                 }
-                tripData.totalFuelCost = totalFuelCostCalculated;
+                tripEntry.totalFuelCost = totalFuelCostCalculated;
 
-                tripData.arla32Cost = parseFloat(row[headerMap.arla32_rs]) || 0;
-                tripData.tollCost = parseFloat(row[headerMap.pedagio_rs]) || 0;
-                tripData.commissionCost = parseFloat(row[headerMap.comissao_rs]) || 0;
-                tripData.otherExpenses = parseFloat(row[headerMap.outras_despesas_rs]) || 0;
-                tripData.expenseDescription = String(row[headerMap.descricao_outras_despesas] || '').trim();
-                tripData.declaredValue = parseFloat(row[headerMap.valor_declarado_rs]) || 0;
+                tripEntry.arla32Cost = parseFloat(String(rowArray[headerMap.arla32_cost] || '0').replace(',', '.')) || 0;
+                tripEntry.tollCost = parseFloat(String(rowArray[headerMap.toll_cost] || '0').replace(',', '.')) || 0;
+                tripEntry.commissionCost = parseFloat(String(rowArray[headerMap.commission_cost] || '0').replace(',', '.')) || 0;
+                tripEntry.otherExpenses = parseFloat(String(rowArray[headerMap.other_expenses] || '0').replace(',', '.')) || 0;
+                tripEntry.expenseDescription = String(rowArray[headerMap.expense_description] || '').trim();
+                tripEntry.declaredValue = parseFloat(String(rowArray[headerMap.declared_value] || '0').replace(',', '.')) || 0;
 
-                tripData.totalExpenses = tripData.totalFuelCost + tripData.arla32Cost + tripData.tollCost + tripData.commissionCost + tripData.otherExpenses;
-                tripData.netProfit = tripData.freightValue - tripData.totalExpenses;
-                tripData.createdAt = Timestamp.now();
+                tripEntry.totalExpenses = tripEntry.totalFuelCost + tripEntry.arla32Cost + tripEntry.tollCost + tripEntry.commissionCost + tripEntry.otherExpenses;
+                tripEntry.netProfit = tripEntry.freightValue - tripEntry.totalExpenses;
+                tripEntry.createdAt = Timestamp.now();
 
                 const newTripRef = doc(collection(db, "trips"));
-                batch.set(newTripRef, tripData);
+                batch.set(newTripRef, tripEntry);
                 importedCount++;
             }
 
@@ -1735,24 +1742,27 @@ async function handleExcelFileImport() {
             
             let feedbackMsg = `${importedCount} frete(s) importado(s) com sucesso.`;
             if (errorMessages.length > 0) {
-                feedbackMsg += `\nErros/Avisos:\n${errorMessages.join('\n')}`;
+                feedbackMsg += `\n\nDetalhes:\n${errorMessages.join('\n')}`;
             }
             showFeedback(excelImportFeedback, feedbackMsg, errorMessages.length > 0 && importedCount > 0 ? "info" : (importedCount > 0 ? "success" : "error"));
-            updateAdminSummary(); // Refresh admin summary if any trips were added
-            if (adminSelectedDriverUid) loadAndRenderAdminDriverMonthlySummaries();
+            
+            if (importedCount > 0) {
+                updateAdminSummary(); 
+                if (adminSelectedDriverUid) loadAndRenderAdminDriverMonthlySummaries();
+            }
 
 
         } catch (error) {
             console.error("Erro ao processar planilha Excel:", error);
-            showFeedback(excelImportFeedback, `Erro ao processar planilha: ${error.message}`, "error");
+            showFeedback(excelImportFeedback, `Erro fatal ao processar planilha: ${error.message}. Verifique o console.`, "error");
         } finally {
-            if (excelFileInput) excelFileInput.value = ''; // Clear file input
+            if (excelFileInput) excelFileInput.value = ''; 
             if (importExcelBtn) importExcelBtn.disabled = false;
         }
     };
 
     reader.onerror = () => {
-        showFeedback(excelImportFeedback, "Não foi possível ler o arquivo.", "error");
+        showFeedback(excelImportFeedback, "Não foi possível ler o arquivo selecionado.", "error");
         if (importExcelBtn) importExcelBtn.disabled = false;
     };
 
@@ -1854,7 +1864,7 @@ async function handleExportAdminReport() {
 
 
         const headers = [
-            "Data", "Motorista", "Tipo Carga", "Km Inicial", "Km Final", "Km Rodados",
+            "Data", "Motorista", /*"Tipo Carga",*/ "Km Inicial", "Km Final", "Km Rodados", // "Tipo Carga" Removido
             "Peso (Kg)", "Valor Frete Bruto (R$)", "Total Combustivel (R$)", "Arla-32 (R$)", "Pedagio (R$)",
             "Comissao (R$)", "Outras Despesas (R$)", "Descricao Outras Despesas",
             "Despesas Totais (R$)", "Lucro Liquido (R$)", "Valor Declarado (R$)"
@@ -1863,7 +1873,7 @@ async function handleExportAdminReport() {
         const dataForHTML = reportTrips.map(trip => [
             formatDisplayDate(trip.date),
             capitalizeName(userMap.get(trip.userId) || trip.driverName), 
-            trip.cargoType || '',
+            // trip.cargoType || '', // Removido
             formatGenericNumber(trip.kmInitial, 0, 0),
             formatGenericNumber(trip.kmFinal, 0, 0),
             formatGenericNumber(trip.kmDriven, 0, 0),

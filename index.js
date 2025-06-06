@@ -79,22 +79,20 @@ let adminSummaryChart = null;
 
 // --- DOM ELEMENTS ---
 const loginView = document.getElementById('loginView');
-// registerView removido
+// registerView foi removido do HTML e não é mais referenciado aqui.
 const appContainer = document.getElementById('appContainer');
 const loginForm = document.getElementById('loginForm');
-// registerForm removido
+// registerForm foi removido.
 const tripForm = document.getElementById('tripForm');
 const loginFeedback = document.getElementById('loginFeedback');
-// registerFeedback removido
+// registerFeedback foi removido.
 const userFormFeedback = document.getElementById('userFormFeedback');
 const myTripsFeedback = document.getElementById('myTripsFeedback');
 const adminGeneralFeedback = document.getElementById('adminGeneralFeedback');
 const userManagementFeedback = document.getElementById('userManagementFeedback');
 const editUserFeedback = document.getElementById('editUserFeedback');
 
-// showRegisterViewLink e showLoginViewLink removidos (ou apenas o de registro)
-// const showRegisterViewLink = document.getElementById('showRegisterViewLink');
-// const showLoginViewLink = document.getElementById('showLoginViewLink'); // Mantido se o link para login a partir do registro existisse
+// showRegisterViewLink e showLoginViewLink (se referia ao registro) foram removidos.
 
 const userViewBtn = document.getElementById('userViewBtn');
 const myTripsViewBtn = document.getElementById('myTripsViewBtn');
@@ -210,7 +208,10 @@ function normalizeUsernameForEmail(username) {
     if (cleaned.endsWith('.')) cleaned = cleaned.slice(0, -1);
 
     if (!cleaned) {
-        return `user.${generateId()}`;
+        // Retorna uma string que possa ser invalidada ou tratada, ou um ID único.
+        // Se retornar uma string que não pode ser um nome de usuário válido para email,
+        // a lógica de criação de email falhará, o que é um comportamento desejável aqui.
+        return `user.invalid.${generateId()}`; 
     }
     return cleaned;
 }
@@ -222,10 +223,16 @@ function formatDate(dateInput) {
     let dateToFormat;
 
     if (typeof dateInput === 'string') {
-        dateToFormat = new Date(dateInput + 'T00:00:00Z');
+        // Garante que a string seja tratada como UTC para evitar problemas de fuso horário
+        // ao converter de YYYY-MM-DD para Date object.
+        if (!dateInput.includes('T')) { // Se não tiver informação de tempo, assume UTC
+             dateToFormat = new Date(dateInput + 'T00:00:00Z');
+        } else {
+            dateToFormat = new Date(dateInput); // Se já tiver T, assume que está correto
+        }
     } else if (dateInput instanceof Date) { 
         dateToFormat = dateInput;
-    } else if (dateInput && typeof dateInput.toDate === 'function') { 
+    } else if (dateInput && typeof dateInput.toDate === 'function') { // Timestamp do Firestore
         dateToFormat = dateInput.toDate();
     } else {
         console.warn("Unsupported dateInput type in formatDate:", dateInput, typeof dateInput);
@@ -236,6 +243,7 @@ function formatDate(dateInput) {
         console.warn("Date parsing resulted in NaN in formatDate. Original input:", dateInput);
         return 'Data inválida';
     }
+    // Formata para dd/MM/yyyy, considerando que a data já é UTC.
     return dateToFormat.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 }
 
@@ -251,7 +259,7 @@ function formatMonthYear(yearMonthKey) {
         return 'Mês/Ano Inválido';
     }
     const dateForMonthName = new Date(parseInt(year, 10), month - 1, 1);
-    const monthName = dateForMonthName.toLocaleString('pt-BR', { month: 'long' });
+    const monthName = dateForMonthName.toLocaleString('pt-BR', { month: 'long', timeZone: 'UTC' });
     return `${monthName.charAt(0).toUpperCase() + monthName.slice(1)}/${year}`;
 }
 
@@ -308,7 +316,7 @@ function showView(viewId) {
     const views = document.querySelectorAll('.view');
     views.forEach(view => view.style.display = 'none');
     if (loginView) loginView.style.display = 'none';
-    // registerView removido
+    // registerView não é mais gerenciado aqui.
     if (appContainer) appContainer.style.display = 'none';
 
     const navButtons = document.querySelectorAll('.nav-btn');
@@ -317,15 +325,17 @@ function showView(viewId) {
 
     if (viewId === 'loginView' && loginView) {
         loginView.style.display = 'flex';
-    } else if (appContainer) { // Não há mais 'registerView' aqui
-        appContainer.style.display = 'flex';
+    } else if (appContainer) { 
+        appContainer.style.display = 'flex'; // Mostra o container principal
         const targetView = document.getElementById(viewId);
         if (targetView) {
-            targetView.style.display = 'block';
+            targetView.style.display = 'block'; // Mostra a view específica dentro do appContainer
             const activeNavButton = document.getElementById(viewId + 'Btn');
             if (activeNavButton) {
                 activeNavButton.setAttribute('aria-pressed', 'true');
             }
+        } else {
+            console.warn(`View with ID "${viewId}" not found inside appContainer.`);
         }
     }
     window.scrollTo(0,0);
@@ -334,6 +344,8 @@ function showView(viewId) {
 function updateNavVisibility() {
     if (loggedInUser && loggedInUserProfile) {
         if(logoutBtn) logoutBtn.style.display = 'inline-block';
+        if (welcomeMessageContainer) welcomeMessageContainer.style.display = 'block'; // Garante que a mensagem seja visível
+
         if (loggedInUserProfile.role === 'admin') {
             if(userViewBtn) userViewBtn.style.display = 'none'; 
             if(myTripsViewBtn) myTripsViewBtn.style.display = 'none'; 
@@ -355,11 +367,15 @@ function updateNavVisibility() {
         if(adminViewBtn) adminViewBtn.style.display = 'none';
         if(userManagementViewBtn) userManagementViewBtn.style.display = 'none';
         if(logoutBtn) logoutBtn.style.display = 'none';
+        if (welcomeMessageContainer) { // Oculta a mensagem se não estiver logado
+             welcomeMessageContainer.innerHTML = '';
+             welcomeMessageContainer.style.display = 'none';
+        }
     }
 }
 
 // --- AUTHENTICATION WITH FIREBASE ---
-// handleRegister removido
+// A função handleRegister foi completamente removida.
 
 async function handleLogin(event) {
     event.preventDefault();
@@ -375,13 +391,13 @@ async function handleLogin(event) {
         console.log("Login aborted: username empty.");
         return;
     }
-     if (!normalizedUsernamePart) {
+     if (!normalizedUsernamePart || normalizedUsernamePart.includes("user.invalid")) { // Verifica se a normalização falhou
         showFeedback(loginFeedback, `Nome de usuário "${rawUsername}" inválido. Use um nome com letras ou números.`, "error");
-        console.log("Login aborted: normalized username part is empty.");
+        console.log("Login aborted: normalized username part is invalid or empty.");
         return;
     }
 
-    const email = `${normalizedUsernamePart}@example.com`;
+    const email = `${normalizedUsernamePart}@example.com`; // Usa um domínio padrão
     const password = passwordInput.value;
     console.log("Attempting login with:", { rawUsername, normalizedUsernamePart, email });
 
@@ -420,6 +436,7 @@ async function handleLogout() {
         await signOut(authFirebase); 
         console.log("User signed out from Firebase Auth.");
         
+        // Limpar mensagem de boas-vindas no logout
         if (welcomeMessageContainer) {
             welcomeMessageContainer.innerHTML = '';
             welcomeMessageContainer.style.display = 'none';
@@ -427,12 +444,17 @@ async function handleLogout() {
 
         showFeedback(loginFeedback, "Você foi desconectado.", "info");
         
+        // Resetar outros estados da UI
         if(myTripsTableBody) myTripsTableBody.innerHTML = '';
         if(myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = 'Nenhum frete para exibir...';
         if(adminDriverTripsTableBody) adminDriverTripsTableBody.innerHTML = '';
         if(adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = 'Nenhum frete encontrado para este motorista.';
         if(adminSelectDriver) adminSelectDriver.innerHTML = '<option value="">-- Selecione um Motorista --</option>';
         if(userManagementTableBody) userManagementTableBody.innerHTML = '';
+        if(adminCreateUserForm) adminCreateUserForm.reset(); // Resetar form de criar usuário
+        if(adminCreateUserFeedback) {adminCreateUserFeedback.textContent = ''; adminCreateUserFeedback.style.display = 'none';}
+
+
         currentUserForMyTripsSearch = null;
         currentUidForMyTripsSearch = null;
         adminSelectedDriverName = null;
@@ -473,10 +495,11 @@ if (authFirebase) {
                         loggedInUserProfile = { id: userProfileDoc.id, ...userProfileDoc.data() };
                         console.log("User profile found in Firestore:", "Username:", loggedInUserProfile.username, "Role:", loggedInUserProfile.role);
 
+                        // Exibir mensagem de boas-vindas
                         if (welcomeMessageContainer && loggedInUserProfile) {
                             const icon = loggedInUserProfile.role === 'admin' ? '⚙️' : '🚗';
                             welcomeMessageContainer.innerHTML = `Bem Vindo, <strong class="welcome-username">${escapeHtml(loggedInUserProfile.username)}</strong> <span class="welcome-icon">${icon}</span>`;
-                            welcomeMessageContainer.style.display = 'block';
+                            welcomeMessageContainer.style.display = 'block'; // Ou 'flex', dependendo do layout do container pai
                         }
 
                         updateNavVisibility();
@@ -527,6 +550,7 @@ if (authFirebase) {
             console.log("User is not authenticated (logged out or session ended).");
             loggedInUser = null;
             loggedInUserProfile = null;
+            // Ocultar mensagem de boas-vindas se não estiver logado
             if (welcomeMessageContainer) {
                 welcomeMessageContainer.innerHTML = '';
                 welcomeMessageContainer.style.display = 'none';
@@ -1012,13 +1036,15 @@ async function populateAdminDriverSelect() {
             motoristas.push({ id: docSnap.id, ...docSnap.data() });
         });
 
-        if (userProfiles.filter(p => p.role === 'motorista').length === 0) {
-             querySnapshot.forEach((docSnap) => { 
-                if (!userProfiles.find(p => p.uid === docSnap.id)) {
-                    userProfiles.push({ id: docSnap.id, ...docSnap.data() });
-                }
-            });
-        }
+        // Atualiza a lista global `userProfiles` se estiver vazia ou para garantir que está atualizada
+        // com motoristas, para outros usos potenciais.
+        const existingMotoristaIds = new Set(userProfiles.filter(p => p.role === 'motorista').map(p => p.id));
+        motoristas.forEach(m => {
+            if (!existingMotoristaIds.has(m.id)) {
+                userProfiles.push(m);
+            }
+        });
+
 
         const options = ['<option value="">-- Selecione um Motorista --</option>'];
         motoristas.forEach((user) => { 
@@ -1224,6 +1250,10 @@ function showAdminTripDetailModal(trip) {
 
 async function handleAdminCreateUser(event) {
     event.preventDefault();
+    if (!adminCreateUsernameInput || !adminCreateUserRoleSelect || !adminCreateUserPasswordInput || !adminCreateUserConfirmPasswordInput || !adminCreateUserFeedback) {
+        console.error("Admin create user form elements not found.");
+        return;
+    }
     console.log("Admin attempting user creation...");
 
     const rawUsername = adminCreateUsernameInput.value.trim();
@@ -1237,8 +1267,8 @@ async function handleAdminCreateUser(event) {
         showFeedback(adminCreateUserFeedback, "Nome de usuário é obrigatório.", "error");
         return;
     }
-    if (!normalizedUsernamePart) {
-        showFeedback(adminCreateUserFeedback, "Nome de usuário inválido. Use letras ou números.", "error");
+    if (!normalizedUsernamePart || normalizedUsernamePart.includes("user.invalid")) {
+        showFeedback(adminCreateUserFeedback, `Nome de usuário "${rawUsername}" inválido. Use letras ou números.`, "error");
         return;
     }
     if (!password || !confirmPassword) {
@@ -1372,9 +1402,10 @@ async function handleEditUserFormSubmit(event) {
         await updateDoc(userProfileRef, { role: newRole }); 
 
         if (newPassword) {
-            showFeedback(editUserFeedback, "Papel do usuário atualizado. A alteração de senha por esta tela não é diretamente suportada. Se necessário, o administrador pode usar o console do Firebase ou o usuário pode redefinir sua própria senha.", "info");
-            // Nota: Atualizar senha do Firebase Auth requer reautenticação ou uma função de admin SDK.
-            // Para simplicidade, não estamos implementando a mudança de senha aqui pelo cliente.
+            // A atualização de senha do Firebase Auth pelo cliente requer reautenticação recente.
+            // Para um painel de admin, isso geralmente é feito com Admin SDK no backend.
+            // Aqui, vamos apenas informar o usuário sobre a limitação.
+            showFeedback(editUserFeedback, "Papel do usuário atualizado. A alteração de senha por esta tela não é diretamente suportada para outros usuários. Se necessário, o administrador pode usar o console do Firebase ou o usuário pode redefinir sua própria senha se essa funcionalidade for implementada.", "info");
         } else {
             showFeedback(editUserFeedback, "Papel do usuário atualizado com sucesso!", "success");
         }
@@ -1405,7 +1436,7 @@ function initializeUserView() {
     if(driverNameInput && loggedInUserProfile) {
         driverNameInput.value = loggedInUserProfile.username; 
     }
-    addFuelEntryToForm();
+    addFuelEntryToForm(); // Adiciona um campo de combustível inicial
 }
 
 function initializeMyTripsView() {
@@ -1436,7 +1467,7 @@ function initializeAdminView() {
     if (!adminDriverFiltersContainer) {
         console.warn("Admin View Init: adminDriverFiltersContainer not found. Filters might not work.");
     } else {
-        adminDriverFiltersContainer.style.display = 'none'; 
+        adminDriverFiltersContainer.style.display = 'none'; // Começa oculto até um motorista ser selecionado
     }
 
     if(adminGeneralFeedback) { adminGeneralFeedback.textContent = ''; adminGeneralFeedback.style.display = 'none';}
@@ -1446,7 +1477,11 @@ function initializeAdminView() {
     if (adminYearFilterSelect) adminYearFilterSelect.value = '';
     if (adminSelectDriver) adminSelectDriver.value = ""; 
     if (adminSelectedDriverNameDisplay) adminSelectedDriverNameDisplay.textContent = "Selecione um motorista para ver os resumos.";
-    if (adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = "Selecione um motorista para ver os resumos.";
+    if (adminDriverTripsPlaceholder) {
+        adminDriverTripsPlaceholder.textContent = "Selecione um motorista para ver os resumos.";
+        adminDriverTripsPlaceholder.style.display = 'block';
+    }
+    if(adminDriverTripsTable) adminDriverTripsTable.style.display = 'none';
     currentDriverMonthlySummaries = [];
     adminSelectedDriverUid = null;
     adminSelectedDriverName = null;
@@ -1516,21 +1551,24 @@ async function handleExportAdminReport() {
 
     const today = new Date();
     let year = today.getFullYear();
-    let month = today.getMonth(); 
+    let month = today.getMonth(); // 0 (Janeiro) a 11 (Dezembro)
 
-    if (month === 0) { 
-        month = 11; 
+    if (month === 0) { // Se for Janeiro, o mês anterior é Dezembro do ano passado
+        month = 11; // Dezembro
         year -= 1;
     } else {
-        month -= 1; 
+        month -= 1; // Mês anterior
     }
 
+    // Nota: new Date() usa mês 0-11. String(month + 1) é para o nome do arquivo/display (1-12).
     const firstDayPrevMonth = new Date(year, month, 1);
-    const lastDayPrevMonth = new Date(year, month + 1, 0); 
+    const lastDayPrevMonth = new Date(year, month + 1, 0); // Dia 0 do próximo mês é o último dia do mês atual
 
     const startDate = firstDayPrevMonth.toISOString().split('T')[0];
     const endDate = lastDayPrevMonth.toISOString().split('T')[0];
-    const reportMonthStr = `${year}-${String(month + 1).padStart(2, '0')}`; 
+    const reportMonthStrForDisplay = `${String(month + 1).padStart(2, '0')}/${year}`; // MM/YYYY
+    const reportMonthStrForFilename = `${year}-${String(month + 1).padStart(2, '0')}`; // YYYY-MM
+
 
     try {
         const q = query(tripsCollection, where("date", ">=", startDate), where("date", "<=", endDate), orderBy("date", "asc"));
@@ -1541,7 +1579,7 @@ async function handleExportAdminReport() {
         });
 
         if (reportTrips.length === 0) {
-            showFeedback(adminGeneralFeedback, `Nenhum frete encontrado para ${reportMonthStr} para exportar.`, "info");
+            showFeedback(adminGeneralFeedback, `Nenhum frete encontrado para ${reportMonthStrForDisplay} para exportar.`, "info");
             return;
         }
         
@@ -1581,18 +1619,18 @@ async function handleExportAdminReport() {
             formatCurrency(trip.declaredValue || 0)
         ]);
 
-        const htmlString = convertToHTMLTable(dataForHTML, headers, reportMonthStr);
+        const htmlString = convertToHTMLTable(dataForHTML, headers, reportMonthStrForDisplay);
         const blob = new Blob([htmlString], { type: 'text/html;charset=utf-8;' });
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
         link.setAttribute("href", url);
-        link.setAttribute("download", `Relatorio_Fretes_${reportMonthStr}.html`);
+        link.setAttribute("download", `Relatorio_Fretes_${reportMonthStrForFilename}.html`);
         link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
 
-        showFeedback(adminGeneralFeedback, `Relatório HTML para ${reportMonthStr} gerado e baixado. Por favor, anexe o arquivo .html em um e-mail para ibisolaribipitanga@gmail.com.`, "success");
+        showFeedback(adminGeneralFeedback, `Relatório HTML para ${reportMonthStrForDisplay} gerado e baixado. Por favor, anexe o arquivo .html em um e-mail para ibisolaribipitanga@gmail.com.`, "success");
 
     } catch (error) {
         console.error("Erro ao gerar relatório HTML:", error);
@@ -1605,22 +1643,20 @@ async function handleExportAdminReport() {
 document.addEventListener('DOMContentLoaded', () => {
     console.log("DOMContentLoaded event fired.");
 
-    // Listener para registerUsernameInput removido pois o elemento não existe mais
-    // const registerUsernameInput = document.getElementById('registerUsername');
+    // Listener para `registerUsernameInput` foi removido pois o elemento não existe mais.
 
     const loginUsernameInput = document.getElementById('loginUsername');
     if (loginUsernameInput) {
         loginUsernameInput.addEventListener('input', function() {
+            // Converte para minúsculas ao digitar
             this.value = this.value.toLowerCase();
         });
         console.log("Event listener 'input' added to loginUsername for lowercase conversion.");
     } else {
         console.error("loginUsername input field not found for adding lowercase listener.");
     }
-
-    // Listeners para showRegisterViewLink e showLoginViewLink removidos
-    // if (showRegisterViewLink) { ... }
-    // if (showLoginViewLink) { ... }
+    
+    // Listeners para `showRegisterViewLink` e `showLoginViewLink` foram removidos.
 
 
     if (!app || !authFirebase || !db || !userProfilesCollection || !tripsCollection) {
@@ -1645,8 +1681,7 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log("Firebase seems initialized, proceeding to add event listeners.");
 
 
-    // Event listener para registerForm removido
-    // if (registerForm) { registerForm.addEventListener('submit', handleRegister); } 
+    // Event listener para `registerForm` foi removido.
 
     if (loginForm) {
         loginForm.addEventListener('submit', handleLogin);
@@ -1761,9 +1796,9 @@ document.addEventListener('DOMContentLoaded', () => {
     modals.forEach(modal => {
         const modalElement = modal;
         if(modalElement) {
-            modalElement.style.display = 'none'; 
+            modalElement.style.display = 'none'; // Garante que todos os modais comecem ocultos
             modalElement.addEventListener('click', (event) => {
-                if (event.target === modalElement) { 
+                if (event.target === modalElement) { // Fecha apenas se clicar no fundo do modal
                     modalElement.style.display = 'none';
                 }
             });

@@ -75,7 +75,12 @@
     <!-- Container Principal da Aplicação (inicialmente oculto) -->
     <div id="appContainer" style="display: none;">
         <header>
-            <h1>Controle de Frete</h1>
+            <div class="header-top-row">
+                <h1>Controle de Frete</h1>
+                <div id="welcomeMessageContainer" style="display: none;">
+                    <!-- Conteúdo preenchido por JavaScript -->
+                </div>
+            </div>
             <nav>
                 <button id="userViewBtn" class="nav-btn" aria-pressed="false" style="display: none;">Registrar Frete</button>
                 <button id="myTripsViewBtn" class="nav-btn" aria-pressed="false" style="display: none;">Meus Fretes</button>

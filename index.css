@@ -1,5 +1,4 @@
 
-
 body {
     font-family: 'Roboto', sans-serif;
     margin: 0;
@@ -458,7 +457,8 @@ fieldset legend {
 #myTripsTable tbody tr:hover { background-color: #f1f1f1; }
 
 #tablePlaceholder, #myTripsTablePlaceholder, #adminDriverTripsPlaceholder { text-align: center; padding: 1rem; color: #777; font-style: italic; display: block; }
-#myTripsTable, #adminDriverTripsTable { display: none; } 
+/* As tabelas são exibidas/ocultadas por JS, mas o estilo inicial aqui pode ser display: none; se for o padrão */
+/* #myTripsTable, #adminDriverTripsTable { display: none; } */
 
 
 footer { background-color: #34495e; color: #ecf0f1; text-align: center; padding: 1rem; font-size: 0.85rem; }
@@ -577,9 +577,8 @@ footer { background-color: #34495e; color: #ecf0f1; text-align: center; padding:
 
     main { padding: 1rem; }
     .view { padding: 1.5rem; }
-    .form-grid, .filter-grid, .summary-container,
-    #fuelEntriesContainer .fuel-entry-item,
-    .summary-metrics {
+    .form-grid, .filter-grid, .summary-metrics, /* summary-container removido pois não existia */
+    #fuelEntriesContainer .fuel-entry-item {
         grid-template-columns: 1fr;
     }
     #adminDriverSelectorContainer {
@@ -592,6 +591,22 @@ footer { background-color: #34495e; color: #ecf0f1; text-align: center; padding:
     }
     .form-actions { flex-direction: column; }
     .form-actions .submit-btn, .form-actions .control-btn { width: 100%; }
+
+    /* Estilos responsivos para a tabela de resumo de motorista no admin */
+    #adminDriverTripsSection {
+        overflow-x: auto; /* Permite rolagem horizontal para toda a seção se o conteúdo (tabela) for largo */
+        -webkit-overflow-scrolling: touch; /* Melhora a experiência de rolagem em iOS */
+    }
+
+    #adminDriverTripsTable {
+        width: auto; /* Permite que a tabela cresça conforme o conteúdo, sobrescrevendo o width: 100% global */
+        min-width: 600px; /* Garante uma largura mínima razoável; ajuste este valor se necessário */
+    }
+
+    #adminDriverTripsTable th,
+    #adminDriverTripsTable td {
+        white-space: nowrap; /* Impede que o conteúdo das células quebre, forçando a tabela a ser mais larga se necessário */
+    }
 }
 
 @media print {

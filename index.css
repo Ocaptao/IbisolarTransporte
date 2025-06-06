@@ -1,4 +1,5 @@
 
+
 body {
     font-family: 'Roboto', sans-serif;
     margin: 0;
@@ -480,6 +481,9 @@ fieldset legend {
 #userManagementTable th:hover { background-color: #dde3e7; }
 #userManagementTable tbody tr:nth-child(even) { background-color: #f9f9f9; }
 #userManagementTable tbody tr:hover { background-color: #f1f1f1; }
+#userManagementTable .delete-user-btn {
+    margin-left: 0.5rem;
+}
 
 /* Estilos para o formulário de cadastro de usuário pelo admin */
 #adminCreateUserContainer {

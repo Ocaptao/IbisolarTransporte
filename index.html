@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script type="importmap">
 {
   "imports": {
@@ -245,7 +246,7 @@
                             </div>
                         </div>
                         <button id="applyAdminSummaryFilterBtn" class="control-btn">Atualizar Resumo Geral</button>
-                        <button id="exportAdminReportBtn" class="control-btn secondary-btn" style="margin-top: 10px;">Exportar Relatório Mensal (Excel/CSV)</button>
+                        <button id="exportAdminReportBtn" class="control-btn secondary-btn" style="margin-top: 10px;">Exportar Relatório Mensal (HTML)</button>
                     </div>
                     <div class="summary-metrics">
                         <div class="metric-card">
@@ -266,6 +267,17 @@
                         </div>
                     </div>
                  </div>
+                 
+                <div id="excelImportContainer" class="dashboard-controls" style="margin-top: 2rem; background-color: #f0f4f8; padding: 1.5rem; border-radius: 6px;">
+                    <h3>Importar Fretes de Planilha</h3>
+                    <p style="font-size: 0.85rem; margin-bottom: 1rem;">Selecione uma planilha (.xlsx ou .xls). A primeira aba deve conter os dados com cabeçalhos na primeira linha. Motoristas devem estar pré-cadastrados.</p>
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label for="excelFileInput">Selecione o arquivo Excel:</label>
+                        <input type="file" id="excelFileInput" accept=".xlsx, .xls" style="padding: 0.5rem;">
+                    </div>
+                    <button id="importExcelBtn" class="control-btn">Importar Planilha</button>
+                    <p id="excelImportFeedback" class="feedback-message" aria-live="polite" style="margin-top: 1rem;"></p>
+                </div>
 
                 <h3>Detalhes de Fretes por Motorista</h3>
                 <div id="adminDriverSelectorContainer" class="dashboard-controls">

@@ -1583,6 +1583,16 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error("registerUsername input field not found.");
     }
 
+    const loginUsernameInput = document.getElementById('loginUsername');
+    if (loginUsernameInput) {
+        loginUsernameInput.addEventListener('input', function() {
+            this.value = this.value.toLowerCase();
+        });
+        console.log("Event listener 'input' added to loginUsername for lowercase conversion.");
+    } else {
+        console.error("loginUsername input field not found.");
+    }
+
 
     if (showRegisterViewLink) {
         showRegisterViewLink.addEventListener('click', (e) => { e.preventDefault(); showView('registerView'); });

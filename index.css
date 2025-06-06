@@ -63,10 +63,7 @@ body {
 
 #loginView .auth-container form,
 #loginView .auth-container .auth-switch,
-#loginView .auth-container .feedback-message,
-#registerView .auth-container form,
-#registerView .auth-container .auth-switch,
-#registerView .auth-container .feedback-message {
+#loginView .auth-container .feedback-message {
     position: relative; 
     z-index: 1; 
 }
@@ -104,7 +101,7 @@ header {
 
 .header-top-row {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start; /* ou center, se preferir o título centralizado */
     align-items: center;
     margin-bottom: 0.5rem; 
 }
@@ -115,9 +112,33 @@ header h1 {
     font-weight: 500;
 }
 
+nav {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem; /* Espaçamento entre os grupos principais */
+}
+
+.nav-main-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem; /* Espaçamento entre os botões principais */
+    align-items: center;
+}
+
+.nav-user-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem; /* Espaçamento entre msg de boas vindas e botão sair */
+    flex-wrap: wrap; /* Permite quebrar linha se não couber */
+}
+
 #welcomeMessageContainer {
     font-size: 0.95rem; 
     color: #ecf0f1; 
+    white-space: nowrap; /* Evita que a mensagem quebre em várias linhas */
 }
 
 #welcomeMessageContainer .welcome-username {
@@ -127,14 +148,6 @@ header h1 {
 #welcomeMessageContainer .welcome-icon {
     margin-left: 0.5em;
     font-size: 1.2em; 
-}
-
-nav {
-    margin-top: 0.5rem;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0.5rem;
 }
 
 .nav-btn {
@@ -152,10 +165,11 @@ nav {
     background-color: #2980b9;
 }
 
-.nav-btn.active {
+.nav-btn[aria-pressed="true"] { /* Atualizado seletor para nav-btn ativo */
     background-color: #1abc9c;
     font-weight: bold;
 }
+
 
 main {
     flex-grow: 1;
@@ -467,6 +481,27 @@ fieldset legend {
 #userManagementTable tbody tr:nth-child(even) { background-color: #f9f9f9; }
 #userManagementTable tbody tr:hover { background-color: #f1f1f1; }
 
+/* Estilos para o formulário de cadastro de usuário pelo admin */
+#adminCreateUserContainer {
+    background-color: #f9f9f9;
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+    border: 1px solid #e0e0e0;
+}
+#adminCreateUserContainer h3 {
+    margin-top: 0;
+    color: #2c3e50;
+    border-bottom: 1px solid #d0d9e0;
+    padding-bottom: 0.5rem;
+}
+#adminCreateUserForm .form-grid {
+    margin-bottom: 1rem; /* Reduz o espaçamento inferior do grid */
+}
+#adminCreateUserForm button#adminCreateUserBtn {
+    margin-top: 1rem; /* Adiciona espaçamento acima do botão de cadastro */
+}
+
 
 #myTripsTableContainer { margin-top: 2rem; }
 #myTripsTable { width: 100%; border-collapse: collapse; margin-top: 1rem; }
@@ -477,8 +512,6 @@ fieldset legend {
 #myTripsTable tbody tr:hover { background-color: #f1f1f1; }
 
 #tablePlaceholder, #myTripsTablePlaceholder, #adminDriverTripsPlaceholder { text-align: center; padding: 1rem; color: #777; font-style: italic; display: block; }
-/* As tabelas são exibidas/ocultadas por JS, mas o estilo inicial aqui pode ser display: none; se for o padrão */
-/* #myTripsTable, #adminDriverTripsTable { display: none; } */
 
 
 footer { background-color: #34495e; color: #ecf0f1; text-align: center; padding: 1rem; font-size: 0.85rem; }
@@ -592,20 +625,44 @@ footer { background-color: #34495e; color: #ecf0f1; text-align: center; padding:
 @media (max-width: 768px) {
     header { padding: 1rem; }
     .header-top-row {
-        flex-direction: column; /* Empilha o título e a mensagem de boas-vindas */
-        align-items: center; /* Centraliza os itens empilhados */
-        gap: 0.5rem; /* Espaço entre título e mensagem */
+        flex-direction: column; /* Empilha o título se necessário */
+        align-items: center;   /* Centraliza o título */
+        text-align: center;    /* Garante que o texto do h1 seja centralizado */
+        margin-bottom: 0.8rem;
     }
-    header h1 { font-size: 1.5rem; text-align: center;}
-    #welcomeMessageContainer { text-align: center; }
+    header h1 { 
+        font-size: 1.5rem; 
+        width: 100%; /* Ocupa toda a largura para centralizar corretamente */
+    }
 
-    nav { flex-direction: column; align-items: center; }
-    .nav-btn { width: 90%; margin: 0.25rem 0; }
+    nav { 
+        flex-direction: column; 
+        align-items: center; 
+        gap: 0.5rem; /* Reduz o gap entre os grupos principais quando empilhados */
+    }
+    .nav-main-actions, .nav-user-actions {
+        flex-direction: column;
+        align-items: stretch; /* Faz os itens internos ocuparem a largura */
+        width: 100%;
+        gap: 0.5rem;
+    }
+    .nav-btn { 
+        width: 100%; /* Faz os botões ocuparem a largura total de seu contêiner */
+        margin: 0.25rem 0; 
+        box-sizing: border-box; /* Garante que padding não aumente a largura além de 100% */
+    }
+    #welcomeMessageContainer {
+        text-align: center; /* Centraliza o texto da mensagem de boas-vindas */
+        width: 100%;
+        padding: 0.3rem 0;
+        box-sizing: border-box;
+    }
 
     main { padding: 1rem; }
     .view { padding: 1.5rem; }
     .form-grid, .filter-grid, .summary-metrics,
-    #fuelEntriesContainer .fuel-entry-item {
+    #fuelEntriesContainer .fuel-entry-item,
+    #adminCreateUserForm .form-grid { /* Adicionado para o novo formulário */
         grid-template-columns: 1fr;
     }
     #adminDriverSelectorContainer {

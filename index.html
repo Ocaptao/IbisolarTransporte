@@ -43,50 +43,32 @@
                 <button type="submit" class="submit-btn full-width-btn">Entrar</button>
             </form>
             <p id="loginFeedback" class="feedback-message" aria-live="polite"></p>
-            <p class="auth-switch">Não tem uma conta? <a href="#" id="showRegisterViewLink">Cadastre-se</a></p>
+            <!-- Link de cadastro removido -->
         </div>
     </section>
 
-    <!-- Tela de Cadastro -->
-    <section id="registerView" class="auth-view" style="display: none;">
-        <div class="auth-container">
-            <img src="logo_ibisolar.png" class="login-bg-logo" alt="height: 150px;">
-            <h2>Cadastro</h2>
-            <form id="registerForm">
-                <div class="form-group">
-                    <label for="registerUsername">Nome de Usuário (será usado para login):</label>
-                    <input type="text" id="registerUsername" name="registerUsername" required autocomplete="username">
-                </div>
-                <div class="form-group">
-                    <label for="registerPassword">Senha (mínimo 6 caracteres):</label>
-                    <input type="password" id="registerPassword" name="registerPassword" required autocomplete="new-password">
-                </div>
-                <div class="form-group">
-                    <label for="registerConfirmPassword">Confirmar Senha:</label>
-                    <input type="password" id="registerConfirmPassword" name="registerConfirmPassword" required autocomplete="new-password">
-                </div>
-                <button type="submit" class="submit-btn full-width-btn">Cadastrar</button>
-            </form>
-            <p id="registerFeedback" class="feedback-message" aria-live="polite"></p>
-            <p class="auth-switch">Já tem uma conta? <a href="#" id="showLoginViewLink">Faça Login</a></p>
-        </div>
-    </section>
+    <!-- Tela de Cadastro Removida -->
+    <!-- <section id="registerView" class="auth-view" style="display: none;"> ... </section> -->
 
     <!-- Container Principal da Aplicação (inicialmente oculto) -->
     <div id="appContainer" style="display: none;">
         <header>
             <div class="header-top-row">
                 <h1>Controle de Frete</h1>
-                <div id="welcomeMessageContainer" style="display: none;">
-                    <!-- Conteúdo preenchido por JavaScript -->
-                </div>
             </div>
             <nav>
-                <button id="userViewBtn" class="nav-btn" aria-pressed="false" style="display: none;">Registrar Frete</button>
-                <button id="myTripsViewBtn" class="nav-btn" aria-pressed="false" style="display: none;">Meus Fretes</button>
-                <button id="adminViewBtn" class="nav-btn" aria-pressed="false" style="display: none;">Painel do Administrador</button>
-                <button id="userManagementViewBtn" class="nav-btn" aria-pressed="false" style="display: none;">Gerenciar Usuários</button>
-                <button id="logoutBtn" class="nav-btn danger-btn" style="display: none;">Sair</button>
+                <div class="nav-main-actions">
+                    <button id="userViewBtn" class="nav-btn" aria-pressed="false" style="display: none;">Registrar Frete</button>
+                    <button id="myTripsViewBtn" class="nav-btn" aria-pressed="false" style="display: none;">Meus Fretes</button>
+                    <button id="adminViewBtn" class="nav-btn" aria-pressed="false" style="display: none;">Painel do Administrador</button>
+                    <button id="userManagementViewBtn" class="nav-btn" aria-pressed="false" style="display: none;">Gerenciar Usuários</button>
+                </div>
+                <div class="nav-user-actions">
+                    <div id="welcomeMessageContainer" style="display: none;">
+                        <!-- Conteúdo preenchido por JavaScript -->
+                    </div>
+                    <button id="logoutBtn" class="nav-btn danger-btn" style="display: none;">Sair</button>
+                </div>
             </nav>
         </header>
 
@@ -348,6 +330,37 @@
 
             <section id="userManagementView" class="view" aria-labelledby="user-management-title">
                 <h2 id="user-management-title">Gerenciamento de Usuários</h2>
+                
+                <!-- Novo Formulário de Cadastro de Usuário pelo Admin -->
+                <div id="adminCreateUserContainer">
+                    <h3>Cadastrar Novo Usuário</h3>
+                    <form id="adminCreateUserForm">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="adminCreateUsername">Nome de Usuário (para login):</label>
+                                <input type="text" id="adminCreateUsername" name="adminCreateUsername" required autocomplete="username">
+                            </div>
+                            <div class="form-group">
+                                <label for="adminCreateUserRole">Papel do Usuário:</label>
+                                <select id="adminCreateUserRole" name="adminCreateUserRole">
+                                    <option value="motorista" selected>Motorista</option>
+                                    <option value="admin">Administrador</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="adminCreateUserPassword">Senha (mínimo 6 caracteres):</label>
+                                <input type="password" id="adminCreateUserPassword" name="adminCreateUserPassword" required autocomplete="new-password">
+                            </div>
+                            <div class="form-group">
+                                <label for="adminCreateUserConfirmPassword">Confirmar Senha:</label>
+                                <input type="password" id="adminCreateUserConfirmPassword" name="adminCreateUserConfirmPassword" required autocomplete="new-password">
+                            </div>
+                        </div>
+                        <button type="submit" id="adminCreateUserBtn" class="submit-btn">Cadastrar Usuário</button>
+                    </form>
+                    <p id="adminCreateUserFeedback" class="feedback-message" aria-live="polite"></p>
+                </div>
+
                 <h3>Usuários Cadastrados</h3>
                 <p id="userManagementFeedback" class="feedback-message" aria-live="polite"></p>
                 <div id="userManagementTableContainer">

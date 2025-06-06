@@ -45,20 +45,17 @@ body {
 }
 
 
-.auth-container h2 {
+.auth-container h2 { /* Common styles for auth titles */
     text-align: center;
     color: #2c3e50;
     margin-bottom: 1.5rem;
     position: relative; 
     z-index: 1; 
-}
-
-/* Specific to loginView H2 */
-#loginView .auth-container h2 {
     font-family: 'Cloud Lucent', sans-serif; 
-    font-weight: normal; 
+    font-weight: normal; /* Cloud Lucent might be bold by default, adjust if needed */
     font-size: 2.2rem; 
     letter-spacing: 0.0em; 
+    text-transform: uppercase;
     border-bottom: none; 
     padding-bottom: 0; 
     margin-top: -0.9em; 
@@ -73,11 +70,6 @@ body {
 #registerView .auth-container .feedback-message {
     position: relative; 
     z-index: 1; 
-}
-/* Ensure h2 in registerView is also above the logo, if not already covered by general .auth-container h2 */
-#registerView .auth-container h2 {
-    position: relative;
-    z-index: 1;
 }
 
 
@@ -168,11 +160,12 @@ main {
     display: block;
 }
 
-h2 { /* General h2 */
+h2 { /* General h2 for view titles, auth titles are more specific */
     color: #2c3e50;
     margin-top: 0; 
     margin-bottom: 1.5rem;
     padding-bottom: 0.5rem;
+    border-bottom: 1px solid #e0e0e0;
     font-weight: 500;
 }
 

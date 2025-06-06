@@ -56,12 +56,12 @@ body {
 /* Specific to loginView H2 */
 #loginView .auth-container h2 {
     font-family: 'Cloud Lucent', sans-serif; 
-    font-weight: bold; 
+    font-weight: normal; 
     font-size: 2.2rem; 
     letter-spacing: 0.0em; 
     border-bottom: none; 
     padding-bottom: 0; 
-    margin-top: -0.8rem; 
+    margin-top: -0.9em; 
 }
 
 

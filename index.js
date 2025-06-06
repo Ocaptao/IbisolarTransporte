@@ -1,16 +1,15 @@
 
-
 import { Chart, registerables } from 'chart.js';
 // Firebase App (o núcleo do Firebase SDK) é sempre necessário e deve ser listado primeiro
-import { initializeApp } from "firebase/app";
+import { initializeApp } from "@firebase/app";
 import {
     getAuth,
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
     signOut,
     onAuthStateChanged,
-    // updatePassword as updateUserPasswordInAuth, // Not used
-} from "firebase/auth";
+    updatePassword as updateUserPasswordInAuth,
+} from "@firebase/auth";
 import {
     getFirestore,
     collection,
@@ -24,9 +23,9 @@ import {
     where,
     Timestamp,
     orderBy,
-    // writeBatch, // Not used
-    setDoc as firebaseSetDoc,
-} from "firebase/firestore";
+    writeBatch,
+    setDoc as firebaseSetDoc, 
+} from "@firebase/firestore";
 
 Chart.register(...registerables);
 
@@ -43,18 +42,18 @@ const firebaseConfig = {
 
 // Inicializar Firebase
 let app;
-let authFirebase;
-let db;
+let authFirebase; 
+let db; 
 let userProfilesCollection;
 let tripsCollection;
 
 
 try {
     app = initializeApp(firebaseConfig);
-    authFirebase = getAuth(app);
+    authFirebase = getAuth(app); 
     db = getFirestore(app);
     userProfilesCollection = collection(db, "userProfiles");
-    tripsCollection = collection(db, "trips"); // "trips" é o nome da coleção para Fretes
+    tripsCollection = collection(db, "trips"); 
     console.log("Firebase initialized successfully!");
 } catch (error) {
     console.error("CRITICAL ERROR: Firebase initialization failed:", "Code:", error.code, "Message:", error.message);
@@ -63,18 +62,18 @@ try {
 
 
 // --- STATE VARIABLES ---
-let trips = []; // Cache local de fretes carregados
+let trips = []; 
 let editingTripId = null;
-let currentUserForMyTripsSearch = null; // Username
-let currentUidForMyTripsSearch = null; // UID do Firebase
+let currentUserForMyTripsSearch = null; 
+let currentUidForMyTripsSearch = null; 
 
-let userProfiles = []; // Cache local de perfis de usuário (para admin)
-let loggedInUser = null; // Usuário do Firebase Auth
-let loggedInUserProfile = null; // Perfil do usuário logado do Firestore
-let editingUserIdForAdmin = null; // UID do usuário sendo editado pelo admin
-let adminSelectedDriverName = null; // Username
-let adminSelectedDriverUid = null; // UID do Firebase
-let currentDriverMonthlySummaries = []; // Para armazenar os resumos mensais do motorista selecionado
+let userProfiles = []; 
+let loggedInUser = null; 
+let loggedInUserProfile = null; 
+let editingUserIdForAdmin = null; 
+let adminSelectedDriverName = null; 
+let adminSelectedDriverUid = null; 
+let currentDriverMonthlySummaries = [];
 
 let adminSummaryChart = null;
 
@@ -101,6 +100,8 @@ const myTripsViewBtn = document.getElementById('myTripsViewBtn');
 const adminViewBtn = document.getElementById('adminViewBtn');
 const userManagementViewBtn = document.getElementById('userManagementViewBtn');
 const logoutBtn = document.getElementById('logoutBtn');
+const welcomeMessageContainer = document.getElementById('welcomeMessageContainer');
+
 
 const userView = document.getElementById('userView');
 const myTripsView = document.getElementById('myTripsView');
@@ -152,22 +153,20 @@ const adminTotalFreightEl = document.getElementById('adminTotalFreightEl');
 const adminTotalExpensesEl = document.getElementById('adminTotalExpensesEl');
 const adminTotalNetProfitEl = document.getElementById('adminTotalNetProfitEl');
 const adminSelectDriver = document.getElementById('adminSelectDriver');
-const adminLoadDriverTripsBtn = document.getElementById('adminLoadDriverTripsBtn'); // Mantido o ID, mas função muda
-const adminDriverTripsSection = document.getElementById('adminDriverTripsSection'); // Reutilizado para resumos
+const adminLoadDriverTripsBtn = document.getElementById('adminLoadDriverTripsBtn');
+const adminDriverTripsSection = document.getElementById('adminDriverTripsSection');
 const adminSelectedDriverNameDisplay = document.getElementById('adminSelectedDriverNameDisplay');
-const adminDriverTripsTable = document.getElementById('adminDriverTripsTable'); // Reutilizado para resumos
-const adminDriverTripsTableBody = document.getElementById('adminDriverTripsTableBody'); // Reutilizado para resumos
-const adminDriverTripsPlaceholder = document.getElementById('adminDriverTripsPlaceholder'); // Reutilizado para resumos
+const adminDriverTripsTable = document.getElementById('adminDriverTripsTable');
+const adminDriverTripsTableBody = document.getElementById('adminDriverTripsTableBody');
+const adminDriverTripsPlaceholder = document.getElementById('adminDriverTripsPlaceholder');
 const adminTripDetailModal = document.getElementById('adminTripDetailModal');
 const closeAdminTripDetailModalBtn = document.getElementById('closeAdminTripDetailModalBtn');
 const adminTripDetailContent = document.getElementById('adminTripDetailContent');
 const printAdminTripDetailBtn = document.getElementById('printAdminTripDetailBtn');
 
-// Novos elementos para filtros de mês/ano no admin
 const adminDriverFiltersContainer = document.getElementById('adminDriverFiltersContainer');
 const adminMonthFilterSelect = document.getElementById('adminMonthFilterSelect');
 const adminYearFilterSelect = document.getElementById('adminYearFilterSelect');
-
 
 const userManagementTableBody = document.getElementById('userManagementTableBody');
 const editUserModal = document.getElementById('editUserModal');
@@ -230,7 +229,7 @@ function formatDate(dateInput) {
     return dateToFormat.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 }
 
-function formatMonthYear(yearMonthKey) { // ex: "2023-09"
+function formatMonthYear(yearMonthKey) { 
     if (!yearMonthKey || typeof yearMonthKey !== 'string' || !yearMonthKey.includes('-')) {
         return 'Mês/Ano Inválido';
     }
@@ -241,10 +240,8 @@ function formatMonthYear(yearMonthKey) { // ex: "2023-09"
     if (isNaN(month) || month < 1 || month > 12) {
         return 'Mês/Ano Inválido';
     }
-    // Cria um objeto Date apenas para obter o nome do mês facilmente
     const dateForMonthName = new Date(parseInt(year, 10), month - 1, 1);
     const monthName = dateForMonthName.toLocaleString('pt-BR', { month: 'long' });
-    // Retorna o nome do mês capitalizado e o ano
     return `${monthName.charAt(0).toUpperCase() + monthName.slice(1)}/${year}`;
 }
 
@@ -476,6 +473,8 @@ async function handleLogin(event) {
             showFeedback(loginFeedback, "Nome de usuário ou senha incorretos.", "error");
         } else if (error.code === 'auth/invalid-email') {
              showFeedback(loginFeedback, `O nome de usuário "${rawUsername}" resultou em um formato de e-mail inválido ("${email}") para o login. Verifique se digitou corretamente.`, "error");
+        } else if (error.code === 'auth/too-many-requests') {
+            showFeedback(loginFeedback, "Muitas tentativas de login malsucedidas. Por segurança, o acesso foi temporariamente bloqueado. Por favor, tente novamente mais tarde.", "error");
         }
         else {
             showFeedback(loginFeedback, "Erro ao tentar fazer login. Verifique o console para detalhes.", "error");
@@ -490,6 +489,12 @@ async function handleLogout() {
         await signOut(authFirebase); 
         console.log("User signed out from Firebase Auth.");
         
+        // Explicitly clear and hide welcome message for immediate UI feedback
+        if (welcomeMessageContainer) {
+            welcomeMessageContainer.innerHTML = '';
+            welcomeMessageContainer.style.display = 'none';
+        }
+
         showFeedback(loginFeedback, "Você foi desconectado.", "info");
         
         if(myTripsTableBody) myTripsTableBody.innerHTML = '';
@@ -538,6 +543,12 @@ if (authFirebase) {
                         loggedInUserProfile = { id: userProfileDoc.id, ...userProfileDoc.data() };
                         console.log("User profile found in Firestore:", "Username:", loggedInUserProfile.username, "Role:", loggedInUserProfile.role);
 
+                        if (welcomeMessageContainer && loggedInUserProfile) {
+                            const icon = loggedInUserProfile.role === 'admin' ? '⚙️' : '🚗';
+                            welcomeMessageContainer.innerHTML = `Bem Vindo, <strong class="welcome-username">${escapeHtml(loggedInUserProfile.username)}</strong> <span class="welcome-icon">${icon}</span>`;
+                            welcomeMessageContainer.style.display = 'block';
+                        }
+
                         updateNavVisibility();
                         if (loggedInUserProfile.role === 'admin') {
                             console.log("User is admin, showing adminView.");
@@ -559,16 +570,26 @@ if (authFirebase) {
                         }
                     } else {
                         console.warn("User session changed while fetching profile for UID:", user.uid, ". Aborting UI update for this stale session.");
-                        
+                        if (welcomeMessageContainer) {
+                            welcomeMessageContainer.innerHTML = '';
+                            welcomeMessageContainer.style.display = 'none';
+                        }
                     }
                 } else {
                     console.error("CRITICAL: User profile NOT FOUND in Firestore for UID:", user.uid, "Email:", user.email);
                     showFeedback(loginFeedback, `Falha ao carregar perfil (usuário ${user.email || user.uid}). Você será desconectado. Verifique o cadastro ou contate o suporte.`, "error");
+                    if (welcomeMessageContainer) {
+                        welcomeMessageContainer.innerHTML = '';
+                        welcomeMessageContainer.style.display = 'none';
+                    }
                     setTimeout(() => signOut(authFirebase), 3000); 
                 }
             } catch (error) {
                 console.error("CRITICAL ERROR fetching user profile for UID:", user.uid, "Error:", error);
-                
+                if (welcomeMessageContainer) {
+                    welcomeMessageContainer.innerHTML = '';
+                    welcomeMessageContainer.style.display = 'none';
+                }
                 showFeedback(loginFeedback, `Erro ao carregar dados do perfil (usuário ${user.email || user.uid}). Você será desconectado. (${error.message})`, "error");
                 setTimeout(() => signOut(authFirebase), 3000); 
             }
@@ -576,6 +597,10 @@ if (authFirebase) {
             console.log("User is not authenticated (logged out or session ended).");
             loggedInUser = null;
             loggedInUserProfile = null;
+            if (welcomeMessageContainer) {
+                welcomeMessageContainer.innerHTML = '';
+                welcomeMessageContainer.style.display = 'none';
+            }
             trips = []; 
             userProfiles = []; 
             updateNavVisibility();
@@ -1022,8 +1047,8 @@ async function updateAdminSummary(filterStartDate, filterEndDate) {
         let totalExpensesOverall = 0; 
         let totalNetProfitOverall = 0; 
 
-        querySnapshot.forEach((doc) => {
-            const trip = doc.data(); 
+        querySnapshot.forEach((docSnap) => { // Use docSnap to avoid conflict with outer doc
+            const trip = docSnap.data(); 
             totalTrips++;
             totalFreight += trip.freightValue;
             totalExpensesOverall += trip.totalExpenses;
@@ -1053,14 +1078,14 @@ async function populateAdminDriverSelect() {
         const querySnapshot = await getDocs(q);
         
         const motoristas = [];
-        querySnapshot.forEach((doc) => {
-            motoristas.push({ id: doc.id, ...doc.data() });
+        querySnapshot.forEach((docSnap) => { // Use docSnap to avoid conflict
+            motoristas.push({ id: docSnap.id, ...docSnap.data() });
         });
 
         if (userProfiles.filter(p => p.role === 'motorista').length === 0) {
-             querySnapshot.forEach((doc) => {
-                if (!userProfiles.find(p => p.uid === doc.id)) {
-                    userProfiles.push({ id: doc.id, ...doc.data() });
+             querySnapshot.forEach((docSnap) => { // Use docSnap to avoid conflict
+                if (!userProfiles.find(p => p.uid === docSnap.id)) {
+                    userProfiles.push({ id: docSnap.id, ...docSnap.data() });
                 }
             });
         }
@@ -1108,7 +1133,7 @@ async function loadAndRenderAdminDriverMonthlySummaries() {
         if (adminSelectedDriverNameDisplay) adminSelectedDriverNameDisplay.textContent = "Selecione um motorista para ver os resumos.";
         if (adminDriverTripsTableBody) adminDriverTripsTableBody.innerHTML = '';
         if (adminDriverTripsPlaceholder) {
-            adminDriverTripsPlaceholder.textContent = "Nenhum motorista selecionado ou dados não encontrados."; 
+            adminDriverTripsPlaceholder.textContent = "Selecione um motorista acima para carregar os resumos mensais.";
             adminDriverTripsPlaceholder.style.display = 'block';
         }
         if (adminDriverTripsTable) adminDriverTripsTable.style.display = 'none';
@@ -1209,7 +1234,6 @@ function renderAdminDriverMonthlySummariesTable() {
         row.insertCell().textContent = formatCurrency(summary.totalFreightValue);
         row.insertCell().textContent = formatCurrency(summary.totalExpenses);
         row.insertCell().textContent = formatCurrency(summary.totalNetProfit);
-        // No "Actions" cell or "View Details" button here for monthly summaries
     });
 }
 
@@ -1279,8 +1303,8 @@ async function loadAndRenderUsersForAdmin() {
         const q = query(userProfilesCollection, orderBy("username"));
         const querySnapshot = await getDocs(q);
         userProfiles = []; 
-        querySnapshot.forEach((doc) => {
-            userProfiles.push({ id: doc.id, ...doc.data() });
+        querySnapshot.forEach((docSnap) => { // Use docSnap to avoid conflict
+            userProfiles.push({ id: docSnap.id, ...docSnap.data() });
         });
 
         renderUserManagementTable(userProfiles);
@@ -1504,8 +1528,8 @@ async function handleExportAdminReport() {
         const q = query(tripsCollection, where("date", ">=", startDate), where("date", "<=", endDate), orderBy("date", "asc"));
         const querySnapshot = await getDocs(q);
         const reportTrips = [];
-        querySnapshot.forEach(doc => {
-            reportTrips.push({ id: doc.id, ...doc.data() });
+        querySnapshot.forEach(docSnap => { // Use docSnap to avoid conflict
+            reportTrips.push({ id: docSnap.id, ...docSnap.data() });
         });
 
         if (reportTrips.length === 0) {
@@ -1516,8 +1540,8 @@ async function handleExportAdminReport() {
         const localUserProfilesForReport = [];
         const qProfiles = query(userProfilesCollection, orderBy("username")); 
         const profileSnapshot = await getDocs(qProfiles);
-        profileSnapshot.forEach(doc => {
-            localUserProfilesForReport.push({ uid: doc.id, ...doc.data() });
+        profileSnapshot.forEach(docSnap => { // Use docSnap to avoid conflict
+            localUserProfilesForReport.push({ uid: docSnap.id, ...docSnap.data() });
         });
         const userMap = new Map(localUserProfilesForReport.map(p => [p.uid, p.username]));
 
@@ -1580,7 +1604,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         console.log("Event listener 'input' added to registerUsername for lowercase conversion.");
     } else {
-        console.error("registerUsername input field not found.");
+        console.error("registerUsername input field not found for adding lowercase listener.");
     }
 
     const loginUsernameInput = document.getElementById('loginUsername');
@@ -1590,7 +1614,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         console.log("Event listener 'input' added to loginUsername for lowercase conversion.");
     } else {
-        console.error("loginUsername input field not found.");
+        console.error("loginUsername input field not found for adding lowercase listener.");
     }
 
 
@@ -1604,7 +1628,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     if (!app || !authFirebase || !db || !userProfilesCollection || !tripsCollection) {
-        console.error("CRITICAL DOMContentLoaded: Firebase not initialized correctly. App listeners not added.");
+        console.error("CRITICAL DOMContentLoaded: Firebase not initialized correctly or collections not set. App listeners not added.");
         const body = document.querySelector('body');
         if (body) {
             const errorDiv = document.createElement('div');
@@ -1734,11 +1758,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const modals = document.querySelectorAll('.modal');
     modals.forEach(modal => {
-        if(modal) {
-            modal.style.display = 'none'; 
-            modal.addEventListener('click', (event) => {
-                if (event.target === modal) { 
-                    modal.style.display = 'none';
+        const modalElement = modal;
+        if(modalElement) {
+            modalElement.style.display = 'none'; 
+            modalElement.addEventListener('click', (event) => {
+                if (event.target === modalElement) { 
+                    modalElement.style.display = 'none';
                 }
             });
         }

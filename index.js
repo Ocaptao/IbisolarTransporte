@@ -1,4 +1,5 @@
 
+
 import { Chart, registerables } from 'chart.js';
 // Firebase App (o núcleo do Firebase SDK) é sempre necessário e deve ser listado primeiro
 import { initializeApp } from "@firebase/app";
@@ -711,7 +712,7 @@ async function handleTripFormSubmit(event) {
         fuelEntryIdCounter = 0;
         editingTripId = null;
         if(tripIdToEditInput) tripIdToEditInput.value = '';
-        if (driverNameInput && loggedInUserProfile) driverNameInput.value = loggedInUserProfile.username;
+        if (driverNameInput && loggedInUserProfile) driverNameInput.value = capitalizeName(loggedInUserProfile.username);
         if (submitTripBtn) submitTripBtn.textContent = 'Salvar Frete'; 
         if (cancelEditBtn) cancelEditBtn.style.display = 'none';
 
@@ -760,7 +761,7 @@ async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
     }
 
 
-    if(myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Carregando fretes de ${targetUsername}...`;
+    if(myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Carregando fretes de ${capitalizeName(targetUsername)}...`;
     if(myTripsTable) myTripsTable.style.display = 'none';
     if(myTripsTablePlaceholder) myTripsTablePlaceholder.style.display = 'block';
     if(myTripsTableBody) myTripsTableBody.innerHTML = '';
@@ -785,7 +786,7 @@ async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
         trips = fetchedTrips; 
 
         if (trips.length === 0) {
-            if(myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Nenhum frete encontrado para ${targetUsername}` +
+            if(myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Nenhum frete encontrado para ${capitalizeName(targetUsername)}` +
                 `${(filterStartDate || filterEndDate) ? ' nos filtros aplicados.' : '.'}`;
         } else {
             if(myTripsTable) myTripsTable.style.display = 'table';
@@ -795,12 +796,12 @@ async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
         updateDriverSummary(trips, targetUsername); 
 
     } catch (error) {
-        console.error(`ERRO CRÍTICO ao carregar fretes de ${targetUsername} do Firestore:`, "Código:", error.code, "Mensagem:", error.message, "Detalhes:", error);
-        let userMessage = `Erro ao carregar fretes de ${targetUsername}. Verifique o console para mais detalhes.`;
+        console.error(`ERRO CRÍTICO ao carregar fretes de ${capitalizeName(targetUsername)} do Firestore:`, "Código:", error.code, "Mensagem:", error.message, "Detalhes:", error);
+        let userMessage = `Erro ao carregar fretes de ${capitalizeName(targetUsername)}. Verifique o console para mais detalhes.`;
         if (error.code === 'failed-precondition') {
-            userMessage = `Erro ao carregar fretes de ${targetUsername}: Provavelmente um índice está faltando no Firestore. Verifique o console do navegador (F12) para um link ou mensagem de erro detalhada.`;
+            userMessage = `Erro ao carregar fretes de ${capitalizeName(targetUsername)}: Provavelmente um índice está faltando no Firestore. Verifique o console do navegador (F12) para um link ou mensagem de erro detalhada.`;
         } else if (error.code === 'permission-denied') {
-            userMessage = `Erro ao carregar fretes de ${targetUsername}: Permissão negada. Verifique as regras de segurança do Firestore.`;
+            userMessage = `Erro ao carregar fretes de ${capitalizeName(targetUsername)}: Permissão negada. Verifique as regras de segurança do Firestore.`;
         }
         showFeedback(myTripsFeedback, userMessage, "error");
         if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = userMessage;
@@ -876,7 +877,7 @@ async function loadTripForEditing(tripId) {
 
             if(tripIdToEditInput) tripIdToEditInput.value = trip.id;
             editingTripId = trip.id;
-            if(driverNameInput) driverNameInput.value = trip.driverName; 
+            if(driverNameInput) driverNameInput.value = capitalizeName(trip.driverName); 
             if(tripDateInput) tripDateInput.value = trip.date; 
             if(cargoTypeInput) cargoTypeInput.value = trip.cargoType || '';
             if(kmInitialInput) kmInitialInput.value = trip.kmInitial?.toString() || '';
@@ -899,7 +900,7 @@ async function loadTripForEditing(tripId) {
             if (cancelEditBtn) cancelEditBtn.style.display = 'inline-block';
             showView('userView'); 
             if (userView) userView.scrollIntoView({ behavior: 'smooth' });
-            showFeedback(userFormFeedback, `Editando frete de ${trip.driverName} do dia ${formatDate(trip.date)}.`, "info");
+            showFeedback(userFormFeedback, `Editando frete de ${capitalizeName(trip.driverName)} do dia ${formatDate(trip.date)}.`, "info");
 
         } else {
             showFeedback(myTripsFeedback, "Frete não encontrado para edição.", "error");
@@ -929,7 +930,7 @@ function confirmDeleteTrip(tripId, driverNameForConfirm) {
     }
 
 
-    if (confirm(`Tem certeza que deseja excluir o frete de ${driverNameForConfirm}? Esta ação não pode ser desfeita.`)) {
+    if (confirm(`Tem certeza que deseja excluir o frete de ${capitalizeName(driverNameForConfirm)}? Esta ação não pode ser desfeita.`)) {
         deleteTrip(tripId);
     }
 }
@@ -1378,7 +1379,10 @@ function confirmDeleteUserProfile(userId, username) {
         return;
     }
 
-    const confirmationMessage = `Tem certeza que deseja excluir o perfil do usuário "${capitalizeName(username)}"?\n\nEsta ação removerá os dados do perfil do sistema.\n\nIMPORTANTE: A conta de login deste usuário precisará ser removida manualmente do painel de Autenticação do Firebase Console para uma exclusão completa.`;
+    const normalizedUsernamePart = normalizeUsernameForEmail(username);
+    const userAuthEmail = `${normalizedUsernamePart}@example.com`;
+
+    const confirmationMessage = `Tem certeza que deseja excluir o perfil do usuário "${capitalizeName(username)}"?\n\nEsta ação removerá os dados do perfil do sistema (Firestore).\n\nIMPORTANTE: A conta de login deste usuário (e-mail: ${userAuthEmail}) precisará ser REMOVIDA MANUALMENTE do painel de Autenticação do Firebase Console para uma exclusão completa. Esta etapa não pode ser feita automaticamente por aqui.\n\nClique OK para remover o perfil do Firestore.`;
 
     if (confirm(confirmationMessage)) {
         deleteUserProfileFromFirestore(userId, username);
@@ -1387,12 +1391,15 @@ function confirmDeleteUserProfile(userId, username) {
 
 async function deleteUserProfileFromFirestore(userId, username) {
     try {
+        const normalizedUsernamePart = normalizeUsernameForEmail(username);
+        const userAuthEmail = `${normalizedUsernamePart}@example.com`;
+
         await deleteDoc(doc(userProfilesCollection, userId));
-        showFeedback(userManagementFeedback, `Perfil do usuário "${capitalizeName(username)}" excluído do Firestore com sucesso. Lembre-se de remover a conta de login do Firebase Auth Console.`, "success");
+        showFeedback(userManagementFeedback, `Perfil de "${capitalizeName(username)}" excluído do Firestore. LEMBRE-SE: Remova a conta de autenticação (e-mail: ${userAuthEmail}) do Firebase Auth Console.`, "success");
         loadAndRenderUsersForAdmin(); 
     } catch (error) {
         console.error(`Error deleting user profile "${username}" (UID: ${userId}) from Firestore:`, "Code:", error.code, "Message:", error.message);
-        showFeedback(userManagementFeedback, `Erro ao excluir perfil do usuário "${capitalizeName(username)}". Tente novamente.`, "error");
+        showFeedback(userManagementFeedback, `Erro ao excluir perfil de "${capitalizeName(username)}". Tente novamente.`, "error");
     }
 }
 

@@ -29,6 +29,7 @@
     <!-- Tela de Login -->
     <section id="loginView" class="auth-view">
         <div class="auth-container">
+            <img src="logo_ibisolar.png" class="login-bg-logo" alt="">
             <h2>Login</h2>
             <form id="loginForm">
                 <div class="form-group">
@@ -286,23 +287,55 @@
                             <option value="">-- Selecione um Motorista --</option>
                         </select>
                     </div>
-                    <button id="adminLoadDriverTripsBtn" class="control-btn">Carregar Fretes</button>
+                    <button id="adminLoadDriverTripsBtn" class="control-btn">Carregar Resumos</button>
+                </div>
+                
+                <div id="adminDriverFiltersContainer" class="dashboard-controls" style="margin-top:1rem; display:none;">
+                    <div class="filter-grid">
+                         <div class="form-group">
+                            <label for="adminMonthFilterSelect">Filtrar por Mês:</label>
+                            <select id="adminMonthFilterSelect">
+                                <option value="">Todos os Meses</option>
+                                <option value="01">Janeiro</option>
+                                <option value="02">Fevereiro</option>
+                                <option value="03">Março</option>
+                                <option value="04">Abril</option>
+                                <option value="05">Maio</option>
+                                <option value="06">Junho</option>
+                                <option value="07">Julho</option>
+                                <option value="08">Agosto</option>
+                                <option value="09">Setembro</option>
+                                <option value="10">Outubro</option>
+                                <option value="11">Novembro</option>
+                                <option value="12">Dezembro</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="adminYearFilterSelect">Filtrar por Ano:</label>
+                            <select id="adminYearFilterSelect">
+                                <option value="">Todos os Anos</option>
+                                <!-- Anos serão populados por JS -->
+                            </select>
+                        </div>
+                    </div>
                 </div>
 
+
                 <div id="adminDriverTripsSection" style="display: none;">
-                    <h3 id="adminSelectedDriverNameDisplay">Fretes de [Motorista]</h3>
-                    <table id="adminDriverTripsTable">
+                    <h3 id="adminSelectedDriverNameDisplay">Resumos Mensais de [Motorista]</h3>
+                    <table id="adminDriverTripsTable"> <!-- Tabela reutilizada para resumos mensais -->
                         <thead>
                             <tr>
-                                <th>Data</th>
-                                <th>Tipo de Carga</th>
+                                <th>Mês/Ano</th>
+                                <th>Qtd. Fretes</th>
+                                <th>Total Frete Bruto (R$)</th>
+                                <th>Despesas Totais (R$)</th>
                                 <th>Lucro Líquido (R$)</th>
-                                <th>Ações</th>
                             </tr>
                         </thead>
                         <tbody id="adminDriverTripsTableBody"></tbody>
                     </table>
-                    <p id="adminDriverTripsPlaceholder">Nenhum frete encontrado para este motorista.</p>
+                    <p id="adminDriverTripsPlaceholder">Nenhum resumo encontrado para este motorista ou filtros.</p>
                 </div>
                 <p id="adminGeneralFeedback" class="feedback-message" aria-live="polite"></p>
             </section>

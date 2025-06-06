@@ -27,7 +27,22 @@ body {
     box-shadow: 0 4px 15px rgba(0,0,0,0.1);
     width: 100%;
     max-width: 400px;
+    position: relative; /* Added for positioning context for the logo */
+    overflow: hidden; /* To contain the absolute positioned logo if it overflows */
 }
+
+.login-bg-logo {
+    position: absolute;
+    top: 4.3rem; /* Adjusted to align with the H2's bottom border */
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%; /* Occupy the width of the auth-container */
+    height: auto;
+    opacity: 0.3;
+    z-index: 0; /* Behind other content */
+    pointer-events: none; /* Make image non-interactive */
+}
+
 
 /*
 .login-logo-container {
@@ -47,7 +62,24 @@ body {
     color: #2c3e50;
     margin-top: 0;
     margin-bottom: 1.5rem;
+    position: relative; /* Ensure it's above the logo */
+    z-index: 1; /* Ensure it's above the logo */
 }
+
+/* Specific to loginView H2 for border as requested for line reference */
+#loginView .auth-container h2 {
+    border-bottom: 2px solid #e0e0e0; /* This is the "line" */
+    padding-bottom: 0.5rem;
+}
+
+
+.auth-container form,
+.auth-container .auth-switch,
+.auth-container .feedback-message {
+    position: relative; /* Ensure form and switch link are above the logo */
+    z-index: 1; /* Ensure form and switch link are above the logo */
+}
+
 
 .auth-switch {
     text-align: center;
@@ -136,7 +168,7 @@ main {
     display: block;
 }
 
-h2 {
+h2 { /* General h2, login specific one is above */
     color: #2c3e50;
     margin-top: 0;
     margin-bottom: 1.5rem;
@@ -341,10 +373,11 @@ fieldset legend {
 
 
 /* Admin Panel Refactor */
-#adminDriverTripsSection h3 {
+#adminDriverTripsSection h3 { /* Now for Monthly Summaries title */
     margin-top: 0;
     color: #2c3e50;
 }
+/* This table is now used for Monthly Summaries for a driver */
 #adminDriverTripsTable {
     width: 100%;
     border-collapse: collapse;
@@ -367,14 +400,14 @@ fieldset legend {
 #adminDriverTripsTable tbody tr:hover {
     background-color: #f1f1f1;
 }
-#adminDriverTripsPlaceholder {
+#adminDriverTripsPlaceholder { /* Placeholder for monthly summaries table */
     text-align: center;
     padding: 1rem;
     color: #777;
     font-style: italic;
 }
 
-/* Trip Detail Modal */
+/* Trip Detail Modal (remains for other potential uses, not directly linked from monthly summary table) */
 #adminTripDetailModal .modal-content.large-modal {
     max-width: 800px; /* Larger modal for trip details */
     max-height: 80vh;
@@ -416,19 +449,19 @@ fieldset legend {
 #adminTripDetailContent .trip-financial-summary strong.loss { color: #e74c3c; }
 
 
-/* User Management Table & Admin Tables */
-#userManagementTableContainer, #adminDriverTripsSection { margin-top: 2rem; }
-#userManagementTable, #adminDriverTripsTable { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-#userManagementTable th, #userManagementTable td, #adminDriverTripsTable th, #adminDriverTripsTable td {
+/* User Management Table */
+#userManagementTableContainer { margin-top: 2rem; }
+#userManagementTable { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+#userManagementTable th, #userManagementTable td {
     border: 1px solid #ddd; padding: 0.75rem; text-align: left; font-size: 0.9rem; vertical-align: middle;
 }
-#userManagementTable th, #adminDriverTripsTable th { background-color: #e9edf0; font-weight: 500; }
-#userManagementTable th:hover, #adminDriverTripsTable th:hover { background-color: #dde3e7; }
-#userManagementTable tbody tr:nth-child(even), #adminDriverTripsTable tbody tr:nth-child(even) { background-color: #f9f9f9; }
-#userManagementTable tbody tr:hover, #adminDriverTripsTable tbody tr:hover { background-color: #f1f1f1; }
+#userManagementTable th { background-color: #e9edf0; font-weight: 500; }
+#userManagementTable th:hover { background-color: #dde3e7; }
+#userManagementTable tbody tr:nth-child(even) { background-color: #f9f9f9; }
+#userManagementTable tbody tr:hover { background-color: #f1f1f1; }
 
 
-/* General Tables */
+/* General Tables (My Fretes) */
 #myTripsTableContainer { margin-top: 2rem; }
 #myTripsTable { width: 100%; border-collapse: collapse; margin-top: 1rem; }
 #myTripsTable th, #myTripsTable td { border: 1px solid #ddd; padding: 0.75rem; text-align: left; font-size: 0.9rem; vertical-align: middle; }

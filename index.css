@@ -1,4 +1,5 @@
 
+
 body {
     font-family: 'Roboto', sans-serif;
     margin: 0;
@@ -27,40 +28,26 @@ body {
     box-shadow: 0 4px 15px rgba(0,0,0,0.1);
     width: 100%;
     max-width: 400px;
-    position: relative; /* Added for positioning context for the logo */
-    overflow: hidden; /* To contain the absolute positioned logo if it overflows */
+    position: relative; 
+    overflow: hidden; 
 }
 
 .login-bg-logo {
     position: absolute;
-    top: 2.8rem; /* Adjusted: was 3.1rem, moved up to re-center with new H2 pos */
+    top: 2.8rem; 
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 100%; /* Occupy the width of the auth-container */
+    width: 100%; 
     height: auto;
     opacity: 0.3;
-    z-index: 0; /* Behind other content */
-    pointer-events: none; /* Make image non-interactive */
+    z-index: 0; 
+    pointer-events: none; 
 }
 
-
-/*
-.login-logo-container {
-    text-align: center;
-    margin-bottom: 1.5rem;
-}
-
-.login-logo-container img {
-    max-width: 220px;
-    height: auto;
-    display: inline-block;
-}
-*/
 
 .auth-container h2 {
     text-align: center;
     color: #2c3e50;
-    /* margin-top will be specific to loginView h2 if adjusted */
     margin-bottom: 1.5rem;
     position: relative; 
     z-index: 1; 
@@ -74,16 +61,24 @@ body {
     letter-spacing: 0.05em; 
     border-bottom: none; 
     padding-bottom: 0; 
-    margin-top: -0.5rem; /* Added to move text higher */
-    text-transform: uppercase; /* Added for uppercase text */
+    margin-top: -0.5rem; 
+    text-transform: uppercase; 
 }
 
 
-.auth-container form,
-.auth-container .auth-switch,
-.auth-container .feedback-message {
+#loginView .auth-container form,
+#loginView .auth-container .auth-switch,
+#loginView .auth-container .feedback-message,
+#registerView .auth-container form,
+#registerView .auth-container .auth-switch,
+#registerView .auth-container .feedback-message {
     position: relative; 
     z-index: 1; 
+}
+/* Ensure h2 in registerView is also above the logo, if not already covered by general .auth-container h2 */
+#registerView .auth-container h2 {
+    position: relative;
+    z-index: 1;
 }
 
 
@@ -174,9 +169,9 @@ main {
     display: block;
 }
 
-h2 { /* General h2, login specific one is above */
+h2 { /* General h2 */
     color: #2c3e50;
-    margin-top: 0; /* General H2s will still have 0 margin-top by default */
+    margin-top: 0; 
     margin-bottom: 1.5rem;
     border-bottom: 2px solid #e0e0e0;
     padding-bottom: 0.5rem;

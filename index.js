@@ -186,6 +186,11 @@ const adminCreateUserPasswordInput = document.getElementById('adminCreateUserPas
 const adminCreateUserConfirmPasswordInput = document.getElementById('adminCreateUserConfirmPassword');
 const adminCreateUserFeedback = document.getElementById('adminCreateUserFeedback');
 
+// DOM Elements para importação de Excel
+const excelFileInput = document.getElementById('excelFileInput');
+const importExcelBtn = document.getElementById('importExcelBtn');
+const excelImportFeedback = document.getElementById('excelImportFeedback');
+
 
 let fuelEntryIdCounter = 0; 
 
@@ -229,8 +234,8 @@ function formatDate(dateInput) {
     let dateToFormat;
 
     if (typeof dateInput === 'string') {
-        if (!dateInput.includes('T')) { 
-             dateToFormat = new Date(dateInput + 'T00:00:00Z');
+        if (!dateInput.includes('T') && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) { 
+             dateToFormat = new Date(dateInput + 'T00:00:00Z'); // Assume UTC if only date
         } else {
             dateToFormat = new Date(dateInput); 
         }
@@ -247,7 +252,19 @@ function formatDate(dateInput) {
         console.warn("Date parsing resulted in NaN in formatDate. Original input:", dateInput);
         return 'Data inválida';
     }
-    return dateToFormat.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+    // Return in YYYY-MM-DD format for consistency with form input and Firestore
+    const year = dateToFormat.getUTCFullYear();
+    const month = (dateToFormat.getUTCMonth() + 1).toString().padStart(2, '0');
+    const day = dateToFormat.getUTCDate().toString().padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function formatDisplayDate(dateInput) { // For display purposes
+    if (!dateInput) return 'Data inválida';
+    const formatted = formatDate(dateInput); // Get YYYY-MM-DD
+    if (formatted === 'Data inválida') return formatted;
+    const [year, month, day] = formatted.split('-');
+    return `${day}/${month}/${year}`; // Convert to DD/MM/YYYY
 }
 
 function formatMonthYear(yearMonthKey) { 
@@ -451,6 +468,8 @@ async function handleLogout() {
         if(userManagementTableBody) userManagementTableBody.innerHTML = '';
         if(adminCreateUserForm) adminCreateUserForm.reset(); 
         if(adminCreateUserFeedback) {adminCreateUserFeedback.textContent = ''; adminCreateUserFeedback.style.display = 'none';}
+        if(excelFileInput) excelFileInput.value = '';
+        if(excelImportFeedback) {excelImportFeedback.textContent = ''; excelImportFeedback.style.display = 'none';}
 
 
         currentUserForMyTripsSearch = null;
@@ -666,7 +685,7 @@ async function handleTripFormSubmit(event) {
 
     const tripDataObjectFromForm = {
         userId: loggedInUser.uid,
-        driverName: (formData.get('driverName')).trim() || loggedInUserProfile.username,
+        driverName: (formData.get('driverName')).trim() || loggedInUserProfile.username, // Nome original, não capitalizado no BD
         date: formData.get('tripDate'),
         cargoType: formData.get('cargoType') || '',
         kmInitial: kmInitialVal,
@@ -825,7 +844,7 @@ function renderMyTripsTable(tripsToRender) {
 
     tripsToRender.forEach(trip => {
         const row = myTripsTableBody.insertRow();
-        row.insertCell().textContent = formatDate(trip.date);
+        row.insertCell().textContent = formatDisplayDate(trip.date);
         row.insertCell().textContent = trip.cargoType || 'N/A';
         row.insertCell().textContent = formatCurrency(trip.freightValue);
         row.insertCell().textContent = formatCurrency(trip.totalExpenses);
@@ -835,7 +854,7 @@ function renderMyTripsTable(tripsToRender) {
         const editButton = document.createElement('button');
         editButton.className = 'control-btn small-btn';
         editButton.textContent = 'Editar';
-        editButton.setAttribute('aria-label', `Editar frete de ${formatDate(trip.date)}`);
+        editButton.setAttribute('aria-label', `Editar frete de ${formatDisplayDate(trip.date)}`);
         editButton.onclick = () => loadTripForEditing(trip.id);
         actionsCell.appendChild(editButton);
 
@@ -852,7 +871,7 @@ function renderMyTripsTable(tripsToRender) {
             const deleteButton = document.createElement('button');
             deleteButton.className = 'control-btn danger-btn small-btn';
             deleteButton.textContent = 'Excluir';
-            deleteButton.setAttribute('aria-label', `Excluir frete de ${formatDate(trip.date)}`);
+            deleteButton.setAttribute('aria-label', `Excluir frete de ${formatDisplayDate(trip.date)}`);
             deleteButton.style.marginLeft = '0.5rem';
             deleteButton.onclick = () => confirmDeleteTrip(trip.id, trip.driverName);
             actionsCell.appendChild(deleteButton);
@@ -900,7 +919,7 @@ async function loadTripForEditing(tripId) {
             if (cancelEditBtn) cancelEditBtn.style.display = 'inline-block';
             showView('userView'); 
             if (userView) userView.scrollIntoView({ behavior: 'smooth' });
-            showFeedback(userFormFeedback, `Editando frete de ${capitalizeName(trip.driverName)} do dia ${formatDate(trip.date)}.`, "info");
+            showFeedback(userFormFeedback, `Editando frete de ${capitalizeName(trip.driverName)} do dia ${formatDisplayDate(trip.date)}.`, "info");
 
         } else {
             showFeedback(myTripsFeedback, "Frete não encontrado para edição.", "error");
@@ -1210,7 +1229,7 @@ function showAdminTripDetailModal(trip) {
         <div class="trip-detail-section">
             <h4>Informações Gerais</h4>
             <p><strong>Motorista:</strong> ${escapeHtml(capitalizeName(trip.driverName))}</p>
-            <p><strong>Data:</strong> ${formatDate(trip.date)}</p>
+            <p><strong>Data:</strong> ${formatDisplayDate(trip.date)}</p>
             <p><strong>Tipo de Carga:</strong> ${escapeHtml(trip.cargoType) || 'N/A'}</p>
             <p><strong>Km Inicial:</strong> ${formatGenericNumber(trip.kmInitial, 0, 0)}</p>
             <p><strong>Km Final:</strong> ${formatGenericNumber(trip.kmFinal, 0, 0)}</p>
@@ -1289,7 +1308,7 @@ async function handleAdminCreateUser(event) {
 
         const newUserProfile = {
             uid: firebaseUser.uid,
-            username: rawUsername,
+            username: rawUsername, // Salva o nome original
             email: firebaseUser.email || email,
             role: role,
             createdAt: Timestamp.now()
@@ -1519,6 +1538,13 @@ function initializeAdminView() {
     currentDriverMonthlySummaries = [];
     adminSelectedDriverUid = null;
     adminSelectedDriverName = null;
+
+    // Reset Excel import fields
+    if (excelFileInput) excelFileInput.value = '';
+    if (excelImportFeedback) {
+        excelImportFeedback.textContent = '';
+        excelImportFeedback.style.display = 'none';
+    }
 }
 
 function initializeUserManagementView() {
@@ -1530,6 +1556,209 @@ function initializeUserManagementView() {
         adminCreateUserFeedback.style.display = 'none';
     }
 }
+
+// --- EXCEL IMPORT FUNCTION ---
+async function handleExcelFileImport() {
+    if (!excelFileInput || !excelImportFeedback || !importExcelBtn) {
+        console.error("Elementos de importação de Excel não encontrados.");
+        return;
+    }
+    const file = excelFileInput.files ? excelFileInput.files[0] : null;
+    if (!file) {
+        showFeedback(excelImportFeedback, "Por favor, selecione um arquivo Excel.", "error");
+        return;
+    }
+
+    showFeedback(excelImportFeedback, "Processando planilha...", "info");
+    importExcelBtn.disabled = true;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+        try {
+            const data = event.target.result;
+            const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false }); // raw:false to get formatted strings
+
+            if (jsonData.length < 2) {
+                showFeedback(excelImportFeedback, "Planilha vazia ou sem dados após o cabeçalho.", "error");
+                return;
+            }
+
+            const headers = jsonData[0].map(h => String(h).trim().toLowerCase());
+            const rows = jsonData.slice(1);
+
+            const expectedHeaders = {
+                data: "data",
+                motorista: "motorista",
+                tipo_carga: "tipo carga", // Normalized
+                km_inicial: "km inicial",
+                km_final: "km final",
+                peso_kg: "peso (kg)", // Allow variations
+                valor_unidade_rs: "v. unidade (r$)",
+                valor_frete_rs: "valor frete (r$)",
+                litros1: "litros1",
+                valor_litro1: "valor/litro1",
+                desconto1: "desconto1",
+                litros2: "litros2",
+                valor_litro2: "valor/litro2",
+                desconto2: "desconto2",
+                litros3: "litros3",
+                valor_litro3: "valor/litro3",
+                desconto3: "desconto3",
+                arla32_rs: "arla-32 (r$)",
+                pedagio_rs: "pedagio (r$)",
+                comissao_rs: "comissao (r$)",
+                outras_despesas_rs: "outras despesas (r$)",
+                descricao_outras_despesas: "descricao outras despesas",
+                valor_declarado_rs: "valor declarado (r$)"
+            };
+            
+            // Find actual index of each expected header
+            const headerMap = {};
+            Object.keys(expectedHeaders).forEach(key => {
+                const index = headers.indexOf(expectedHeaders[key]);
+                if (index !== -1) {
+                    headerMap[key] = index;
+                } else {
+                     // Try some variations for common headers like "Valor Frete" instead of "Valor Frete (R$)"
+                    if (key === 'valor_frete_rs' && headers.indexOf('valor frete') !== -1) headerMap[key] = headers.indexOf('valor frete');
+                    else if (key === 'peso_kg' && headers.indexOf('peso') !== -1) headerMap[key] = headers.indexOf('peso');
+                    else if (key === 'arla32_rs' && headers.indexOf('arla-32') !== -1) headerMap[key] = headers.indexOf('arla-32');
+                    else if (key === 'pedagio_rs' && headers.indexOf('pedagio') !== -1) headerMap[key] = headers.indexOf('pedagio');
+                    else if (key === 'comissao_rs' && headers.indexOf('comissao') !== -1) headerMap[key] = headers.indexOf('comissao');
+                    else if (key === 'outras_despesas_rs' && headers.indexOf('outras despesas') !== -1) headerMap[key] = headers.indexOf('outras despesas');
+                    else if (key === 'valor_declarado_rs' && headers.indexOf('valor declarado') !== -1) headerMap[key] = headers.indexOf('valor declarado');
+                    else {
+                        console.warn(`Cabeçalho esperado "${expectedHeaders[key]}" não encontrado na planilha.`);
+                    }
+                }
+            });
+
+            if (headerMap.data === undefined || headerMap.motorista === undefined || headerMap.valor_frete_rs === undefined) {
+                showFeedback(excelImportFeedback, "Cabeçalhos obrigatórios (Data, Motorista, Valor Frete (R$)) não encontrados na planilha.", "error");
+                return;
+            }
+
+            const qProfiles = query(userProfilesCollection, where("role", "==", "motorista"));
+            const profileSnapshot = await getDocs(qProfiles);
+            const motoristaProfiles = new Map();
+            profileSnapshot.forEach(doc => {
+                const profile = doc.data();
+                motoristaProfiles.set(profile.username.toLowerCase(), profile.uid);
+            });
+
+            const batch = writeBatch(db);
+            let importedCount = 0;
+            const errorMessages = [];
+
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                const tripData = {};
+
+                const motoristaNome = String(row[headerMap.motorista] || '').trim();
+                const motoristaUid = motoristaProfiles.get(motoristaNome.toLowerCase());
+
+                if (!motoristaUid) {
+                    errorMessages.push(`Linha ${i + 2}: Motorista "${motoristaNome}" não encontrado no sistema. Frete ignorado.`);
+                    continue;
+                }
+                tripData.userId = motoristaUid;
+                tripData.driverName = motoristaNome; // Store original name from sheet
+
+                const dateValue = row[headerMap.data];
+                tripData.date = formatDate(dateValue); // formatDate now returns YYYY-MM-DD
+                if (tripData.date === 'Data inválida') {
+                     errorMessages.push(`Linha ${i + 2}: Data inválida "${dateValue}". Frete ignorado.`);
+                    continue;
+                }
+                
+                tripData.freightValue = parseFloat(row[headerMap.valor_frete_rs]) || 0;
+                if (tripData.freightValue <= 0) {
+                     errorMessages.push(`Linha ${i + 2}: Valor do Frete inválido ou zero. Frete ignorado.`);
+                    continue;
+                }
+                
+                tripData.cargoType = String(row[headerMap.tipo_carga] || '').trim();
+                tripData.kmInitial = parseFloat(row[headerMap.km_inicial]) || 0;
+                tripData.kmFinal = parseFloat(row[headerMap.km_final]) || 0;
+                tripData.kmDriven = (tripData.kmFinal > tripData.kmInitial) ? tripData.kmFinal - tripData.kmInitial : 0;
+                tripData.weight = parseFloat(row[headerMap.peso_kg]) || 0;
+                tripData.unitValue = parseFloat(row[headerMap.valor_unidade_rs]) || 0;
+
+                tripData.fuelEntries = [];
+                let totalFuelCostCalculated = 0;
+                for (let j = 1; j <= 3; j++) { // Check for up to 3 fuel entries
+                    const litrosKey = `litros${j}`;
+                    const valorLitroKey = `valor_litro${j}`;
+                    const descontoKey = `desconto${j}`;
+
+                    if (headerMap[litrosKey] !== undefined && headerMap[valorLitroKey] !== undefined) {
+                        const liters = parseFloat(row[headerMap[litrosKey]]) || 0;
+                        const valuePerLiter = parseFloat(row[headerMap[valorLitroKey]]) || 0;
+                        const discount = parseFloat(row[headerMap[descontoKey]]) || 0;
+                        if (liters > 0 && valuePerLiter > 0) {
+                            const totalValue = (liters * valuePerLiter) - discount;
+                            tripData.fuelEntries.push({
+                                id: `imported_fuel_${i}_${j}`,
+                                liters,
+                                valuePerLiter,
+                                discount,
+                                totalValue
+                            });
+                            totalFuelCostCalculated += totalValue;
+                        }
+                    }
+                }
+                tripData.totalFuelCost = totalFuelCostCalculated;
+
+                tripData.arla32Cost = parseFloat(row[headerMap.arla32_rs]) || 0;
+                tripData.tollCost = parseFloat(row[headerMap.pedagio_rs]) || 0;
+                tripData.commissionCost = parseFloat(row[headerMap.comissao_rs]) || 0;
+                tripData.otherExpenses = parseFloat(row[headerMap.outras_despesas_rs]) || 0;
+                tripData.expenseDescription = String(row[headerMap.descricao_outras_despesas] || '').trim();
+                tripData.declaredValue = parseFloat(row[headerMap.valor_declarado_rs]) || 0;
+
+                tripData.totalExpenses = tripData.totalFuelCost + tripData.arla32Cost + tripData.tollCost + tripData.commissionCost + tripData.otherExpenses;
+                tripData.netProfit = tripData.freightValue - tripData.totalExpenses;
+                tripData.createdAt = Timestamp.now();
+
+                const newTripRef = doc(collection(db, "trips"));
+                batch.set(newTripRef, tripData);
+                importedCount++;
+            }
+
+            if (importedCount > 0) {
+                await batch.commit();
+            }
+            
+            let feedbackMsg = `${importedCount} frete(s) importado(s) com sucesso.`;
+            if (errorMessages.length > 0) {
+                feedbackMsg += `\nErros/Avisos:\n${errorMessages.join('\n')}`;
+            }
+            showFeedback(excelImportFeedback, feedbackMsg, errorMessages.length > 0 && importedCount > 0 ? "info" : (importedCount > 0 ? "success" : "error"));
+            updateAdminSummary(); // Refresh admin summary if any trips were added
+            if (adminSelectedDriverUid) loadAndRenderAdminDriverMonthlySummaries();
+
+
+        } catch (error) {
+            console.error("Erro ao processar planilha Excel:", error);
+            showFeedback(excelImportFeedback, `Erro ao processar planilha: ${error.message}`, "error");
+        } finally {
+            if (excelFileInput) excelFileInput.value = ''; // Clear file input
+            if (importExcelBtn) importExcelBtn.disabled = false;
+        }
+    };
+
+    reader.onerror = () => {
+        showFeedback(excelImportFeedback, "Não foi possível ler o arquivo.", "error");
+        if (importExcelBtn) importExcelBtn.disabled = false;
+    };
+
+    reader.readAsArrayBuffer(file);
+}
+
 
 // --- FUNÇÃO DE EXPORTAÇÃO HTML ---
 function convertToHTMLTable(dataArray, headers, reportMonthStr) {
@@ -1632,7 +1861,7 @@ async function handleExportAdminReport() {
         ];
 
         const dataForHTML = reportTrips.map(trip => [
-            formatDate(trip.date),
+            formatDisplayDate(trip.date),
             capitalizeName(userMap.get(trip.userId) || trip.driverName), 
             trip.cargoType || '',
             formatGenericNumber(trip.kmInitial, 0, 0),
@@ -1779,6 +2008,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (exportAdminReportBtn) {
         exportAdminReportBtn.addEventListener('click', handleExportAdminReport);
     }
+     if (importExcelBtn) {
+        importExcelBtn.addEventListener('click', handleExcelFileImport);
+    }
+
 
     if (adminLoadDriverTripsBtn) { 
         adminLoadDriverTripsBtn.addEventListener('click', loadAndRenderAdminDriverMonthlySummaries);

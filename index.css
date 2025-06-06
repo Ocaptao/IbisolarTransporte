@@ -287,6 +287,7 @@ fieldset legend {
 .form-group input[type="date"],
 .form-group input[type="number"],
 .form-group input[type="password"],
+.form-group input[type="file"], /* Added for file input */
 .form-group select {
     padding: 0.75rem;
     border: 1px solid #ccc;
@@ -625,6 +626,40 @@ footer { background-color: #34495e; color: #ecf0f1; text-align: center; padding:
     margin-bottom: 0.5rem;
 }
 
+/* Estilos para a seção de importação de Excel */
+#excelImportContainer {
+    background-color: #f0f4f8; /* Tom um pouco diferente para destacar */
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+    border: 1px solid #d6dde4;
+}
+#excelImportContainer h3 {
+    margin-top: 0;
+    color: #2c3e50;
+    border-bottom: 1px solid #c8d1d9;
+    padding-bottom: 0.5rem;
+}
+#excelImportContainer .form-group label {
+    font-weight: 500;
+}
+#excelImportContainer input[type="file"] {
+    border: 1px solid #ccc;
+    padding: 0.5rem;
+    border-radius: 4px;
+    display: block; /* Para ocupar a largura e facilitar o clique */
+    width: 100%;
+}
+#excelImportContainer #importExcelBtn {
+    margin-top: 1rem;
+}
+#excelImportFeedback {
+    margin-top: 1rem;
+    font-size: 0.9rem;
+    white-space: pre-wrap; /* Para exibir quebras de linha nas mensagens de erro */
+}
+
 
 @media (max-width: 768px) {
     header { padding: 1rem; }
@@ -669,12 +704,14 @@ footer { background-color: #34495e; color: #ecf0f1; text-align: center; padding:
     #adminCreateUserForm .form-grid { /* Adicionado para o novo formulário */
         grid-template-columns: 1fr;
     }
-    #adminDriverSelectorContainer {
+    #adminDriverSelectorContainer, #excelImportContainer { /* Adicionado excelImportContainer */
         flex-direction: column;
         align-items: stretch;
     }
     #adminDriverSelectorContainer .form-group,
-    #adminDriverSelectorContainer button {
+    #adminDriverSelectorContainer button,
+    #excelImportContainer .form-group, /* Adicionado excelImportContainer */
+    #excelImportContainer button { /* Adicionado excelImportContainer */
         width: 100%;
     }
     .form-actions { flex-direction: column; }

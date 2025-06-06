@@ -1,5 +1,4 @@
 
-
 body {
     font-family: 'Roboto', sans-serif;
     margin: 0;
@@ -34,7 +33,7 @@ body {
 
 .login-bg-logo {
     position: absolute;
-    top: 3.1rem; /* Adjusted to center behind new H2 text size */
+    top: 2.8rem; /* Adjusted: was 3.1rem, moved up to re-center with new H2 pos */
     left: 50%;
     transform: translate(-50%, -50%);
     width: 100%; /* Occupy the width of the auth-container */
@@ -61,28 +60,30 @@ body {
 .auth-container h2 {
     text-align: center;
     color: #2c3e50;
-    margin-top: 0;
+    /* margin-top will be specific to loginView h2 if adjusted */
     margin-bottom: 1.5rem;
-    position: relative; /* Ensure it's above the logo */
-    z-index: 1; /* Ensure it's above the logo */
+    position: relative; 
+    z-index: 1; 
 }
 
 /* Specific to loginView H2 */
 #loginView .auth-container h2 {
     font-family: 'Cloud Lucent', sans-serif; 
     font-weight: bold; 
-    font-size: 2.2rem; /* Increased font size */
-    letter-spacing: 0.05em; /* Added letter spacing */
-    border-bottom: none; /* Explicitly remove border */
-    padding-bottom: 0; /* Explicitly remove padding */
+    font-size: 2.2rem; 
+    letter-spacing: 0.05em; 
+    border-bottom: none; 
+    padding-bottom: 0; 
+    margin-top: -0.5rem; /* Added to move text higher */
+    text-transform: uppercase; /* Added for uppercase text */
 }
 
 
 .auth-container form,
 .auth-container .auth-switch,
 .auth-container .feedback-message {
-    position: relative; /* Ensure form and switch link are above the logo */
-    z-index: 1; /* Ensure form and switch link are above the logo */
+    position: relative; 
+    z-index: 1; 
 }
 
 
@@ -103,7 +104,7 @@ body {
 
 /* Container da Aplicação Principal */
 #appContainer {
-    display: flex; /* Changed from none to flex to manage layout */
+    display: flex; 
     flex-direction: column;
     min-height: 100vh;
 }
@@ -175,7 +176,7 @@ main {
 
 h2 { /* General h2, login specific one is above */
     color: #2c3e50;
-    margin-top: 0;
+    margin-top: 0; /* General H2s will still have 0 margin-top by default */
     margin-bottom: 1.5rem;
     border-bottom: 2px solid #e0e0e0;
     padding-bottom: 0.5rem;
@@ -248,7 +249,7 @@ fieldset legend {
 .form-group {
     display: flex;
     flex-direction: column;
-    margin-bottom: 1rem; /* Added default margin for auth forms */
+    margin-bottom: 1rem; 
 }
 
 .form-group.full-width {
@@ -276,9 +277,9 @@ fieldset legend {
 }
 
 .form-group input[readonly] {
-    background-color: #e9ecef; /* Light grey background */
-    cursor: not-allowed;      /* Indicates it's not editable */
-    opacity: 0.8;             /* Slightly faded appearance */
+    background-color: #e9ecef; 
+    cursor: not-allowed;      
+    opacity: 0.8;             
 }
 
 
@@ -374,15 +375,12 @@ fieldset legend {
 .filter-buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 .filter-buttons .control-btn { margin-top: 0; }
 
-/* User Management - Add User Form related styles removed as form is removed */
 
-
-/* Admin Panel Refactor */
-#adminDriverTripsSection h3 { /* Now for Monthly Summaries title */
+#adminDriverTripsSection h3 { 
     margin-top: 0;
     color: #2c3e50;
 }
-/* This table is now used for Monthly Summaries for a driver */
+
 #adminDriverTripsTable {
     width: 100%;
     border-collapse: collapse;
@@ -405,16 +403,16 @@ fieldset legend {
 #adminDriverTripsTable tbody tr:hover {
     background-color: #f1f1f1;
 }
-#adminDriverTripsPlaceholder { /* Placeholder for monthly summaries table */
+#adminDriverTripsPlaceholder { 
     text-align: center;
     padding: 1rem;
     color: #777;
     font-style: italic;
 }
 
-/* Trip Detail Modal (remains for other potential uses, not directly linked from monthly summary table) */
+
 #adminTripDetailModal .modal-content.large-modal {
-    max-width: 800px; /* Larger modal for trip details */
+    max-width: 800px; 
     max-height: 80vh;
     overflow-y: auto;
 }
@@ -454,7 +452,6 @@ fieldset legend {
 #adminTripDetailContent .trip-financial-summary strong.loss { color: #e74c3c; }
 
 
-/* User Management Table */
 #userManagementTableContainer { margin-top: 2rem; }
 #userManagementTable { width: 100%; border-collapse: collapse; margin-top: 1rem; }
 #userManagementTable th, #userManagementTable td {
@@ -466,7 +463,6 @@ fieldset legend {
 #userManagementTable tbody tr:hover { background-color: #f1f1f1; }
 
 
-/* General Tables (My Fretes) */
 #myTripsTableContainer { margin-top: 2rem; }
 #myTripsTable { width: 100%; border-collapse: collapse; margin-top: 1rem; }
 #myTripsTable th, #myTripsTable td { border: 1px solid #ddd; padding: 0.75rem; text-align: left; font-size: 0.9rem; vertical-align: middle; }
@@ -476,7 +472,7 @@ fieldset legend {
 #myTripsTable tbody tr:hover { background-color: #f1f1f1; }
 
 #tablePlaceholder, #myTripsTablePlaceholder, #adminDriverTripsPlaceholder { text-align: center; padding: 1rem; color: #777; font-style: italic; display: block; }
-#myTripsTable, #adminDriverTripsTable { display: none; } /* Initially hidden */
+#myTripsTable, #adminDriverTripsTable { display: none; } 
 
 
 footer { background-color: #34495e; color: #ecf0f1; text-align: center; padding: 1rem; font-size: 0.85rem; }
@@ -486,7 +482,6 @@ footer { background-color: #34495e; color: #ecf0f1; text-align: center; padding:
 #myTripsFilterControls { margin-top: 1.5rem; margin-bottom: 1.5rem; padding: 1rem; background-color: #f9f9f9; border-radius: 4px; }
 #myTripsFilterControls h3 { margin-top: 0; }
 
-/* Modal Styles */
 .modal {
     position: fixed;
     left: 0;
@@ -521,7 +516,6 @@ footer { background-color: #34495e; color: #ecf0f1; text-align: center; padding:
     color: #333;
 }
 
-/* Summary Section Styles */
 .summary-section {
     background-color: #e9edf0;
     padding: 1.5rem;
@@ -565,7 +559,7 @@ footer { background-color: #34495e; color: #ecf0f1; text-align: center; padding:
 .metric-card p.profit { color: #27ae60; }
 .metric-card p.loss { color: #e74c3c; }
 
-.chart-container { /* Styles for chart container, though admin chart is removed */
+.chart-container { 
     background-color: #ffffff;
     padding: 1.5rem;
     border-radius: 6px;
@@ -580,7 +574,7 @@ footer { background-color: #34495e; color: #ecf0f1; text-align: center; padding:
     color: #34495e;
 }
 #adminSummaryContainer .dashboard-controls {
-    background-color: transparent; /* Override for admin summary filters */
+    background-color: transparent; 
     padding: 0;
     margin-bottom: 1rem;
 }
@@ -589,7 +583,6 @@ footer { background-color: #34495e; color: #ecf0f1; text-align: center; padding:
 }
 
 
-/* Responsive adjustments */
 @media (max-width: 768px) {
     header { padding: 1rem; }
     header h1 { font-size: 1.5rem; }
@@ -600,7 +593,6 @@ footer { background-color: #34495e; color: #ecf0f1; text-align: center; padding:
     .view { padding: 1.5rem; }
     .form-grid, .filter-grid, .summary-container,
     #fuelEntriesContainer .fuel-entry-item,
-    /* #addUserByAdminForm .form-grid, */ /* Removido */
     .summary-metrics {
         grid-template-columns: 1fr;
     }
@@ -616,7 +608,6 @@ footer { background-color: #34495e; color: #ecf0f1; text-align: center; padding:
     .form-actions .submit-btn, .form-actions .control-btn { width: 100%; }
 }
 
-/* Print Styles for Admin Trip Detail Modal */
 @media print {
     body * {
         visibility: hidden !important;
@@ -635,17 +626,17 @@ footer { background-color: #34495e; color: #ecf0f1; text-align: center; padding:
         border: none !important;
         overflow: visible !important;
         background-color: white !important;
-        padding: 0 !important; /* Reset padding for the modal itself */
+        padding: 0 !important; 
         margin: 0 !important;
     }
     #adminTripDetailModal .modal-content {
         box-shadow: none !important;
         border: none !important;
         margin: 0 !important;
-        padding: 10mm !important; /* Add some padding for print */
+        padding: 10mm !important; 
         width: 100% !important;
         max-width: 100% !important;
-        max-height: none !important; /* Allow content to flow */
+        max-height: none !important; 
         border-radius: 0 !important;
     }
     #adminTripDetailModal .close-modal-btn,
@@ -656,12 +647,12 @@ footer { background-color: #34495e; color: #ecf0f1; text-align: center; padding:
     #adminTripDetailModal h4,
     #adminTripDetailModal p,
     #adminTripDetailModal div {
-        color: #000 !important; /* Ensure text is black for printing */
+        color: #000 !important; 
     }
     #adminTripDetailModal .trip-detail-section {
-        background-color: #fff !important; /* Ensure section backgrounds are white */
-        border: 1px solid #ccc !important; /* Optional: add light borders to sections */
-        page-break-inside: avoid; /* Try to avoid breaking sections across pages */
+        background-color: #fff !important; 
+        border: 1px solid #ccc !important; 
+        page-break-inside: avoid; 
     }
     #adminTripDetailModal .fuel-entry-detail-item {
          border: 1px solid #eee !important;

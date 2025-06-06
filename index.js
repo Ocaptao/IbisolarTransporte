@@ -208,12 +208,17 @@ function normalizeUsernameForEmail(username) {
     if (cleaned.endsWith('.')) cleaned = cleaned.slice(0, -1);
 
     if (!cleaned) {
-        // Retorna uma string que possa ser invalidada ou tratada, ou um ID único.
-        // Se retornar uma string que não pode ser um nome de usuário válido para email,
-        // a lógica de criação de email falhará, o que é um comportamento desejável aqui.
         return `user.invalid.${generateId()}`; 
     }
     return cleaned;
+}
+
+function capitalizeName(nameString) {
+    if (!nameString || typeof nameString !== 'string') return '';
+    return nameString
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(' ');
 }
 
 
@@ -223,16 +228,14 @@ function formatDate(dateInput) {
     let dateToFormat;
 
     if (typeof dateInput === 'string') {
-        // Garante que a string seja tratada como UTC para evitar problemas de fuso horário
-        // ao converter de YYYY-MM-DD para Date object.
-        if (!dateInput.includes('T')) { // Se não tiver informação de tempo, assume UTC
+        if (!dateInput.includes('T')) { 
              dateToFormat = new Date(dateInput + 'T00:00:00Z');
         } else {
-            dateToFormat = new Date(dateInput); // Se já tiver T, assume que está correto
+            dateToFormat = new Date(dateInput); 
         }
     } else if (dateInput instanceof Date) { 
         dateToFormat = dateInput;
-    } else if (dateInput && typeof dateInput.toDate === 'function') { // Timestamp do Firestore
+    } else if (dateInput && typeof dateInput.toDate === 'function') { 
         dateToFormat = dateInput.toDate();
     } else {
         console.warn("Unsupported dateInput type in formatDate:", dateInput, typeof dateInput);
@@ -243,7 +246,6 @@ function formatDate(dateInput) {
         console.warn("Date parsing resulted in NaN in formatDate. Original input:", dateInput);
         return 'Data inválida';
     }
-    // Formata para dd/MM/yyyy, considerando que a data já é UTC.
     return dateToFormat.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 }
 
@@ -316,7 +318,6 @@ function showView(viewId) {
     const views = document.querySelectorAll('.view');
     views.forEach(view => view.style.display = 'none');
     if (loginView) loginView.style.display = 'none';
-    // registerView não é mais gerenciado aqui.
     if (appContainer) appContainer.style.display = 'none';
 
     const navButtons = document.querySelectorAll('.nav-btn');
@@ -326,10 +327,10 @@ function showView(viewId) {
     if (viewId === 'loginView' && loginView) {
         loginView.style.display = 'flex';
     } else if (appContainer) { 
-        appContainer.style.display = 'flex'; // Mostra o container principal
+        appContainer.style.display = 'flex'; 
         const targetView = document.getElementById(viewId);
         if (targetView) {
-            targetView.style.display = 'block'; // Mostra a view específica dentro do appContainer
+            targetView.style.display = 'block'; 
             const activeNavButton = document.getElementById(viewId + 'Btn');
             if (activeNavButton) {
                 activeNavButton.setAttribute('aria-pressed', 'true');
@@ -344,7 +345,7 @@ function showView(viewId) {
 function updateNavVisibility() {
     if (loggedInUser && loggedInUserProfile) {
         if(logoutBtn) logoutBtn.style.display = 'inline-block';
-        if (welcomeMessageContainer) welcomeMessageContainer.style.display = 'block'; // Garante que a mensagem seja visível
+        if (welcomeMessageContainer) welcomeMessageContainer.style.display = 'block'; 
 
         if (loggedInUserProfile.role === 'admin') {
             if(userViewBtn) userViewBtn.style.display = 'none'; 
@@ -367,7 +368,7 @@ function updateNavVisibility() {
         if(adminViewBtn) adminViewBtn.style.display = 'none';
         if(userManagementViewBtn) userManagementViewBtn.style.display = 'none';
         if(logoutBtn) logoutBtn.style.display = 'none';
-        if (welcomeMessageContainer) { // Oculta a mensagem se não estiver logado
+        if (welcomeMessageContainer) { 
              welcomeMessageContainer.innerHTML = '';
              welcomeMessageContainer.style.display = 'none';
         }
@@ -375,8 +376,6 @@ function updateNavVisibility() {
 }
 
 // --- AUTHENTICATION WITH FIREBASE ---
-// A função handleRegister foi completamente removida.
-
 async function handleLogin(event) {
     event.preventDefault();
     console.log("handleLogin function started.");
@@ -391,13 +390,13 @@ async function handleLogin(event) {
         console.log("Login aborted: username empty.");
         return;
     }
-     if (!normalizedUsernamePart || normalizedUsernamePart.includes("user.invalid")) { // Verifica se a normalização falhou
+     if (!normalizedUsernamePart || normalizedUsernamePart.includes("user.invalid")) { 
         showFeedback(loginFeedback, `Nome de usuário "${rawUsername}" inválido. Use um nome com letras ou números.`, "error");
         console.log("Login aborted: normalized username part is invalid or empty.");
         return;
     }
 
-    const email = `${normalizedUsernamePart}@example.com`; // Usa um domínio padrão
+    const email = `${normalizedUsernamePart}@example.com`; 
     const password = passwordInput.value;
     console.log("Attempting login with:", { rawUsername, normalizedUsernamePart, email });
 
@@ -436,7 +435,6 @@ async function handleLogout() {
         await signOut(authFirebase); 
         console.log("User signed out from Firebase Auth.");
         
-        // Limpar mensagem de boas-vindas no logout
         if (welcomeMessageContainer) {
             welcomeMessageContainer.innerHTML = '';
             welcomeMessageContainer.style.display = 'none';
@@ -444,14 +442,13 @@ async function handleLogout() {
 
         showFeedback(loginFeedback, "Você foi desconectado.", "info");
         
-        // Resetar outros estados da UI
         if(myTripsTableBody) myTripsTableBody.innerHTML = '';
         if(myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = 'Nenhum frete para exibir...';
         if(adminDriverTripsTableBody) adminDriverTripsTableBody.innerHTML = '';
         if(adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = 'Nenhum frete encontrado para este motorista.';
         if(adminSelectDriver) adminSelectDriver.innerHTML = '<option value="">-- Selecione um Motorista --</option>';
         if(userManagementTableBody) userManagementTableBody.innerHTML = '';
-        if(adminCreateUserForm) adminCreateUserForm.reset(); // Resetar form de criar usuário
+        if(adminCreateUserForm) adminCreateUserForm.reset(); 
         if(adminCreateUserFeedback) {adminCreateUserFeedback.textContent = ''; adminCreateUserFeedback.style.display = 'none';}
 
 
@@ -495,11 +492,11 @@ if (authFirebase) {
                         loggedInUserProfile = { id: userProfileDoc.id, ...userProfileDoc.data() };
                         console.log("User profile found in Firestore:", "Username:", loggedInUserProfile.username, "Role:", loggedInUserProfile.role);
 
-                        // Exibir mensagem de boas-vindas
                         if (welcomeMessageContainer && loggedInUserProfile) {
                             const icon = loggedInUserProfile.role === 'admin' ? '⚙️' : '🚗';
-                            welcomeMessageContainer.innerHTML = `Bem Vindo, <strong class="welcome-username">${escapeHtml(loggedInUserProfile.username)}</strong> <span class="welcome-icon">${icon}</span>`;
-                            welcomeMessageContainer.style.display = 'block'; // Ou 'flex', dependendo do layout do container pai
+                            const formattedUsername = capitalizeName(loggedInUserProfile.username);
+                            welcomeMessageContainer.innerHTML = `Bem Vindo, <strong class="welcome-username">${escapeHtml(formattedUsername)}</strong> <span class="welcome-icon">${icon}</span>`;
+                            welcomeMessageContainer.style.display = 'block';
                         }
 
                         updateNavVisibility();
@@ -550,7 +547,6 @@ if (authFirebase) {
             console.log("User is not authenticated (logged out or session ended).");
             loggedInUser = null;
             loggedInUserProfile = null;
-            // Ocultar mensagem de boas-vindas se não estiver logado
             if (welcomeMessageContainer) {
                 welcomeMessageContainer.innerHTML = '';
                 welcomeMessageContainer.style.display = 'none';
@@ -976,7 +972,7 @@ function updateDriverSummary(summaryTrips, driverDisplayName) {
         const summaryTitle = driverSummaryContainer.querySelector('h3');
         if (summaryTitle) {
             if (loggedInUserProfile?.role === 'admin' && currentUserForMyTripsSearch && currentUserForMyTripsSearch !== loggedInUserProfile.username) {
-                summaryTitle.textContent = `Resumo de Fretes de ${driverDisplayName}`;
+                summaryTitle.textContent = `Resumo de Fretes de ${capitalizeName(driverDisplayName)}`;
             } else {
                 summaryTitle.textContent = `Seu Resumo de Fretes`;
             }
@@ -1036,8 +1032,6 @@ async function populateAdminDriverSelect() {
             motoristas.push({ id: docSnap.id, ...docSnap.data() });
         });
 
-        // Atualiza a lista global `userProfiles` se estiver vazia ou para garantir que está atualizada
-        // com motoristas, para outros usos potenciais.
         const existingMotoristaIds = new Set(userProfiles.filter(p => p.role === 'motorista').map(p => p.id));
         motoristas.forEach(m => {
             if (!existingMotoristaIds.has(m.id)) {
@@ -1048,7 +1042,7 @@ async function populateAdminDriverSelect() {
 
         const options = ['<option value="">-- Selecione um Motorista --</option>'];
         motoristas.forEach((user) => { 
-            options.push(`<option value="${user.uid}" data-name="${user.username}">${user.username}</option>`);
+            options.push(`<option value="${user.uid}" data-name="${user.username}">${capitalizeName(user.username)}</option>`);
         });
         adminSelectDriver.innerHTML = options.join('');
 
@@ -1062,7 +1056,7 @@ function populateAdminYearFilterSelect() {
     if (!adminYearFilterSelect) return;
     const currentYear = new Date().getFullYear();
     const yearOptions = ['<option value="">Todos os Anos</option>'];
-    for (let i = 0; i < 5; i++) { // Current year and 4 previous years
+    for (let i = 0; i < 5; i++) { 
         const year = currentYear - i;
         yearOptions.push(`<option value="${year}">${year}</option>`);
     }
@@ -1099,9 +1093,9 @@ async function loadAndRenderAdminDriverMonthlySummaries() {
     adminSelectedDriverUid = driverUid;
     adminSelectedDriverName = driverName;
 
-    if (adminSelectedDriverNameDisplay) adminSelectedDriverNameDisplay.textContent = `Resumos Mensais de ${driverName}`;
+    if (adminSelectedDriverNameDisplay) adminSelectedDriverNameDisplay.textContent = `Resumos Mensais de ${capitalizeName(driverName)}`;
     if (adminDriverTripsTableBody) adminDriverTripsTableBody.innerHTML = '';
-    if (adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = `Carregando resumos de ${driverName}...`;
+    if (adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = `Carregando resumos de ${capitalizeName(driverName)}...`;
     if (adminDriverTripsTable) adminDriverTripsTable.style.display = 'none';
     if (adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.style.display = 'block';
     if (adminDriverTripsSection) adminDriverTripsSection.style.display = 'block';
@@ -1144,9 +1138,9 @@ async function loadAndRenderAdminDriverMonthlySummaries() {
 
     } catch (error) {
         console.error(`ERRO CRÍTICO ao carregar resumos para ${driverName} (UID: ${driverUid}):`, "Código:", error.code, "Mensagem:", error.message, "Detalhes:", error);
-        let userMessage = `Erro ao carregar resumos de ${driverName}. Verifique o console.`;
+        let userMessage = `Erro ao carregar resumos de ${capitalizeName(driverName)}. Verifique o console.`;
         if (error.code === 'failed-precondition') {
-            userMessage = `Erro ao carregar resumos de ${driverName}: Provavelmente um índice está faltando no Firestore. Verifique o console do navegador (F12).`;
+            userMessage = `Erro ao carregar resumos de ${capitalizeName(driverName)}: Provavelmente um índice está faltando no Firestore. Verifique o console do navegador (F12).`;
         }
         showFeedback(adminGeneralFeedback, userMessage, "error");
         if (adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = userMessage;
@@ -1175,7 +1169,7 @@ function renderAdminDriverMonthlySummariesTable() {
         if (adminDriverTripsTable) adminDriverTripsTable.style.display = 'none';
         if (adminDriverTripsPlaceholder) {
             adminDriverTripsPlaceholder.style.display = 'block';
-            adminDriverTripsPlaceholder.textContent = `Nenhum resumo encontrado para ${adminSelectedDriverName || 'o motorista selecionado'} com os filtros aplicados.`;
+            adminDriverTripsPlaceholder.textContent = `Nenhum resumo encontrado para ${capitalizeName(adminSelectedDriverName) || 'o motorista selecionado'} com os filtros aplicados.`;
         }
         return;
     }
@@ -1214,7 +1208,7 @@ function showAdminTripDetailModal(trip) {
     adminTripDetailContent.innerHTML = `
         <div class="trip-detail-section">
             <h4>Informações Gerais</h4>
-            <p><strong>Motorista:</strong> ${escapeHtml(trip.driverName)}</p>
+            <p><strong>Motorista:</strong> ${escapeHtml(capitalizeName(trip.driverName))}</p>
             <p><strong>Data:</strong> ${formatDate(trip.date)}</p>
             <p><strong>Tipo de Carga:</strong> ${escapeHtml(trip.cargoType) || 'N/A'}</p>
             <p><strong>Km Inicial:</strong> ${formatGenericNumber(trip.kmInitial, 0, 0)}</p>
@@ -1284,7 +1278,7 @@ async function handleAdminCreateUser(event) {
         return;
     }
 
-    const email = `${normalizedUsernamePart}@example.com`; // Assume um domínio padrão
+    const email = `${normalizedUsernamePart}@example.com`; 
     console.log("Admin creating user with details:", { rawUsername, normalizedUsernamePart, email, role });
 
     try {
@@ -1302,9 +1296,9 @@ async function handleAdminCreateUser(event) {
         await firebaseSetDoc(doc(userProfilesCollection, firebaseUser.uid), newUserProfile);
         console.log("User profile created in Firestore by admin.");
 
-        showFeedback(adminCreateUserFeedback, `Usuário "${rawUsername}" (${role}) criado com sucesso!`, "success");
+        showFeedback(adminCreateUserFeedback, `Usuário "${capitalizeName(rawUsername)}" (${role}) criado com sucesso!`, "success");
         if(adminCreateUserForm) adminCreateUserForm.reset();
-        loadAndRenderUsersForAdmin(); // Recarrega a lista de usuários
+        loadAndRenderUsersForAdmin(); 
 
     } catch (error) {
         console.error("CRITICAL ERROR during admin user creation:", "Code:", error.code, "Message:", error.message);
@@ -1354,25 +1348,61 @@ function renderUserManagementTable(usersToRender) {
     }
     usersToRender.forEach(userProf => {
         const row = userManagementTableBody.insertRow();
-        row.insertCell().textContent = userProf.username;
+        row.insertCell().textContent = capitalizeName(userProf.username);
         row.insertCell().textContent = userProf.role === 'admin' ? 'Administrador' : 'Motorista';
 
         const actionsCell = row.insertCell();
         const editButton = document.createElement('button');
         editButton.className = 'control-btn small-btn';
         editButton.textContent = 'Editar Papel';
-        editButton.setAttribute('aria-label', `Editar papel do usuário ${userProf.username}`);
+        editButton.setAttribute('aria-label', `Editar papel do usuário ${capitalizeName(userProf.username)}`);
         editButton.onclick = () => openEditUserModal(userProf);
         actionsCell.appendChild(editButton);
+
+        if (loggedInUserProfile && loggedInUserProfile.username === 'fabio' && userProf.username !== 'fabio') {
+            const deleteButton = document.createElement('button');
+            deleteButton.className = 'control-btn danger-btn small-btn delete-user-btn';
+            deleteButton.textContent = 'Excluir Usuário';
+            deleteButton.setAttribute('aria-label', `Excluir usuário ${capitalizeName(userProf.username)}`);
+            deleteButton.onclick = () => confirmDeleteUserProfile(userProf.uid, userProf.username);
+            actionsCell.appendChild(deleteButton);
+        }
     });
 }
+
+
+function confirmDeleteUserProfile(userId, username) {
+    if (!userId || !username) return;
+    if (username === 'fabio') {
+        showFeedback(userManagementFeedback, "Não é possível excluir o administrador principal 'fabio'.", "error");
+        return;
+    }
+
+    const confirmationMessage = `Tem certeza que deseja excluir o perfil do usuário "${capitalizeName(username)}"?\n\nEsta ação removerá os dados do perfil do sistema.\n\nIMPORTANTE: A conta de login deste usuário precisará ser removida manualmente do painel de Autenticação do Firebase Console para uma exclusão completa.`;
+
+    if (confirm(confirmationMessage)) {
+        deleteUserProfileFromFirestore(userId, username);
+    }
+}
+
+async function deleteUserProfileFromFirestore(userId, username) {
+    try {
+        await deleteDoc(doc(userProfilesCollection, userId));
+        showFeedback(userManagementFeedback, `Perfil do usuário "${capitalizeName(username)}" excluído do Firestore com sucesso. Lembre-se de remover a conta de login do Firebase Auth Console.`, "success");
+        loadAndRenderUsersForAdmin(); 
+    } catch (error) {
+        console.error(`Error deleting user profile "${username}" (UID: ${userId}) from Firestore:`, "Code:", error.code, "Message:", error.message);
+        showFeedback(userManagementFeedback, `Erro ao excluir perfil do usuário "${capitalizeName(username)}". Tente novamente.`, "error");
+    }
+}
+
 
 function openEditUserModal(userProf) {
     if (!editUserIdInput || !editUsernameDisplayInput || !editUserRoleSelect || !editUserNewPasswordInput || !editUserConfirmNewPasswordInput || !editUserModal) return;
 
     editingUserIdForAdmin = userProf.uid; 
     editUserIdInput.value = userProf.uid; 
-    editUsernameDisplayInput.value = userProf.username;
+    editUsernameDisplayInput.value = capitalizeName(userProf.username);
     editUserRoleSelect.value = userProf.role;
     editUserNewPasswordInput.value = ''; 
     editUserConfirmNewPasswordInput.value = '';
@@ -1402,9 +1432,6 @@ async function handleEditUserFormSubmit(event) {
         await updateDoc(userProfileRef, { role: newRole }); 
 
         if (newPassword) {
-            // A atualização de senha do Firebase Auth pelo cliente requer reautenticação recente.
-            // Para um painel de admin, isso geralmente é feito com Admin SDK no backend.
-            // Aqui, vamos apenas informar o usuário sobre a limitação.
             showFeedback(editUserFeedback, "Papel do usuário atualizado. A alteração de senha por esta tela não é diretamente suportada para outros usuários. Se necessário, o administrador pode usar o console do Firebase ou o usuário pode redefinir sua própria senha se essa funcionalidade for implementada.", "info");
         } else {
             showFeedback(editUserFeedback, "Papel do usuário atualizado com sucesso!", "success");
@@ -1434,9 +1461,9 @@ function initializeUserView() {
     if (userFormFeedback) { userFormFeedback.textContent = ''; userFormFeedback.style.display = 'none';}
 
     if(driverNameInput && loggedInUserProfile) {
-        driverNameInput.value = loggedInUserProfile.username; 
+        driverNameInput.value = capitalizeName(loggedInUserProfile.username); 
     }
-    addFuelEntryToForm(); // Adiciona um campo de combustível inicial
+    addFuelEntryToForm(); 
 }
 
 function initializeMyTripsView() {
@@ -1467,7 +1494,7 @@ function initializeAdminView() {
     if (!adminDriverFiltersContainer) {
         console.warn("Admin View Init: adminDriverFiltersContainer not found. Filters might not work.");
     } else {
-        adminDriverFiltersContainer.style.display = 'none'; // Começa oculto até um motorista ser selecionado
+        adminDriverFiltersContainer.style.display = 'none'; 
     }
 
     if(adminGeneralFeedback) { adminGeneralFeedback.textContent = ''; adminGeneralFeedback.style.display = 'none';}
@@ -1490,7 +1517,6 @@ function initializeAdminView() {
 function initializeUserManagementView() {
      if (!loggedInUserProfile || loggedInUserProfile.role !== 'admin' || loggedInUserProfile.username !== 'fabio') return;
     loadAndRenderUsersForAdmin();
-    // Resetar o formulário de criação de usuário pelo admin
     if (adminCreateUserForm) adminCreateUserForm.reset();
     if (adminCreateUserFeedback) {
         adminCreateUserFeedback.textContent = '';
@@ -1551,23 +1577,22 @@ async function handleExportAdminReport() {
 
     const today = new Date();
     let year = today.getFullYear();
-    let month = today.getMonth(); // 0 (Janeiro) a 11 (Dezembro)
+    let month = today.getMonth(); 
 
-    if (month === 0) { // Se for Janeiro, o mês anterior é Dezembro do ano passado
-        month = 11; // Dezembro
+    if (month === 0) { 
+        month = 11; 
         year -= 1;
     } else {
-        month -= 1; // Mês anterior
+        month -= 1; 
     }
 
-    // Nota: new Date() usa mês 0-11. String(month + 1) é para o nome do arquivo/display (1-12).
     const firstDayPrevMonth = new Date(year, month, 1);
-    const lastDayPrevMonth = new Date(year, month + 1, 0); // Dia 0 do próximo mês é o último dia do mês atual
+    const lastDayPrevMonth = new Date(year, month + 1, 0); 
 
     const startDate = firstDayPrevMonth.toISOString().split('T')[0];
     const endDate = lastDayPrevMonth.toISOString().split('T')[0];
-    const reportMonthStrForDisplay = `${String(month + 1).padStart(2, '0')}/${year}`; // MM/YYYY
-    const reportMonthStrForFilename = `${year}-${String(month + 1).padStart(2, '0')}`; // YYYY-MM
+    const reportMonthStrForDisplay = `${String(month + 1).padStart(2, '0')}/${year}`; 
+    const reportMonthStrForFilename = `${year}-${String(month + 1).padStart(2, '0')}`; 
 
 
     try {
@@ -1601,7 +1626,7 @@ async function handleExportAdminReport() {
 
         const dataForHTML = reportTrips.map(trip => [
             formatDate(trip.date),
-            userMap.get(trip.userId) || trip.driverName, 
+            capitalizeName(userMap.get(trip.userId) || trip.driverName), 
             trip.cargoType || '',
             formatGenericNumber(trip.kmInitial, 0, 0),
             formatGenericNumber(trip.kmFinal, 0, 0),
@@ -1643,12 +1668,9 @@ async function handleExportAdminReport() {
 document.addEventListener('DOMContentLoaded', () => {
     console.log("DOMContentLoaded event fired.");
 
-    // Listener para `registerUsernameInput` foi removido pois o elemento não existe mais.
-
     const loginUsernameInput = document.getElementById('loginUsername');
     if (loginUsernameInput) {
         loginUsernameInput.addEventListener('input', function() {
-            // Converte para minúsculas ao digitar
             this.value = this.value.toLowerCase();
         });
         console.log("Event listener 'input' added to loginUsername for lowercase conversion.");
@@ -1656,9 +1678,6 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error("loginUsername input field not found for adding lowercase listener.");
     }
     
-    // Listeners para `showRegisterViewLink` e `showLoginViewLink` foram removidos.
-
-
     if (!app || !authFirebase || !db || !userProfilesCollection || !tripsCollection) {
         console.error("CRITICAL DOMContentLoaded: Firebase not initialized correctly or collections not set. App listeners not added.");
         const body = document.querySelector('body');
@@ -1679,9 +1698,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return; 
     }
     console.log("Firebase seems initialized, proceeding to add event listeners.");
-
-
-    // Event listener para `registerForm` foi removido.
 
     if (loginForm) {
         loginForm.addEventListener('submit', handleLogin);
@@ -1704,7 +1720,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fuelEntryIdCounter = 0;
         if(submitTripBtn) submitTripBtn.textContent = 'Salvar Frete';
         if(cancelEditBtn) cancelEditBtn.style.display = 'none';
-        if(driverNameInput && loggedInUserProfile) driverNameInput.value = loggedInUserProfile.username; 
+        if(driverNameInput && loggedInUserProfile) driverNameInput.value = capitalizeName(loggedInUserProfile.username); 
         addFuelEntryToForm(); 
         showFeedback(userFormFeedback, "Edição cancelada.", "info");
     });
@@ -1720,7 +1736,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             try {
-                const qUser = query(userProfilesCollection, where("username", "==", driverNameToSearch));
+                const qUser = query(userProfilesCollection, where("username", "==", driverNameToSearch)); // Busca pelo nome em minúsculas
                 const userSnapshot = await getDocs(qUser);
                 if (!userSnapshot.empty) {
                     const foundUser = userSnapshot.docs[0].data(); 
@@ -1728,12 +1744,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     currentUidForMyTripsSearch = foundUser.uid;
                     loadAndRenderMyTrips(myTripsFilterStartDateInput?.value, myTripsFilterEndDateInput?.value);
                 } else {
-                    showFeedback(myTripsFeedback, `Motorista "${myTripsDriverNameInput.value.trim()}" não encontrado.`, "error");
+                    showFeedback(myTripsFeedback, `Motorista "${capitalizeName(myTripsDriverNameInput.value.trim())}" não encontrado.`, "error");
                     if (myTripsTableBody) myTripsTableBody.innerHTML = '';
-                    if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Nenhum motorista encontrado com o nome "${myTripsDriverNameInput.value.trim()}".`;
+                    if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Nenhum motorista encontrado com o nome "${capitalizeName(myTripsDriverNameInput.value.trim())}".`;
                     if (myTripsTable) myTripsTable.style.display = 'none';
                     if (myTripsTablePlaceholder) myTripsTablePlaceholder.style.display = 'block';
-                    updateDriverSummary([], myTripsDriverNameInput.value.trim()); 
+                    updateDriverSummary([], capitalizeName(myTripsDriverNameInput.value.trim())); 
                 }
             } catch(err) {
                 console.error("Error searching driver by name:", "Code:", err.code, "Message:", err.message);
@@ -1781,7 +1797,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Event listener para o novo formulário de criação de usuário pelo Admin
     if (adminCreateUserForm) {
         adminCreateUserForm.addEventListener('submit', handleAdminCreateUser);
     } else { console.error("adminCreateUserForm not found!"); }
@@ -1796,9 +1811,9 @@ document.addEventListener('DOMContentLoaded', () => {
     modals.forEach(modal => {
         const modalElement = modal;
         if(modalElement) {
-            modalElement.style.display = 'none'; // Garante que todos os modais comecem ocultos
+            modalElement.style.display = 'none'; 
             modalElement.addEventListener('click', (event) => {
-                if (event.target === modalElement) { // Fecha apenas se clicar no fundo do modal
+                if (event.target === modalElement) { 
                     modalElement.style.display = 'none';
                 }
             });

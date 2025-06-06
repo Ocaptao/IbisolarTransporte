@@ -79,21 +79,22 @@ let adminSummaryChart = null;
 
 // --- DOM ELEMENTS ---
 const loginView = document.getElementById('loginView');
-const registerView = document.getElementById('registerView');
+// registerView removido
 const appContainer = document.getElementById('appContainer');
 const loginForm = document.getElementById('loginForm');
-const registerForm = document.getElementById('registerForm');
+// registerForm removido
 const tripForm = document.getElementById('tripForm');
 const loginFeedback = document.getElementById('loginFeedback');
-const registerFeedback = document.getElementById('registerFeedback');
+// registerFeedback removido
 const userFormFeedback = document.getElementById('userFormFeedback');
 const myTripsFeedback = document.getElementById('myTripsFeedback');
 const adminGeneralFeedback = document.getElementById('adminGeneralFeedback');
 const userManagementFeedback = document.getElementById('userManagementFeedback');
 const editUserFeedback = document.getElementById('editUserFeedback');
 
-const showRegisterViewLink = document.getElementById('showRegisterViewLink');
-const showLoginViewLink = document.getElementById('showLoginViewLink');
+// showRegisterViewLink e showLoginViewLink removidos (ou apenas o de registro)
+// const showRegisterViewLink = document.getElementById('showRegisterViewLink');
+// const showLoginViewLink = document.getElementById('showLoginViewLink'); // Mantido se o link para login a partir do registro existisse
 
 const userViewBtn = document.getElementById('userViewBtn');
 const myTripsViewBtn = document.getElementById('myTripsViewBtn');
@@ -177,6 +178,15 @@ const editUsernameDisplayInput = document.getElementById('editUsernameDisplay');
 const editUserRoleSelect = document.getElementById('editUserRole');
 const editUserNewPasswordInput = document.getElementById('editUserNewPassword');
 const editUserConfirmNewPasswordInput = document.getElementById('editUserConfirmNewPassword');
+
+// DOM Elements para o formulário de criação de usuário pelo Admin
+const adminCreateUserForm = document.getElementById('adminCreateUserForm');
+const adminCreateUsernameInput = document.getElementById('adminCreateUsername');
+const adminCreateUserRoleSelect = document.getElementById('adminCreateUserRole');
+const adminCreateUserPasswordInput = document.getElementById('adminCreateUserPassword');
+const adminCreateUserConfirmPasswordInput = document.getElementById('adminCreateUserConfirmPassword');
+const adminCreateUserFeedback = document.getElementById('adminCreateUserFeedback');
+
 
 let fuelEntryIdCounter = 0; 
 
@@ -298,7 +308,7 @@ function showView(viewId) {
     const views = document.querySelectorAll('.view');
     views.forEach(view => view.style.display = 'none');
     if (loginView) loginView.style.display = 'none';
-    if (registerView) registerView.style.display = 'none';
+    // registerView removido
     if (appContainer) appContainer.style.display = 'none';
 
     const navButtons = document.querySelectorAll('.nav-btn');
@@ -307,9 +317,7 @@ function showView(viewId) {
 
     if (viewId === 'loginView' && loginView) {
         loginView.style.display = 'flex';
-    } else if (viewId === 'registerView' && registerView) {
-        registerView.style.display = 'flex';
-    } else if (appContainer) {
+    } else if (appContainer) { // Não há mais 'registerView' aqui
         appContainer.style.display = 'flex';
         const targetView = document.getElementById(viewId);
         if (targetView) {
@@ -351,84 +359,7 @@ function updateNavVisibility() {
 }
 
 // --- AUTHENTICATION WITH FIREBASE ---
-async function handleRegister(event) {
-    event.preventDefault();
-    console.log("Attempting registration...");
-    const usernameInput = document.getElementById('registerUsername');
-    const passwordInput = document.getElementById('registerPassword');
-    const confirmPasswordInput = document.getElementById('registerConfirmPassword');
-
-    const rawUsername = usernameInput.value.trim(); 
-    const normalizedUsernamePart = normalizeUsernameForEmail(rawUsername); 
-
-    if (!rawUsername) {
-        showFeedback(registerFeedback, "Nome de usuário é obrigatório.", "error");
-        return;
-    }
-    if (!normalizedUsernamePart) {
-        showFeedback(registerFeedback, "Nome de usuário inválido após normalização. Use letras ou números.", "error");
-        return;
-    }
-
-    const email = `${normalizedUsernamePart}@example.com`;
-    const password = passwordInput.value;
-    const confirmPassword = confirmPasswordInput.value;
-    console.log("Registration details:", { rawUsername, normalizedUsernamePart, email });
-
-
-    if (!password || !confirmPassword) { 
-        showFeedback(registerFeedback, "Todos os campos são obrigatórios.", "error");
-        return;
-    }
-    if (password.length < 6) {
-        showFeedback(registerFeedback, "A senha deve ter pelo menos 6 caracteres.", "error");
-        return;
-    }
-    if (password !== confirmPassword) {
-        showFeedback(registerFeedback, "As senhas não coincidem.", "error");
-        return;
-    }
-
-    try {
-        console.log("Calling createUserWithEmailAndPassword with email:", email);
-        const userCredential = await createUserWithEmailAndPassword(authFirebase, email, password); 
-        const firebaseUser = userCredential.user;
-        console.log("User created in Auth:", firebaseUser.uid);
-
-        let roleForNewUser = 'motorista';
-        if (rawUsername === 'fabio') {
-            roleForNewUser = 'admin';
-            console.log(`Registering user ${rawUsername} as ADMIN because username is 'fabio'.`);
-        }
-
-        const newUserProfile = {
-            uid: firebaseUser.uid,
-            username: rawUsername, 
-            email: firebaseUser.email || email, 
-            role: roleForNewUser,
-            createdAt: Timestamp.now()
-        };
-        console.log("Creating user profile in Firestore:", newUserProfile);
-        await firebaseSetDoc(doc(userProfilesCollection, firebaseUser.uid), newUserProfile);
-        console.log("User profile created in Firestore.");
-
-        showFeedback(registerFeedback, "Cadastro realizado com sucesso! Redirecionando...", "success");
-        if (registerForm) registerForm.reset();
-        
-    } catch (error) {
-        console.error("CRITICAL ERROR during registration:", "Code:", error.code, "Message:", error.message);
-        if (error.code === 'auth/email-already-in-use') {
-            showFeedback(registerFeedback, "Nome de usuário (ou e-mail derivado) já existe. Tente outro.", "error");
-        } else if (error.code === 'auth/weak-password') {
-            showFeedback(registerFeedback, "Senha muito fraca. Tente uma mais forte.", "error");
-        } else if (error.code === 'auth/invalid-email') {
-            showFeedback(registerFeedback, `O nome de usuário "${rawUsername}" resultou em um formato de e-mail inválido ("${email}"). Tente um nome de usuário diferente.`, "error");
-        }
-         else {
-            showFeedback(registerFeedback, "Erro ao registrar. Verifique o console para detalhes.", "error");
-        }
-    }
-}
+// handleRegister removido
 
 async function handleLogin(event) {
     event.preventDefault();
@@ -489,7 +420,6 @@ async function handleLogout() {
         await signOut(authFirebase); 
         console.log("User signed out from Firebase Auth.");
         
-        // Explicitly clear and hide welcome message for immediate UI feedback
         if (welcomeMessageContainer) {
             welcomeMessageContainer.innerHTML = '';
             welcomeMessageContainer.style.display = 'none';
@@ -1047,7 +977,7 @@ async function updateAdminSummary(filterStartDate, filterEndDate) {
         let totalExpensesOverall = 0; 
         let totalNetProfitOverall = 0; 
 
-        querySnapshot.forEach((docSnap) => { // Use docSnap to avoid conflict with outer doc
+        querySnapshot.forEach((docSnap) => { 
             const trip = docSnap.data(); 
             totalTrips++;
             totalFreight += trip.freightValue;
@@ -1078,12 +1008,12 @@ async function populateAdminDriverSelect() {
         const querySnapshot = await getDocs(q);
         
         const motoristas = [];
-        querySnapshot.forEach((docSnap) => { // Use docSnap to avoid conflict
+        querySnapshot.forEach((docSnap) => { 
             motoristas.push({ id: docSnap.id, ...docSnap.data() });
         });
 
         if (userProfiles.filter(p => p.role === 'motorista').length === 0) {
-             querySnapshot.forEach((docSnap) => { // Use docSnap to avoid conflict
+             querySnapshot.forEach((docSnap) => { 
                 if (!userProfiles.find(p => p.uid === docSnap.id)) {
                     userProfiles.push({ id: docSnap.id, ...docSnap.data() });
                 }
@@ -1291,6 +1221,76 @@ function showAdminTripDetailModal(trip) {
 }
 
 // --- USER MANAGEMENT FUNCTIONS (Admin Fabio) ---
+
+async function handleAdminCreateUser(event) {
+    event.preventDefault();
+    console.log("Admin attempting user creation...");
+
+    const rawUsername = adminCreateUsernameInput.value.trim();
+    const role = adminCreateUserRoleSelect.value;
+    const password = adminCreateUserPasswordInput.value;
+    const confirmPassword = adminCreateUserConfirmPasswordInput.value;
+
+    const normalizedUsernamePart = normalizeUsernameForEmail(rawUsername);
+
+    if (!rawUsername) {
+        showFeedback(adminCreateUserFeedback, "Nome de usuário é obrigatório.", "error");
+        return;
+    }
+    if (!normalizedUsernamePart) {
+        showFeedback(adminCreateUserFeedback, "Nome de usuário inválido. Use letras ou números.", "error");
+        return;
+    }
+    if (!password || !confirmPassword) {
+        showFeedback(adminCreateUserFeedback, "Todos os campos de senha são obrigatórios.", "error");
+        return;
+    }
+    if (password.length < 6) {
+        showFeedback(adminCreateUserFeedback, "A senha deve ter pelo menos 6 caracteres.", "error");
+        return;
+    }
+    if (password !== confirmPassword) {
+        showFeedback(adminCreateUserFeedback, "As senhas não coincidem.", "error");
+        return;
+    }
+
+    const email = `${normalizedUsernamePart}@example.com`; // Assume um domínio padrão
+    console.log("Admin creating user with details:", { rawUsername, normalizedUsernamePart, email, role });
+
+    try {
+        const userCredential = await createUserWithEmailAndPassword(authFirebase, email, password);
+        const firebaseUser = userCredential.user;
+        console.log("User created in Auth by admin:", firebaseUser.uid);
+
+        const newUserProfile = {
+            uid: firebaseUser.uid,
+            username: rawUsername,
+            email: firebaseUser.email || email,
+            role: role,
+            createdAt: Timestamp.now()
+        };
+        await firebaseSetDoc(doc(userProfilesCollection, firebaseUser.uid), newUserProfile);
+        console.log("User profile created in Firestore by admin.");
+
+        showFeedback(adminCreateUserFeedback, `Usuário "${rawUsername}" (${role}) criado com sucesso!`, "success");
+        if(adminCreateUserForm) adminCreateUserForm.reset();
+        loadAndRenderUsersForAdmin(); // Recarrega a lista de usuários
+
+    } catch (error) {
+        console.error("CRITICAL ERROR during admin user creation:", "Code:", error.code, "Message:", error.message);
+        if (error.code === 'auth/email-already-in-use') {
+            showFeedback(adminCreateUserFeedback, "Nome de usuário (ou e-mail derivado) já existe. Tente outro.", "error");
+        } else if (error.code === 'auth/weak-password') {
+            showFeedback(adminCreateUserFeedback, "Senha muito fraca. Tente uma mais forte.", "error");
+        } else if (error.code === 'auth/invalid-email') {
+            showFeedback(adminCreateUserFeedback, `O nome de usuário "${rawUsername}" resultou em um formato de e-mail inválido ("${email}"). Tente um nome de usuário diferente.`, "error");
+        } else {
+            showFeedback(adminCreateUserFeedback, "Erro ao criar usuário. Verifique o console para detalhes.", "error");
+        }
+    }
+}
+
+
 async function loadAndRenderUsersForAdmin() {
     if (!userManagementTableBody) return;
     if (!loggedInUserProfile || loggedInUserProfile.role !== 'admin' || loggedInUserProfile.username !== 'fabio') {
@@ -1303,7 +1303,7 @@ async function loadAndRenderUsersForAdmin() {
         const q = query(userProfilesCollection, orderBy("username"));
         const querySnapshot = await getDocs(q);
         userProfiles = []; 
-        querySnapshot.forEach((docSnap) => { // Use docSnap to avoid conflict
+        querySnapshot.forEach((docSnap) => { 
             userProfiles.push({ id: docSnap.id, ...docSnap.data() });
         });
 
@@ -1373,6 +1373,8 @@ async function handleEditUserFormSubmit(event) {
 
         if (newPassword) {
             showFeedback(editUserFeedback, "Papel do usuário atualizado. A alteração de senha por esta tela não é diretamente suportada. Se necessário, o administrador pode usar o console do Firebase ou o usuário pode redefinir sua própria senha.", "info");
+            // Nota: Atualizar senha do Firebase Auth requer reautenticação ou uma função de admin SDK.
+            // Para simplicidade, não estamos implementando a mudança de senha aqui pelo cliente.
         } else {
             showFeedback(editUserFeedback, "Papel do usuário atualizado com sucesso!", "success");
         }
@@ -1453,6 +1455,12 @@ function initializeAdminView() {
 function initializeUserManagementView() {
      if (!loggedInUserProfile || loggedInUserProfile.role !== 'admin' || loggedInUserProfile.username !== 'fabio') return;
     loadAndRenderUsersForAdmin();
+    // Resetar o formulário de criação de usuário pelo admin
+    if (adminCreateUserForm) adminCreateUserForm.reset();
+    if (adminCreateUserFeedback) {
+        adminCreateUserFeedback.textContent = '';
+        adminCreateUserFeedback.style.display = 'none';
+    }
 }
 
 // --- FUNÇÃO DE EXPORTAÇÃO HTML ---
@@ -1528,7 +1536,7 @@ async function handleExportAdminReport() {
         const q = query(tripsCollection, where("date", ">=", startDate), where("date", "<=", endDate), orderBy("date", "asc"));
         const querySnapshot = await getDocs(q);
         const reportTrips = [];
-        querySnapshot.forEach(docSnap => { // Use docSnap to avoid conflict
+        querySnapshot.forEach(docSnap => { 
             reportTrips.push({ id: docSnap.id, ...docSnap.data() });
         });
 
@@ -1540,7 +1548,7 @@ async function handleExportAdminReport() {
         const localUserProfilesForReport = [];
         const qProfiles = query(userProfilesCollection, orderBy("username")); 
         const profileSnapshot = await getDocs(qProfiles);
-        profileSnapshot.forEach(docSnap => { // Use docSnap to avoid conflict
+        profileSnapshot.forEach(docSnap => { 
             localUserProfilesForReport.push({ uid: docSnap.id, ...docSnap.data() });
         });
         const userMap = new Map(localUserProfilesForReport.map(p => [p.uid, p.username]));
@@ -1597,15 +1605,8 @@ async function handleExportAdminReport() {
 document.addEventListener('DOMContentLoaded', () => {
     console.log("DOMContentLoaded event fired.");
 
-    const registerUsernameInput = document.getElementById('registerUsername');
-    if (registerUsernameInput) {
-        registerUsernameInput.addEventListener('input', function() {
-            this.value = this.value.toLowerCase();
-        });
-        console.log("Event listener 'input' added to registerUsername for lowercase conversion.");
-    } else {
-        console.error("registerUsername input field not found for adding lowercase listener.");
-    }
+    // Listener para registerUsernameInput removido pois o elemento não existe mais
+    // const registerUsernameInput = document.getElementById('registerUsername');
 
     const loginUsernameInput = document.getElementById('loginUsername');
     if (loginUsernameInput) {
@@ -1617,14 +1618,9 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error("loginUsername input field not found for adding lowercase listener.");
     }
 
-
-    if (showRegisterViewLink) {
-        showRegisterViewLink.addEventListener('click', (e) => { e.preventDefault(); showView('registerView'); });
-    } else { console.error("showRegisterViewLink not found!"); }
-
-    if (showLoginViewLink) {
-        showLoginViewLink.addEventListener('click', (e) => { e.preventDefault(); showView('loginView'); });
-    } else { console.error("showLoginViewLink not found!"); }
+    // Listeners para showRegisterViewLink e showLoginViewLink removidos
+    // if (showRegisterViewLink) { ... }
+    // if (showLoginViewLink) { ... }
 
 
     if (!app || !authFirebase || !db || !userProfilesCollection || !tripsCollection) {
@@ -1649,9 +1645,9 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log("Firebase seems initialized, proceeding to add event listeners.");
 
 
-    if (registerForm) {
-        registerForm.addEventListener('submit', handleRegister);
-    } else { console.error("registerForm not found!");}
+    // Event listener para registerForm removido
+    // if (registerForm) { registerForm.addEventListener('submit', handleRegister); } 
+
     if (loginForm) {
         loginForm.addEventListener('submit', handleLogin);
     } else { console.error("loginForm not found!");}
@@ -1749,6 +1745,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // Event listener para o novo formulário de criação de usuário pelo Admin
+    if (adminCreateUserForm) {
+        adminCreateUserForm.addEventListener('submit', handleAdminCreateUser);
+    } else { console.error("adminCreateUserForm not found!"); }
 
 
     if(editUserForm) editUserForm.addEventListener('submit', handleEditUserFormSubmit);

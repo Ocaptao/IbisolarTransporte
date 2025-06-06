@@ -99,14 +99,34 @@ header {
     background-color: #2c3e50;
     color: #ecf0f1;
     padding: 1rem 2rem;
-    text-align: center;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.header-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem; 
 }
 
 header h1 {
     margin: 0;
     font-size: 1.8rem;
     font-weight: 500;
+}
+
+#welcomeMessageContainer {
+    font-size: 0.95rem; 
+    color: #ecf0f1; 
+}
+
+#welcomeMessageContainer .welcome-username {
+    font-weight: bold;
+}
+
+#welcomeMessageContainer .welcome-icon {
+    margin-left: 0.5em;
+    font-size: 1.2em; 
 }
 
 nav {
@@ -571,13 +591,20 @@ footer { background-color: #34495e; color: #ecf0f1; text-align: center; padding:
 
 @media (max-width: 768px) {
     header { padding: 1rem; }
-    header h1 { font-size: 1.5rem; }
+    .header-top-row {
+        flex-direction: column; /* Empilha o título e a mensagem de boas-vindas */
+        align-items: center; /* Centraliza os itens empilhados */
+        gap: 0.5rem; /* Espaço entre título e mensagem */
+    }
+    header h1 { font-size: 1.5rem; text-align: center;}
+    #welcomeMessageContainer { text-align: center; }
+
     nav { flex-direction: column; align-items: center; }
     .nav-btn { width: 90%; margin: 0.25rem 0; }
 
     main { padding: 1rem; }
     .view { padding: 1.5rem; }
-    .form-grid, .filter-grid, .summary-metrics, /* summary-container removido pois não existia */
+    .form-grid, .filter-grid, .summary-metrics,
     #fuelEntriesContainer .fuel-entry-item {
         grid-template-columns: 1fr;
     }
@@ -592,20 +619,19 @@ footer { background-color: #34495e; color: #ecf0f1; text-align: center; padding:
     .form-actions { flex-direction: column; }
     .form-actions .submit-btn, .form-actions .control-btn { width: 100%; }
 
-    /* Estilos responsivos para a tabela de resumo de motorista no admin */
     #adminDriverTripsSection {
-        overflow-x: auto; /* Permite rolagem horizontal para toda a seção se o conteúdo (tabela) for largo */
-        -webkit-overflow-scrolling: touch; /* Melhora a experiência de rolagem em iOS */
+        overflow-x: auto; 
+        -webkit-overflow-scrolling: touch; 
     }
 
     #adminDriverTripsTable {
-        width: auto; /* Permite que a tabela cresça conforme o conteúdo, sobrescrevendo o width: 100% global */
-        min-width: 600px; /* Garante uma largura mínima razoável; ajuste este valor se necessário */
+        width: auto; 
+        min-width: 600px;
     }
 
     #adminDriverTripsTable th,
     #adminDriverTripsTable td {
-        white-space: nowrap; /* Impede que o conteúdo das células quebre, forçando a tabela a ser mais larga se necessário */
+        white-space: nowrap; 
     }
 }
 

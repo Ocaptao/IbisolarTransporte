@@ -303,6 +303,24 @@ fieldset legend {
     opacity: 0.8;             
 }
 
+.form-input-feedback { /* Style for file selection feedback */
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: #555;
+}
+#tripAttachmentsFeedback ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+#tripAttachmentsFeedback li {
+    background-color: #e9ecef;
+    padding: 0.3rem 0.6rem;
+    border-radius: 3px;
+    margin-bottom: 0.3rem;
+    font-size: 0.9em;
+}
+
 
 .form-group input:focus,
 .form-group select:focus {
@@ -490,6 +508,50 @@ fieldset legend {
 }
 #adminTripDetailContent .trip-financial-summary strong.profit { color: #27ae60; }
 #adminTripDetailContent .trip-financial-summary strong.loss { color: #e74c3c; }
+
+/* Admin Trip Detail Modal - Attachments Section */
+#adminTripAttachmentsSection {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #eee;
+}
+#adminTripAttachmentsSection h4 {
+    margin-top: 0;
+}
+#adminTripAttachmentsList ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+#adminTripAttachmentsList li {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+}
+#adminTripAttachmentsList li .attachment-info {
+    font-size: 0.9rem;
+}
+#adminTripAttachmentsList li .attachment-info .filename {
+    font-weight: 500;
+    color: #007bff;
+    text-decoration: none;
+}
+#adminTripAttachmentsList li .attachment-info .filename:hover {
+    text-decoration: underline;
+}
+#adminTripAttachmentsList li .attachment-meta {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
+    display: block; /* Para ocupar a largura e permitir o espaçamento */
+    width: 100%; /* Para garantir que o meta fique abaixo do nome se quebrar */
+}
 
 
 #userManagementTableContainer { margin-top: 2rem; }

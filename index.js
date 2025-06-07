@@ -1880,7 +1880,7 @@ async function handleExcelFileImport(event) {
                 const existingTripSnapshot = await getDocs(existingTripQuery);
 
                 if (!existingTripSnapshot.empty) {
-                     skippedTripsLog += `Linha ${i + 2}: Viagem para ${driverNameFromSheet} em ${formatDisplayDate(tripDateFormatted)} já existe. Ignorando.\n`;
+                     skippedTripsLog += `Linha ${i + 2}: Viagem para ${capitalizeName(driverNameFromSheet)} em ${formatDisplayDate(tripDateFormatted)} já existe. Ignorando.\n`;
                     continue; 
                 }
 
@@ -1919,7 +1919,7 @@ async function handleExcelFileImport(event) {
 
                 const newTrip = {
                     userId: motoristaUid,
-                    driverName: driverNameFromSheet,
+                    driverName: driverNameFromSheet, // Store the name as it is in the sheet for consistency
                     date: tripDateFormatted,
                     kmInitial: kmInitialSheet,
                     kmFinal: kmFinalSheet,
@@ -1943,7 +1943,7 @@ async function handleExcelFileImport(event) {
                 const newTripRef = doc(tripsCollection); 
                 batch.set(newTripRef, newTrip);
                 importCount++;
-                importedTripsLog += `Linha ${i + 2}: ${driverNameFromSheet}, ${formatDisplayDate(tripDateFormatted)}, Frete: ${formatCurrency(newTrip.freightValue)}\n`;
+                importedTripsLog += `Linha ${i + 2}: ${capitalizeName(driverNameFromSheet)}, ${formatDisplayDate(tripDateFormatted)}, Frete: ${formatCurrency(newTrip.freightValue)}\n`;
             }
 
             if (importCount > 0) {

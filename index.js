@@ -243,10 +243,23 @@ function parseNumericValueFromString(value) {
 
     strValue = strValue.replace(/R\$\s?/g, ''); // Remove R$
 
-    // Remove all dots (treat them as thousand separators for pt-BR)
-    strValue = strValue.replace(/\./g, '');
-    // Replace comma (treat as decimal separator for pt-BR) with a dot
-    strValue = strValue.replace(/,/g, '.');
+    const hasComma = strValue.includes(',');
+    const dotCount = (strValue.match(/\./g) || []).length;
+
+    if (hasComma) {
+        // Assume pt-BR format: "1.234,56" or "1234,56"
+        strValue = strValue.replace(/\./g, ''); // Remove all dots (thousand separators)
+        strValue = strValue.replace(/,/g, '.'); // Convert comma to dot (decimal)
+    } else {
+        // No comma
+        if (dotCount > 1) {
+            // Multiple dots, no comma: "1.234.567" (pt-BR integer for thousands)
+            strValue = strValue.replace(/\./g, ''); // Remove all dots
+        }
+        // else if dotCount === 1: "1234.56" (US-style decimal). parseFloat handles this.
+        // else if dotCount === 0: "1234" (integer). parseFloat handles this.
+        // No change needed for strValue in these cases as parseFloat will handle them.
+    }
 
     const num = parseFloat(strValue);
     return isNaN(num) ? 0 : num;
@@ -2162,13 +2175,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const newUserProfile = {
                     uid: firebaseUser.uid,
-                    username: username,
+                    username: username, // Store the original, non-normalized username for display
                     email: firebaseUser.email || email,
                     role: role,
                     createdAt: Timestamp.now()
                 };
                 await firebaseSetDoc(doc(userProfilesCollection, firebaseUser.uid), newUserProfile);
-                showFeedback(adminCreateUserFeedback, `Usuário "${username}" (${role}) cadastrado com sucesso!`, "success");
+                showFeedback(adminCreateUserFeedback, `Usuário "${capitalizeName(username)}" (${role}) cadastrado com sucesso!`, "success");
                 adminCreateUserForm.reset();
                 loadAndRenderUsersForAdmin(); 
                 populateAdminDriverSelect(); 

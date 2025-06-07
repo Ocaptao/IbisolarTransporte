@@ -1763,7 +1763,6 @@ async function handleExcelFileImport(event) {
             const workbook = XLSX.read(data, { type: 'array', cellDates: true, cellNF: false, cellText: true });
             const firstSheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[firstSheetName];
-            // Alterado raw: false para raw: true para tentar obter valores numéricos brutos
             const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true, defval: null });
 
 
@@ -1814,7 +1813,6 @@ async function handleExcelFileImport(event) {
                 }
             }
             
-            // Validação de cabeçalhos essenciais
             const essentialHeaders = ["date", "driverName", "freightValue"];
             for (const essential of essentialHeaders) {
                 if (headerMap[essential] === undefined) {
@@ -1854,13 +1852,13 @@ async function handleExcelFileImport(event) {
                 let tripDateRaw = rowArray[headerMap.date];
                 let tripDateFormatted;
                 
-                if (tripDateRaw instanceof Date) { // Se o XLSX já interpretou como Date
+                if (tripDateRaw instanceof Date) { 
                      tripDateFormatted = formatDate(tripDateRaw);
-                } else if (typeof tripDateRaw === 'number') { // Se for número de série do Excel
-                    const excelEpoch = new Date(1899, 11, 30); // Excel epoch starts Dec 30, 1899
+                } else if (typeof tripDateRaw === 'number') { 
+                    const excelEpoch = new Date(1899, 11, 30); 
                     const jsDate = new Date(excelEpoch.getTime() + tripDateRaw * 24 * 60 * 60 * 1000);
                     tripDateFormatted = formatDate(jsDate);
-                } else if (typeof tripDateRaw === 'string') { // Se for string (DD/MM/YYYY ou YYYY-MM-DD)
+                } else if (typeof tripDateRaw === 'string') { 
                     tripDateFormatted = formatDate(tripDateRaw.trim());
                 } else {
                      errorMessages.push(`Linha ${i + 2}: Formato de data inválido ou não reconhecido: ${tripDateRaw}. Use YYYY-MM-DD ou DD/MM/YYYY.`);
@@ -1890,10 +1888,13 @@ async function handleExcelFileImport(event) {
                 const fuelEntries = [];
                 let totalFuelCostSheet = 0;
                 for (let j = 1; j <= 4; j++) { 
-                    const liters = parseNumericValueFromString(rowArray[headerMap[`litros${j}`]] || '0');
-                    const valuePerLiter = parseNumericValueFromString(rowArray[headerMap[`valor_litro${j}`]] || '0');
-                    const discount = parseNumericValueFromString(rowArray[headerMap[`desconto${j}`]] || '0');
+                    const litersKey = `litros${j}`;
+                    const valuePerLiterKey = `valor_litro${j}`;
+                    const discountKey = `desconto${j}`;
 
+                    const liters = parseNumericValueFromString( (headerMap[litersKey] !== undefined) ? rowArray[headerMap[litersKey]] : '0' );
+                    const valuePerLiter = parseNumericValueFromString( (headerMap[valuePerLiterKey] !== undefined) ? rowArray[headerMap[valuePerLiterKey]] : '0' );
+                    const discount = parseNumericValueFromString( (headerMap[discountKey] !== undefined) ? rowArray[headerMap[discountKey]] : '0' );
 
                     if (liters > 0 && valuePerLiter > 0) {
                         const totalValue = (liters * valuePerLiter) - discount;

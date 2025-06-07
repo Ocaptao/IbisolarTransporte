@@ -92,23 +92,23 @@
                             <!-- Campo Tipo de Carga Removido -->
                             <div class="form-group">
                                 <label for="kmInitial">Km Inicial:</label>
-                                <input type="number" id="kmInitial" name="kmInitial" min="0" step="any" placeholder="0">
+                                <input type="text" id="kmInitial" name="kmInitial" placeholder="0" inputmode="decimal">
                             </div>
                             <div class="form-group">
                                 <label for="kmFinal">Km Final:</label>
-                                <input type="number" id="kmFinal" name="kmFinal" min="0" step="any" placeholder="0">
+                                <input type="text" id="kmFinal" name="kmFinal" placeholder="0" inputmode="decimal">
                             </div>
                             <div class="form-group">
                                 <label for="weight">Peso (Kg):</label>
-                                <input type="number" id="weight" name="weight" min="0" step="any" placeholder="0">
+                                <input type="text" id="weight" name="weight" placeholder="0" inputmode="decimal">
                             </div>
                             <div class="form-group">
                                 <label for="unitValue">V. Unidade (R$):</label>
-                                <input type="number" id="unitValue" name="unitValue" min="0" step="0.01" placeholder="0,00">
+                                <input type="text" id="unitValue" name="unitValue" placeholder="0,00" inputmode="decimal">
                             </div>
                             <div class="form-group">
                                 <label for="freightValue">Valor Frete (R$):</label>
-                                <input type="number" id="freightValue" name="freightValue" min="0" step="0.01" placeholder="0,00" required>
+                                <input type="text" id="freightValue" name="freightValue" placeholder="0,00" required inputmode="decimal">
                             </div>
                         </div>
                     </fieldset>
@@ -126,19 +126,19 @@
                         <div class="form-grid">
                             <div class="form-group">
                                 <label for="arla32Cost">Arla-32 (R$):</label>
-                                <input type="number" id="arla32Cost" name="arla32Cost" min="0" step="0.01" placeholder="0,00">
+                                <input type="text" id="arla32Cost" name="arla32Cost" placeholder="0,00" inputmode="decimal">
                             </div>
                             <div class="form-group">
                                 <label for="tollCost">Pedágio (R$):</label>
-                                <input type="number" id="tollCost" name="tollCost" min="0" step="0.01" placeholder="0,00">
+                                <input type="text" id="tollCost" name="tollCost" placeholder="0,00" inputmode="decimal">
                             </div>
                             <div class="form-group">
                                 <label for="commissionCost">Comissão (R$):</label>
-                                <input type="number" id="commissionCost" name="commissionCost" min="0" step="0.01" placeholder="0,00">
+                                <input type="text" id="commissionCost" name="commissionCost" placeholder="0,00" inputmode="decimal">
                             </div>
                             <div class="form-group">
                                 <label for="otherExpenses">Outras Despesas Adicionais (R$):</label>
-                                <input type="number" id="otherExpenses" name="otherExpenses" min="0" step="0.01" placeholder="0,00">
+                                <input type="text" id="otherExpenses" name="otherExpenses" placeholder="0,00" inputmode="decimal">
                             </div>
                             <div class="form-group full-width">
                                 <label for="expenseDescription">Descrição (Outras Despesas Adicionais):</label>
@@ -151,7 +151,7 @@
                         <legend>Resumo Financeiro do Frete</legend>
                         <div class="form-group full-width">
                             <label for="declaredValue">Valor Declarado:</label>
-                            <input type="number" id="declaredValue" name="declaredValue" min="0" step="0.01" placeholder="0,00">
+                            <input type="text" id="declaredValue" name="declaredValue" placeholder="0,00" inputmode="decimal">
                         </div>
                     </fieldset>
 

@@ -1,5 +1,6 @@
 
 
+
 import { Chart, registerables } from 'chart.js';
 // Firebase App (o núcleo do Firebase SDK) é sempre necessário e deve ser listado primeiro
 import { initializeApp } from "@firebase/app";
@@ -236,28 +237,16 @@ function capitalizeName(nameString) {
 }
 
 function parseNumericValueFromString(value) {
-    if (value === null || value === undefined || String(value).trim() === "") return 0;
+    if (value === null || value === undefined) return 0;
     let strValue = String(value).trim();
-    strValue = strValue.replace(/R\$\s?/g, ''); // Remove R$ e espaço opcional
+    if (strValue === "") return 0;
 
-    const hasComma = strValue.includes(',');
-    const periodCount = (strValue.match(/\./g) || []).length;
+    strValue = strValue.replace(/R\$\s?/g, ''); // Remove R$
 
-    if (hasComma) {
-        // Se tem vírgula, assume que é o decimal. Pontos são milhares.
-        // Ex: "1.234,56" ou "14.459,84" ou "123,45"
-        strValue = strValue.replace(/\./g, ''); // Remove todos os pontos
-        strValue = strValue.replace(',', '.');   // Converte vírgula para ponto
-    } else {
-        // Sem vírgula. Pontos podem ser milhares ou um único decimal.
-        // Ex: "1.234.567" (milhares) -> "1234567"
-        // Ex: "1234.56" (decimal) -> "1234.56" (parseFloat lida com isso)
-        // Ex: "1.234" (ambíguo, parseFloat torna 1.234. Se for 1234, esta regra é problemática para este caso específico)
-        if (periodCount > 1) { // Múltiplos pontos indicam que são separadores de milhar
-            strValue = strValue.replace(/\./g, '');
-        }
-        // Se periodCount é 1 (ex: "1234.56" ou "1.234") ou 0, parseFloat lida.
-    }
+    // Remove all dots (treat them as thousand separators for pt-BR)
+    strValue = strValue.replace(/\./g, '');
+    // Replace comma (treat as decimal separator for pt-BR) with a dot
+    strValue = strValue.replace(/,/g, '.');
 
     const num = parseFloat(strValue);
     return isNaN(num) ? 0 : num;
@@ -638,19 +627,19 @@ function addFuelEntryToForm(entry) {
         <input type="hidden" name="fuelEntryId" value="${entryId}">
         <div class="form-group">
             <label for="liters_${entryId}">Litros:</label>
-            <input type="text" id="liters_${entryId}" name="liters" placeholder="0" value="${entry?.liters || ''}" required inputmode="decimal">
+            <input type="text" id="liters_${entryId}" name="liters" placeholder="0" value="${entry?.liters ? String(entry.liters).replace('.', ',') : ''}" required inputmode="decimal">
         </div>
         <div class="form-group">
             <label for="valuePerLiter_${entryId}">Valor/Litro (R$):</label>
-            <input type="text" id="valuePerLiter_${entryId}" name="valuePerLiter" placeholder="0,00" value="${entry?.valuePerLiter || ''}" required inputmode="decimal">
+            <input type="text" id="valuePerLiter_${entryId}" name="valuePerLiter" placeholder="0,00" value="${entry?.valuePerLiter ? String(entry.valuePerLiter).replace('.', ',') : ''}" required inputmode="decimal">
         </div>
         <div class="form-group">
             <label for="discount_${entryId}">Desconto (R$):</label>
-            <input type="text" id="discount_${entryId}" name="discount" placeholder="0,00" value="${entry?.discount || '0'}" inputmode="decimal">
+            <input type="text" id="discount_${entryId}" name="discount" placeholder="0,00" value="${entry?.discount ? String(entry.discount).replace('.', ',') : '0'}" inputmode="decimal">
         </div>
         <div class="form-group">
             <label for="totalValue_${entryId}">Valor Total (R$):</label>
-            <input type="text" id="totalValue_${entryId}" name="totalValue" placeholder="0,00" value="${entry?.totalValue || ''}" required readonly inputmode="decimal">
+            <input type="text" id="totalValue_${entryId}" name="totalValue" placeholder="0,00" value="${entry?.totalValue ? String(entry.totalValue).replace('.', ',') : ''}" required readonly inputmode="decimal">
         </div>
         <button type="button" class="control-btn danger-btn small-btn remove-fuel-entry-btn" data-entry-id="${entryId}" aria-label="Remover este abastecimento">Remover</button>
     `;
@@ -941,20 +930,20 @@ async function loadTripForEditing(tripId) {
             editingTripId = trip.id;
             if(driverNameInput) driverNameInput.value = capitalizeName(trip.driverName);
             if(tripDateInput) tripDateInput.value = trip.date; 
-            if(kmInitialInput) kmInitialInput.value = trip.kmInitial?.toString().replace('.', ',') || ''; // Display with comma
-            if(kmFinalInput) kmFinalInput.value = trip.kmFinal?.toString().replace('.', ',') || '';     // Display with comma
-            if(weightInput) weightInput.value = trip.weight?.toString().replace('.', ',') || '';       // Display with comma
-            if(unitValueInput) unitValueInput.value = trip.unitValue?.toString().replace('.', ',') || ''; // Display with comma
-            if(freightValueInput) freightValueInput.value = trip.freightValue.toString().replace('.', ','); // Display with comma
+            if(kmInitialInput) kmInitialInput.value = trip.kmInitial?.toString().replace('.', ',') || '';
+            if(kmFinalInput) kmFinalInput.value = trip.kmFinal?.toString().replace('.', ',') || '';    
+            if(weightInput) weightInput.value = trip.weight?.toString().replace('.', ',') || '';      
+            if(unitValueInput) unitValueInput.value = trip.unitValue?.toString().replace('.', ',') || ''; 
+            if(freightValueInput) freightValueInput.value = trip.freightValue.toString().replace('.', ',');
 
-            trip.fuelEntries.forEach(entry => addFuelEntryToForm(entry)); // addFuelEntryToForm will handle display formatting
+            trip.fuelEntries.forEach(entry => addFuelEntryToForm(entry)); 
 
-            if(arla32CostInput) arla32CostInput.value = trip.arla32Cost?.toString().replace('.', ',') || ''; // Display with comma
-            if(tollCostInput) tollCostInput.value = trip.tollCost.toString().replace('.', ',');             // Display with comma
-            if(commissionCostInput) commissionCostInput.value = trip.commissionCost?.toString().replace('.', ',') || ''; // Display with comma
-            if(otherExpensesInput) otherExpensesInput.value = trip.otherExpenses.toString().replace('.', ',');       // Display with comma
+            if(arla32CostInput) arla32CostInput.value = trip.arla32Cost?.toString().replace('.', ',') || ''; 
+            if(tollCostInput) tollCostInput.value = trip.tollCost.toString().replace('.', ',');            
+            if(commissionCostInput) commissionCostInput.value = trip.commissionCost?.toString().replace('.', ',') || ''; 
+            if(otherExpensesInput) otherExpensesInput.value = trip.otherExpenses.toString().replace('.', ',');      
             if(expenseDescriptionInput) expenseDescriptionInput.value = trip.expenseDescription || '';
-            if(declaredValueInput) declaredValueInput.value = trip.declaredValue?.toString().replace('.', ',') || ''; // Display with comma
+            if(declaredValueInput) declaredValueInput.value = trip.declaredValue?.toString().replace('.', ',') || '';
 
 
             if (submitTripBtn) submitTripBtn.textContent = 'Salvar Alterações';
@@ -1348,12 +1337,12 @@ function renderAdminDriverIndividualTripsTable(individualTrips, displayMonthYear
         row.insertCell().textContent = formatCurrency(trip.netProfit);
 
         const actionsCell = row.insertCell();
-        const detailsButton = document.createElement('button');
-        detailsButton.className = 'control-btn small-btn';
-        detailsButton.textContent = 'Ver Detalhes';
-        detailsButton.setAttribute('aria-label', `Ver detalhes da viagem de ${formatDisplayDate(trip.date)}`);
-        detailsButton.onclick = () => showAdminTripDetailModal(trip);
-        actionsCell.appendChild(detailsButton);
+        const viewDetailsButton = document.createElement('button');
+        viewDetailsButton.className = 'control-btn small-btn view-trip-details-btn';
+        viewDetailsButton.textContent = 'Ver Detalhes';
+        viewDetailsButton.setAttribute('aria-label', `Ver detalhes da viagem de ${formatDisplayDate(trip.date)}`);
+        viewDetailsButton.onclick = () => showAdminTripDetailModal(trip);
+        actionsCell.appendChild(viewDetailsButton);
     });
 }
 
@@ -1380,9 +1369,9 @@ function showAdminTripDetailModal(trip) {
             <h4>Informações Gerais</h4>
             <p><strong>Motorista:</strong> ${escapeHtml(capitalizeName(trip.driverName))}</p>
             <p><strong>Data:</strong> ${formatDisplayDate(trip.date)}</p>
-            <p><strong>Km Inicial:</strong> ${formatGenericNumber(trip.kmInitial, 0, 0)}</p>
-            <p><strong>Km Final:</strong> ${formatGenericNumber(trip.kmFinal, 0, 0)}</p>
-            <p><strong>Km Rodados:</strong> ${formatGenericNumber(trip.kmDriven, 0, 0)}</p>
+            <p><strong>Km Inicial:</strong> ${formatGenericNumber(trip.kmInitial, 2, 2)}</p>
+            <p><strong>Km Final:</strong> ${formatGenericNumber(trip.kmFinal, 2, 2)}</p>
+            <p><strong>Km Rodados:</strong> ${formatGenericNumber(trip.kmDriven, 2, 2)}</p>
             <p><strong>Peso (Kg):</strong> ${formatGenericNumber(trip.weight, 2, 2)}</p>
             <p><strong>Valor Unidade:</strong> ${formatCurrency(trip.unitValue)}</p>
         </div>
@@ -1410,80 +1399,6 @@ function showAdminTripDetailModal(trip) {
 }
 
 // --- USER MANAGEMENT FUNCTIONS (Admin Fabio) ---
-
-async function handleAdminCreateUser(event) {
-    event.preventDefault();
-    if (!adminCreateUsernameInput || !adminCreateUserRoleSelect || !adminCreateUserPasswordInput || !adminCreateUserConfirmPasswordInput || !adminCreateUserFeedback) {
-        console.error("Admin create user form elements not found.");
-        return;
-    }
-    console.log("Admin attempting user creation...");
-
-    const rawUsername = adminCreateUsernameInput.value.trim();
-    const role = adminCreateUserRoleSelect.value;
-    const password = adminCreateUserPasswordInput.value;
-    const confirmPassword = adminCreateUserConfirmPasswordInput.value;
-
-    const normalizedUsernamePart = normalizeUsernameForEmail(rawUsername);
-
-    if (!rawUsername) {
-        showFeedback(adminCreateUserFeedback, "Nome de usuário é obrigatório.", "error");
-        return;
-    }
-    if (!normalizedUsernamePart || normalizedUsernamePart.includes("user.invalid")) {
-        showFeedback(adminCreateUserFeedback, `Nome de usuário "${rawUsername}" inválido. Use letras ou números.`, "error");
-        return;
-    }
-    if (!password || !confirmPassword) {
-        showFeedback(adminCreateUserFeedback, "Todos os campos de senha são obrigatórios.", "error");
-        return;
-    }
-    if (password.length < 6) {
-        showFeedback(adminCreateUserFeedback, "A senha deve ter pelo menos 6 caracteres.", "error");
-        return;
-    }
-    if (password !== confirmPassword) {
-        showFeedback(adminCreateUserFeedback, "As senhas não coincidem.", "error");
-        return;
-    }
-
-    const email = `${normalizedUsernamePart}@example.com`;
-    console.log("Admin creating user with details:", { rawUsername, normalizedUsernamePart, email, role });
-
-    try {
-        const userCredential = await createUserWithEmailAndPassword(authFirebase, email, password);
-        const firebaseUser = userCredential.user;
-        console.log("User created in Auth by admin:", firebaseUser.uid);
-
-        const newUserProfile = {
-            uid: firebaseUser.uid,
-            username: rawUsername, 
-            email: firebaseUser.email || email,
-            role: role,
-            createdAt: Timestamp.now()
-        };
-        await firebaseSetDoc(doc(userProfilesCollection, firebaseUser.uid), newUserProfile);
-        console.log("User profile created in Firestore by admin.");
-
-        showFeedback(adminCreateUserFeedback, `Usuário "${capitalizeName(rawUsername)}" (${role}) criado com sucesso!`, "success");
-        if(adminCreateUserForm) adminCreateUserForm.reset();
-        loadAndRenderUsersForAdmin();
-
-    } catch (error) {
-        console.error("CRITICAL ERROR during admin user creation:", "Code:", error.code, "Message:", error.message);
-        if (error.code === 'auth/email-already-in-use') {
-            showFeedback(adminCreateUserFeedback, "Nome de usuário (ou e-mail derivado) já existe. Tente outro.", "error");
-        } else if (error.code === 'auth/weak-password') {
-            showFeedback(adminCreateUserFeedback, "Senha muito fraca. Tente uma mais forte.", "error");
-        } else if (error.code === 'auth/invalid-email') {
-            showFeedback(adminCreateUserFeedback, `O nome de usuário "${rawUsername}" resultou em um formato de e-mail inválido ("${email}"). Tente um nome de usuário diferente.`, "error");
-        } else {
-            showFeedback(adminCreateUserFeedback, "Erro ao criar usuário. Verifique o console para detalhes.", "error");
-        }
-    }
-}
-
-
 async function loadAndRenderUsersForAdmin() {
     if (!userManagementTableBody) return;
     if (!loggedInUserProfile || loggedInUserProfile.role !== 'admin' || loggedInUserProfile.username !== 'fabio') {
@@ -1524,53 +1439,11 @@ function renderUserManagementTable(usersToRender) {
         const editButton = document.createElement('button');
         editButton.className = 'control-btn small-btn';
         editButton.textContent = 'Editar Papel';
-        editButton.setAttribute('aria-label', `Editar papel do usuário ${capitalizeName(userProf.username)}`);
+        editButton.setAttribute('aria-label', `Editar papel do usuário ${userProf.username}`);
         editButton.onclick = () => openEditUserModal(userProf);
         actionsCell.appendChild(editButton);
-
-        if (loggedInUserProfile && loggedInUserProfile.username === 'fabio' && userProf.username !== 'fabio') {
-            const deleteButton = document.createElement('button');
-            deleteButton.className = 'control-btn danger-btn small-btn delete-user-btn';
-            deleteButton.textContent = 'Excluir Usuário';
-            deleteButton.setAttribute('aria-label', `Excluir usuário ${capitalizeName(userProf.username)}`);
-            deleteButton.onclick = () => confirmDeleteUserProfile(userProf.uid, userProf.username);
-            actionsCell.appendChild(deleteButton);
-        }
     });
 }
-
-
-function confirmDeleteUserProfile(userId, username) {
-    if (!userId || !username) return;
-    if (username === 'fabio') {
-        showFeedback(userManagementFeedback, "Não é possível excluir o administrador principal 'fabio'.", "error");
-        return;
-    }
-
-    const normalizedUsernamePart = normalizeUsernameForEmail(username);
-    const userAuthEmail = `${normalizedUsernamePart}@example.com`;
-
-    const confirmationMessage = `Tem certeza que deseja excluir o perfil do usuário "${capitalizeName(username)}"?\n\nEsta ação removerá os dados do perfil do sistema (Firestore).\n\nIMPORTANTE: A conta de login deste usuário (e-mail: ${userAuthEmail}) precisará ser REMOVIDA MANUALMENTE do painel de Autenticação do Firebase Console para uma exclusão completa. Esta etapa não pode ser feita automaticamente por aqui.\n\nClique OK para remover o perfil do Firestore.`;
-
-    if (confirm(confirmationMessage)) {
-        deleteUserProfileFromFirestore(userId, username);
-    }
-}
-
-async function deleteUserProfileFromFirestore(userId, username) {
-    try {
-        const normalizedUsernamePart = normalizeUsernameForEmail(username);
-        const userAuthEmail = `${normalizedUsernamePart}@example.com`;
-
-        await deleteDoc(doc(userProfilesCollection, userId));
-        showFeedback(userManagementFeedback, `Perfil de "${capitalizeName(username)}" excluído do Firestore. LEMBRE-SE: Remova a conta de autenticação (e-mail: ${userAuthEmail}) do Firebase Auth Console.`, "success");
-        loadAndRenderUsersForAdmin();
-    } catch (error) {
-        console.error(`Error deleting user profile "${username}" (UID: ${userId}) from Firestore:`, "Code:", error.code, "Message:", error.message);
-        showFeedback(userManagementFeedback, `Erro ao excluir perfil de "${capitalizeName(username)}". Tente novamente.`, "error");
-    }
-}
-
 
 function openEditUserModal(userProf) {
     if (!editUserIdInput || !editUsernameDisplayInput || !editUserRoleSelect || !editUserNewPasswordInput || !editUserConfirmNewPasswordInput || !editUserModal) return;
@@ -1607,7 +1480,7 @@ async function handleEditUserFormSubmit(event) {
         await updateDoc(userProfileRef, { role: newRole });
 
         if (newPassword) {
-            showFeedback(editUserFeedback, "Papel do usuário atualizado. A alteração de senha por esta tela não é diretamente suportada para outros usuários. Se necessário, o administrador pode usar o console do Firebase ou o usuário pode redefinir sua própria senha se essa funcionalidade for implementada.", "info");
+            showFeedback(editUserFeedback, "Papel do usuário atualizado. A alteração de senha por esta tela não é diretamente suportada. Se necessário, o administrador pode usar o console do Firebase ou o usuário pode redefinir sua própria senha.", "info");
         } else {
             showFeedback(editUserFeedback, "Papel do usuário atualizado com sucesso!", "success");
         }
@@ -1665,18 +1538,14 @@ function initializeAdminView() {
     populateAdminDriverSelect();
     populateAdminYearFilterSelect();
     if(adminDriverTripsSection) adminDriverTripsSection.style.display = 'none';
+    if(adminDriverIndividualTripsSection) adminDriverIndividualTripsSection.style.display = 'none';
+
 
     if (!adminDriverFiltersContainer) {
         console.warn("Admin View Init: adminDriverFiltersContainer not found. Filters might not work.");
     } else {
         adminDriverFiltersContainer.style.display = 'none';
     }
-
-    if (adminDriverIndividualTripsSection) adminDriverIndividualTripsSection.style.display = 'none';
-    if (adminIndividualTripsTitle) adminIndividualTripsTitle.textContent = '';
-    if (adminDriverIndividualTripsTableBody) adminDriverIndividualTripsTableBody.innerHTML = '';
-    if (adminDriverIndividualTripsPlaceholder) adminDriverIndividualTripsPlaceholder.textContent = 'Selecione um mês na tabela de resumos para ver as viagens individuais.';
-
 
     if(adminGeneralFeedback) { adminGeneralFeedback.textContent = ''; adminGeneralFeedback.style.display = 'none';}
     if (adminSummaryFilterStartDateInput) adminSummaryFilterStartDateInput.value = '';
@@ -1685,275 +1554,18 @@ function initializeAdminView() {
     if (adminYearFilterSelect) adminYearFilterSelect.value = '';
     if (adminSelectDriver) adminSelectDriver.value = "";
     if (adminSelectedDriverNameDisplay) adminSelectedDriverNameDisplay.textContent = "Selecione um motorista para ver os resumos.";
-    if (adminDriverTripsPlaceholder) {
-        adminDriverTripsPlaceholder.textContent = "Selecione um motorista para ver os resumos.";
-        adminDriverTripsPlaceholder.style.display = 'block';
-    }
-    if(adminDriverTripsTable) adminDriverTripsTable.style.display = 'none';
+    if (adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = "Selecione um motorista para ver os resumos.";
     currentDriverMonthlySummaries = [];
     adminSelectedDriverUid = null;
     adminSelectedDriverName = null;
-
-    if (excelFileInput) excelFileInput.value = '';
-    if (excelImportFeedback) {
-        excelImportFeedback.textContent = '';
-        excelImportFeedback.style.display = 'none';
-    }
 }
 
 function initializeUserManagementView() {
      if (!loggedInUserProfile || loggedInUserProfile.role !== 'admin' || loggedInUserProfile.username !== 'fabio') return;
     loadAndRenderUsersForAdmin();
-    if (adminCreateUserForm) adminCreateUserForm.reset();
-    if (adminCreateUserFeedback) {
-        adminCreateUserFeedback.textContent = '';
-        adminCreateUserFeedback.style.display = 'none';
-    }
+    if(adminCreateUserForm) adminCreateUserForm.reset();
+    if(adminCreateUserFeedback) {adminCreateUserFeedback.textContent = ''; adminCreateUserFeedback.style.display = 'none';}
 }
-
-// --- EXCEL IMPORT FUNCTION ---
-async function handleExcelFileImport() {
-    if (!excelFileInput || !excelImportFeedback || !importExcelBtn) {
-        console.error("Elementos de importação de Excel não encontrados.");
-        if (importExcelBtn) importExcelBtn.disabled = false;
-        return;
-    }
-    const file = excelFileInput.files ? excelFileInput.files[0] : null;
-    if (!file) {
-        showFeedback(excelImportFeedback, "Por favor, selecione um arquivo Excel.", "error");
-        if (importExcelBtn) importExcelBtn.disabled = false;
-        return;
-    }
-
-    showFeedback(excelImportFeedback, "Processando planilha...", "info");
-    importExcelBtn.disabled = true;
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-        try {
-            const data = event.target.result;
-            const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-            const firstSheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[firstSheetName];
-            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
-
-            if (jsonData.length < 2) {
-                showFeedback(excelImportFeedback, "Planilha vazia ou sem dados após o cabeçalho.", "error");
-                if (importExcelBtn) importExcelBtn.disabled = false;
-                if (excelFileInput) excelFileInput.value = '';
-                return;
-            }
-
-            const headersFromSheet = jsonData[0].map(h => String(h || '').trim().toLowerCase());
-            console.log("Cabeçalhos lidos da planilha (normalizados):", headersFromSheet);
-
-            const internalToSheetHeaderMap = {
-                data: ["data"],
-                motorista: ["motorista"],
-                valor_frete: ["valor frete (r$)", "valor frete", "valor do frete", "valor bruto frete"],
-                km_inicial: ["km inicial", "kminicial", "km in"],
-                km_final: ["km final", "kmfinal", "km fn"],
-                peso: ["peso (kg)", "peso"],
-                valor_unidade: ["v. unidade (r$)", "valor unidade", "v. unidade", "valor unitário", "v.un"],
-
-                litros1: ["litros1", "litros 1", "litros"],
-                valor_litro1: ["valor/litro1", "valor/litro 1", "valor litro1", "valor litro 1", "v.litro"],
-                desconto1: ["desconto1", "desconto 1", "descont"],
-
-                litros2: ["litros2", "litros 2", "litro"],
-                valor_litro2: ["valor/litro2", "valor/litro 2", "valor litro2", "valor litro 2", "v.litro2", "v.litro 2"],
-                desconto2: ["desconto2", "desconto 2", "descont2", "descont 2"],
-
-                litros3: ["litros3", "litros 3"],
-                valor_litro3: ["valor/litro3", "valor/litro 3", "valor litro3", "valor litro 3", "v.litro3", "v.litro 3"],
-                desconto3: ["desconto3", "desconto 3", "descont3", "descont 3"],
-                
-                litros4: ["litros4", "litros 4"],
-                valor_litro4: ["valor/litro4", "valor/litro 4", "valor litro4", "valor litro 4", "v.litro4", "v.litro 4"],
-                desconto4: ["desconto4", "desconto 4", "descont4", "descont 4"],
-
-                arla32_cost: ["arla-32 (r$)", "arla-32", "arla", "arla 32", "arla32", "valor arla"],
-                toll_cost: ["pedagio (r$)", "pedagio", "pedágio"],
-                commission_cost: ["comissao (r$)", "comissao", "comissão", "comissão motorista"],
-                other_expenses: ["outras despesas (r$)", "outras despesas"],
-                expense_description: ["descricao outras despesas", "descrição outras despesas", "desc. outras despesas", "observação despesas"],
-                declared_value: ["valor declarado (r$)", "valor declarado", "declarado"]
-            };
-
-
-            const requiredInternalKeys = ['data', 'motorista', 'valor_frete'];
-            const headerMap = {};
-            const missingRequiredHeadersForMessage = [];
-
-            Object.keys(internalToSheetHeaderMap).forEach(internalKey => {
-                const possibleSheetNames = internalToSheetHeaderMap[internalKey];
-                let foundIndex = -1;
-                for (const sheetNameVariant of possibleSheetNames) {
-                    const index = headersFromSheet.indexOf(sheetNameVariant.toLowerCase());
-                    if (index !== -1) {
-                        foundIndex = index;
-                        break;
-                    }
-                }
-                if (foundIndex !== -1) {
-                    headerMap[internalKey] = foundIndex;
-                } else {
-                    console.warn(`Mapeamento para "${internalKey}" (esperando um de: [${possibleSheetNames.join(', ')}]) não encontrado nos cabeçalhos da planilha: [${headersFromSheet.join(', ')}]`);
-                    if (requiredInternalKeys.includes(internalKey)) {
-                        missingRequiredHeadersForMessage.push(possibleSheetNames[0]); 
-                    }
-                }
-            });
-            console.log("Mapa de cabeçalhos gerado (headerMap - chave_interna: indice_planilha):", headerMap);
-
-            if (missingRequiredHeadersForMessage.length > 0) {
-                const message = `Cabeçalho(s) obrigatório(s) não encontrado(s) na planilha: ${missingRequiredHeadersForMessage.join(', ')}. Por favor, verifique se sua planilha contém estes cabeçalhos na primeira linha. Cabeçalhos lidos da sua planilha: [${headersFromSheet.join(', ')}]`;
-                showFeedback(excelImportFeedback, message, "error");
-                if (importExcelBtn) importExcelBtn.disabled = false;
-                if (excelFileInput) excelFileInput.value = '';
-                return;
-            }
-
-            const qProfiles = query(userProfilesCollection, where("role", "==", "motorista"));
-            const profileSnapshot = await getDocs(qProfiles);
-            const motoristaProfiles = new Map();
-            profileSnapshot.forEach(doc => {
-                const profile = doc.data();
-                motoristaProfiles.set(profile.username.trim().toLowerCase(), profile.uid);
-            });
-
-            const batch = writeBatch(db);
-            let importedCount = 0;
-            const errorMessages = [];
-            const rows = jsonData.slice(1);
-
-            for (let i = 0; i < rows.length; i++) {
-                const rowArray = rows[i];
-                const tripEntry = {};
-
-                const motoristaNomeOriginal = String(rowArray[headerMap.motorista] || '').trim();
-                if (!motoristaNomeOriginal && headerMap.motorista !== undefined) {
-                    errorMessages.push(`Linha ${i + 2}: Nome do motorista está vazio. Frete ignorado.`);
-                    continue;
-                }
-                const motoristaUid = motoristaProfiles.get(motoristaNomeOriginal.toLowerCase());
-
-                if (!motoristaUid && motoristaNomeOriginal) {
-                    errorMessages.push(`Linha ${i + 2}: Motorista "${capitalizeName(motoristaNomeOriginal)}" não encontrado no sistema. Frete ignorado.`);
-                    continue;
-                }
-                 if (!motoristaUid && !motoristaNomeOriginal && headerMap.motorista !== undefined) {
-                    errorMessages.push(`Linha ${i + 2}: Nome do motorista não fornecido e coluna existe. Frete ignorado.`);
-                    continue;
-                }
-                tripEntry.userId = motoristaUid;
-                tripEntry.driverName = motoristaNomeOriginal;
-
-                const dateValueFromSheet = rowArray[headerMap.data];
-                tripEntry.date = formatDate(dateValueFromSheet);
-                if (tripEntry.date === 'Data inválida') {
-                     errorMessages.push(`Linha ${i + 2}: Data "${dateValueFromSheet}" inválida. Frete ignorado.`);
-                    continue;
-                }
-
-                if (tripEntry.userId && tripEntry.date !== 'Data inválida') {
-                    const qExisting = query(tripsCollection, 
-                                            where("userId", "==", tripEntry.userId), 
-                                            where("date", "==", tripEntry.date));
-                    const querySnapshotExisting = await getDocs(qExisting);
-                    if (!querySnapshotExisting.empty) {
-                        errorMessages.push(`Linha ${i + 2}: Viagem duplicada para ${capitalizeName(motoristaNomeOriginal)} na data ${formatDisplayDate(tripEntry.date)}. Ignorada.`);
-                        continue; 
-                    }
-                }
-
-                tripEntry.freightValue = parseNumericValueFromString(rowArray[headerMap.valor_frete]);
-                if (tripEntry.freightValue <= 0 && headerMap.valor_frete !== undefined && (rowArray[headerMap.valor_frete] !== undefined && rowArray[headerMap.valor_frete] !== null && String(rowArray[headerMap.valor_frete]).trim() !== '')) {
-                     errorMessages.push(`Linha ${i + 2}: Valor do Frete (${rowArray[headerMap.valor_frete]}) inválido ou zero. Frete ignorado.`);
-                    continue;
-                }
-
-                tripEntry.kmInitial = parseNumericValueFromString(rowArray[headerMap.km_inicial]);
-                tripEntry.kmFinal = parseNumericValueFromString(rowArray[headerMap.km_final]);
-                tripEntry.kmDriven = (tripEntry.kmFinal > tripEntry.kmInitial) ? tripEntry.kmFinal - tripEntry.kmInitial : 0;
-                tripEntry.weight = parseNumericValueFromString(rowArray[headerMap.peso]);
-                tripEntry.unitValue = parseNumericValueFromString(rowArray[headerMap.valor_unidade]);
-
-                tripEntry.fuelEntries = [];
-                let totalFuelCostCalculated = 0;
-                for (let j = 1; j <= 4; j++) { 
-                    const litrosKey = `litros${j}`;
-                    const valorLitroKey = `valor_litro${j}`;
-                    const descontoKey = `desconto${j}`;
-
-                    if (headerMap[litrosKey] !== undefined && headerMap[valorLitroKey] !== undefined && rowArray[headerMap[litrosKey]]) {
-                        const liters = parseNumericValueFromString(rowArray[headerMap[litrosKey]]);
-                        const valuePerLiter = parseNumericValueFromString(rowArray[headerMap[valorLitroKey]]);
-                        const discount = headerMap[descontoKey] !== undefined ? parseNumericValueFromString(rowArray[headerMap[descontoKey]]) : 0;
-                        if (liters > 0 && valuePerLiter > 0) {
-                            const totalValue = (liters * valuePerLiter) - discount;
-                            tripEntry.fuelEntries.push({
-                                id: `imported_fuel_${i}_${j}`,
-                                liters,
-                                valuePerLiter,
-                                discount,
-                                totalValue
-                            });
-                            totalFuelCostCalculated += totalValue;
-                        }
-                    }
-                }
-                tripEntry.totalFuelCost = totalFuelCostCalculated;
-
-                tripEntry.arla32Cost = parseNumericValueFromString(rowArray[headerMap.arla32_cost]);
-                tripEntry.tollCost = parseNumericValueFromString(rowArray[headerMap.toll_cost]);
-                tripEntry.commissionCost = parseNumericValueFromString(rowArray[headerMap.commission_cost]);
-                tripEntry.otherExpenses = parseNumericValueFromString(rowArray[headerMap.other_expenses]);
-                tripEntry.expenseDescription = String(rowArray[headerMap.expense_description] || '').trim();
-                tripEntry.declaredValue = parseNumericValueFromString(rowArray[headerMap.declared_value]);
-
-                tripEntry.totalExpenses = tripEntry.totalFuelCost + tripEntry.arla32Cost + tripEntry.tollCost + tripEntry.commissionCost + tripEntry.otherExpenses;
-                tripEntry.netProfit = tripEntry.freightValue - tripEntry.totalExpenses;
-                tripEntry.createdAt = Timestamp.now();
-
-                const newTripRef = doc(collection(db, "trips"));
-                batch.set(newTripRef, tripEntry);
-                importedCount++;
-            }
-
-            if (importedCount > 0) {
-                await batch.commit();
-            }
-
-            let feedbackMsg = `${importedCount} frete(s) importado(s) com sucesso.`;
-            if (errorMessages.length > 0) {
-                feedbackMsg += `\n\nDetalhes dos erros/avisos:\n${errorMessages.join('\n')}`;
-            }
-            showFeedback(excelImportFeedback, feedbackMsg, errorMessages.length > 0 && importedCount > 0 ? "info" : (importedCount > 0 ? "success" : "error"));
-
-            if (importedCount > 0) {
-                updateAdminSummary();
-                if (adminSelectedDriverUid) loadAndRenderAdminDriverMonthlySummaries();
-            }
-
-
-        } catch (error) {
-            console.error("Erro ao processar planilha Excel:", error);
-            showFeedback(excelImportFeedback, `Erro fatal ao processar planilha: ${error.message}. Verifique o console.`, "error");
-        } finally {
-            if (excelFileInput) excelFileInput.value = '';
-            if (importExcelBtn) importExcelBtn.disabled = false;
-        }
-    };
-
-    reader.onerror = () => {
-        showFeedback(excelImportFeedback, "Não foi possível ler o arquivo selecionado.", "error");
-        if (importExcelBtn) importExcelBtn.disabled = false;
-    };
-
-    reader.readAsArrayBuffer(file);
-}
-
 
 // --- FUNÇÃO DE EXPORTAÇÃO HTML ---
 function convertToHTMLTable(dataArray, headers, reportMonthStr) {
@@ -2008,23 +1620,21 @@ async function handleExportAdminReport() {
 
     const today = new Date();
     let year = today.getFullYear();
-    let month = today.getMonth(); 
+    let month = today.getMonth();
 
-    if (month === 0) { 
-        month = 11; 
+    if (month === 0) {
+        month = 11;
         year -= 1;
     } else {
-        month -= 1; 
+        month -= 1;
     }
 
     const firstDayPrevMonth = new Date(year, month, 1);
-    const lastDayPrevMonth = new Date(year, month + 1, 0); 
+    const lastDayPrevMonth = new Date(year, month + 1, 0);
 
-    const startDate = formatDate(firstDayPrevMonth); 
-    const endDate = formatDate(lastDayPrevMonth);   
-    const reportMonthStrForDisplay = `${String(month + 1).padStart(2, '0')}/${year}`;
-    const reportMonthStrForFilename = `${year}-${String(month + 1).padStart(2, '0')}`;
-
+    const startDate = firstDayPrevMonth.toISOString().split('T')[0];
+    const endDate = lastDayPrevMonth.toISOString().split('T')[0];
+    const reportMonthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
 
     try {
         const q = query(tripsCollection, where("date", ">=", startDate), where("date", "<=", endDate), orderBy("date", "asc"));
@@ -2035,10 +1645,10 @@ async function handleExportAdminReport() {
         });
 
         if (reportTrips.length === 0) {
-            showFeedback(adminGeneralFeedback, `Nenhum frete encontrado para ${reportMonthStrForDisplay} para exportar.`, "info");
+            showFeedback(adminGeneralFeedback, `Nenhum frete encontrado para ${reportMonthStr} para exportar.`, "info");
             return;
         }
-
+        
         const localUserProfilesForReport = [];
         const qProfiles = query(userProfilesCollection, orderBy("username"));
         const profileSnapshot = await getDocs(qProfiles);
@@ -2049,43 +1659,69 @@ async function handleExportAdminReport() {
 
 
         const headers = [
-            "Data", "Motorista", "Km Inicial", "Km Final", "Km Rodados", 
-            "Peso (Kg)", "Valor Frete Bruto (R$)", "Total Combustivel (R$)", "Arla-32 (R$)", "Pedagio (R$)",
+            "Data", "Motorista", "Km Inicial", "Km Final", "Km Rodados",
+            "Peso (Kg)", "Valor Unidade (R$)", "Valor Frete Bruto (R$)",
+            "Litros 1", "V/Litro 1", "Desc 1", "Total 1",
+            "Litros 2", "V/Litro 2", "Desc 2", "Total 2",
+            "Litros 3", "V/Litro 3", "Desc 3", "Total 3",
+            "Litros 4", "V/Litro 4", "Desc 4", "Total 4",
+            "Total Combustivel (R$)", "Arla-32 (R$)", "Pedagio (R$)",
             "Comissao (R$)", "Outras Despesas (R$)", "Descricao Outras Despesas",
             "Despesas Totais (R$)", "Lucro Liquido (R$)", "Valor Declarado (R$)"
         ];
+        
+        const dataForHTML = reportTrips.map(trip => {
+            const rowData = [
+                formatDisplayDate(trip.date),
+                capitalizeName(userMap.get(trip.userId) || trip.driverName),
+                formatGenericNumber(trip.kmInitial, 2, 2),
+                formatGenericNumber(trip.kmFinal, 2, 2),
+                formatGenericNumber(trip.kmDriven, 2, 2),
+                formatGenericNumber(trip.weight, 2, 2),
+                formatCurrency(trip.unitValue || 0),
+                formatCurrency(trip.freightValue || 0),
+            ];
 
-        const dataForHTML = reportTrips.map(trip => [
-            formatDisplayDate(trip.date),
-            capitalizeName(userMap.get(trip.userId) || trip.driverName),
-            formatGenericNumber(trip.kmInitial, 2, 2), 
-            formatGenericNumber(trip.kmFinal, 2, 2),   
-            formatGenericNumber(trip.kmDriven, 2, 2),  
-            formatGenericNumber(trip.weight, 2, 2),
-            formatCurrency(trip.freightValue || 0),
-            formatCurrency(trip.totalFuelCost || 0),
-            formatCurrency(trip.arla32Cost || 0),
-            formatCurrency(trip.tollCost || 0),
-            formatCurrency(trip.commissionCost || 0),
-            formatCurrency(trip.otherExpenses || 0),
-            trip.expenseDescription || '',
-            formatCurrency(trip.totalExpenses || 0),
-            formatCurrency(trip.netProfit || 0),
-            formatCurrency(trip.declaredValue || 0)
-        ]);
+            for (let i = 0; i < 4; i++) { // For up to 4 fuel entries
+                if (trip.fuelEntries && trip.fuelEntries[i]) {
+                    rowData.push(
+                        formatGenericNumber(trip.fuelEntries[i].liters, 2, 2),
+                        formatCurrency(trip.fuelEntries[i].valuePerLiter),
+                        formatCurrency(trip.fuelEntries[i].discount),
+                        formatCurrency(trip.fuelEntries[i].totalValue)
+                    );
+                } else {
+                    rowData.push('', '', '', ''); // Empty cells if no entry
+                }
+            }
 
-        const htmlString = convertToHTMLTable(dataForHTML, headers, reportMonthStrForDisplay);
+            rowData.push(
+                formatCurrency(trip.totalFuelCost || 0),
+                formatCurrency(trip.arla32Cost || 0),
+                formatCurrency(trip.tollCost || 0),
+                formatCurrency(trip.commissionCost || 0),
+                formatCurrency(trip.otherExpenses || 0),
+                trip.expenseDescription || '',
+                formatCurrency(trip.totalExpenses || 0),
+                formatCurrency(trip.netProfit || 0),
+                formatCurrency(trip.declaredValue || 0)
+            );
+            return rowData;
+        });
+
+
+        const htmlString = convertToHTMLTable(dataForHTML, headers, reportMonthStr);
         const blob = new Blob([htmlString], { type: 'text/html;charset=utf-8;' });
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
         link.setAttribute("href", url);
-        link.setAttribute("download", `Relatorio_Fretes_${reportMonthStrForFilename}.html`);
+        link.setAttribute("download", `Relatorio_Fretes_${reportMonthStr}.html`);
         link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
 
-        showFeedback(adminGeneralFeedback, `Relatório HTML para ${reportMonthStrForDisplay} gerado e baixado. Por favor, anexe o arquivo .html em um e-mail para ibisolaribipitanga@gmail.com.`, "success");
+        showFeedback(adminGeneralFeedback, `Relatório HTML para ${reportMonthStr} gerado e baixado. Por favor, anexe o arquivo .html em um e-mail para ibisolaribipitanga@gmail.com.`, "success");
 
     } catch (error) {
         console.error("Erro ao gerar relatório HTML:", error);
@@ -2093,6 +1729,251 @@ async function handleExportAdminReport() {
     }
 }
 
+
+async function handleExcelFileImport(event) {
+    const file = event.target.files[0];
+    if (!file) {
+        showFeedback(excelImportFeedback, "Nenhum arquivo selecionado.", "info");
+        return;
+    }
+
+    if (!loggedInUserProfile || loggedInUserProfile.role !== 'admin') {
+        showFeedback(excelImportFeedback, "Apenas administradores podem importar planilhas.", "error");
+        return;
+    }
+
+    showFeedback(excelImportFeedback, "Processando arquivo Excel...", "info");
+    const reader = new FileReader();
+
+    reader.onload = async (e) => {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array', cellDates: true, cellNF: false, cellText: true });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, defval: null });
+
+            if (jsonData.length < 2) {
+                showFeedback(excelImportFeedback, "Planilha vazia ou sem dados após o cabeçalho.", "error");
+                return;
+            }
+
+            const headerRow = jsonData[0].map(header => String(header || '').trim().toLowerCase());
+            const dataRows = jsonData.slice(1);
+
+            const internalToSheetHeaderMap = {
+                date: ["data"],
+                driverName: ["motorista", "nome motorista", "motoristas"],
+                kmInitial: ["km inicial", "km in", "km ini", "km inicial.", "kminicial"],
+                kmFinal: ["km final", "km fn", "km fim", "km final.", "kmfinal"],
+                weight: ["peso", "peso (kg)", "peso kg"],
+                unitValue: ["v.un", "v. un", "v un", "valor unidade", "valor unitario", "valor/un", "valor_unidade"],
+                freightValue: ["valor frete", "valor do frete", "vlr frete", "v. frete", "frete bruto", "valorfrete"],
+                litros1: ["litros", "litro", "lts", "litros1", "litro1"],
+                valor_litro1: ["v.litro", "v. litro", "valor litro", "v litro", "valor/litro", "valor_litro", "v.litro1", "valor_litro1"],
+                desconto1: ["descont", "desconto", "desc", "desconto1", "desc1"],
+                litros2: ["litros2", "litro2", "lts2"],
+                valor_litro2: ["v.litro2", "v. litro2", "valor litro2", "v litro2", "valor/litro2", "valor_litro2"],
+                desconto2: ["descont2", "desconto2", "desc2"],
+                litros3: ["litros3", "litro3", "lts3"],
+                valor_litro3: ["v.litro3", "v. litro3", "valor litro3", "v litro3", "valor/litro3", "valor_litro3"],
+                desconto3: ["descont3", "desconto3", "desc3"],
+                litros4: ["litros4", "litro4", "lts4"],
+                valor_litro4: ["v.litro4", "v. litro4", "valor litro4", "v litro4", "valor/litro4", "valor_litro4"],
+                desconto4: ["descont4", "desconto4", "desc4"],
+                arla32Cost: ["arla-32", "arla32", "arla", "custo arla"],
+                tollCost: ["pedágio", "pedagio", "pedágios", "pedagios"],
+                commissionCost: ["comissão", "comissao", "comissões", "comissoes", "comiss"],
+                otherExpenses: ["outras despesas", "outrasdespesas", "desp. adic.", "despesas adicionais"],
+                expenseDescription: ["descrição outras despesas", "descricao outras despesas", "desc. outras", "detalhes despesas"],
+                declaredValue: ["declarado", "valor declarado", "vlr declarado", "valordeclarado"],
+            };
+
+            const headerMap = {};
+            for (const internalKey in internalToSheetHeaderMap) {
+                for (const alias of internalToSheetHeaderMap[internalKey]) {
+                    const index = headerRow.indexOf(alias);
+                    if (index !== -1) {
+                        headerMap[internalKey] = index;
+                        break; 
+                    }
+                }
+            }
+            
+            // Validação de cabeçalhos essenciais
+            const essentialHeaders = ["date", "driverName", "freightValue"];
+            for (const essential of essentialHeaders) {
+                if (headerMap[essential] === undefined) {
+                    throw new Error(`Coluna essencial "${internalToSheetHeaderMap[essential][0]}" não encontrada na planilha.`);
+                }
+            }
+
+
+            const batch = writeBatch(db);
+            let importCount = 0;
+            const errorMessages = [];
+            let importedTripsLog = "Viagens importadas com sucesso:\n";
+            let skippedTripsLog = "Viagens ignoradas (já existentes ou erro):\n";
+
+
+            const motoristasSnapshot = await getDocs(query(userProfilesCollection, where("role", "==", "motorista")));
+            const motoristasMap = new Map();
+            motoristasSnapshot.forEach(docSnap => {
+                const profile = docSnap.data();
+                motoristasMap.set(profile.username.trim().toLowerCase(), profile.uid);
+            });
+
+
+            for (let i = 0; i < dataRows.length; i++) {
+                const rowArray = dataRows[i];
+                if (!rowArray || rowArray.every(cell => cell === null || String(cell).trim() === '')) continue; 
+
+                const driverNameFromSheet = String(rowArray[headerMap.driverName] || '').trim();
+                const motoristaUid = motoristasMap.get(driverNameFromSheet.toLowerCase());
+
+                if (!motoristaUid) {
+                    errorMessages.push(`Linha ${i + 2}: Motorista "${driverNameFromSheet}" não encontrado no sistema. Cadastre-o primeiro.`);
+                    skippedTripsLog += `Linha ${i + 2}: Motorista "${driverNameFromSheet}" não cadastrado.\n`;
+                    continue;
+                }
+                
+                let tripDateRaw = rowArray[headerMap.date];
+                let tripDateFormatted;
+                
+                if (tripDateRaw instanceof Date) { // Se o XLSX já interpretou como Date
+                     tripDateFormatted = formatDate(tripDateRaw);
+                } else if (typeof tripDateRaw === 'number') { // Se for número de série do Excel
+                    const excelEpoch = new Date(1899, 11, 30); // Excel epoch starts Dec 30, 1899
+                    const jsDate = new Date(excelEpoch.getTime() + tripDateRaw * 24 * 60 * 60 * 1000);
+                    tripDateFormatted = formatDate(jsDate);
+                } else if (typeof tripDateRaw === 'string') { // Se for string (DD/MM/YYYY ou YYYY-MM-DD)
+                    tripDateFormatted = formatDate(tripDateRaw.trim());
+                } else {
+                     errorMessages.push(`Linha ${i + 2}: Formato de data inválido ou não reconhecido: ${tripDateRaw}. Use YYYY-MM-DD ou DD/MM/YYYY.`);
+                     skippedTripsLog += `Linha ${i+2}: Data inválida: ${tripDateRaw}\n`;
+                     continue;
+                }
+
+                if (tripDateFormatted === 'Data inválida') {
+                    errorMessages.push(`Linha ${i + 2}: Data inválida ou mal formatada: "${rowArray[headerMap.date]}". Use YYYY-MM-DD ou DD/MM/YYYY.`);
+                    skippedTripsLog += `Linha ${i+2}: Data mal formatada: ${rowArray[headerMap.date]}\n`;
+                    continue;
+                }
+
+
+                const existingTripQuery = query(tripsCollection, 
+                    where("userId", "==", motoristaUid), 
+                    where("date", "==", tripDateFormatted)
+                );
+                const existingTripSnapshot = await getDocs(existingTripQuery);
+
+                if (!existingTripSnapshot.empty) {
+                     skippedTripsLog += `Linha ${i + 2}: Viagem para ${driverNameFromSheet} em ${formatDisplayDate(tripDateFormatted)} já existe. Ignorando.\n`;
+                    continue; 
+                }
+
+
+                const fuelEntries = [];
+                let totalFuelCostSheet = 0;
+                for (let j = 1; j <= 4; j++) { 
+                    const liters = parseNumericValueFromString(String(rowArray[headerMap[`litros${j}`]] || '0').trim());
+                    const valuePerLiter = parseNumericValueFromString(String(rowArray[headerMap[`valor_litro${j}`]] || '0').trim());
+                    const discount = parseNumericValueFromString(String(rowArray[headerMap[`desconto${j}`]] || '0').trim());
+
+                    if (liters > 0 && valuePerLiter > 0) {
+                        const totalValue = (liters * valuePerLiter) - discount;
+                        fuelEntries.push({ id: generateId(), liters, valuePerLiter, discount, totalValue });
+                        totalFuelCostSheet += totalValue;
+                    }
+                }
+                
+                const kmInitialSheet = parseNumericValueFromString(String(rowArray[headerMap.kmInitial] || '0').trim());
+                const kmFinalSheet = parseNumericValueFromString(String(rowArray[headerMap.kmFinal] || '0').trim());
+                const freightValueSheet = parseNumericValueFromString(String(rowArray[headerMap.freightValue] || '0').trim());
+
+                if (freightValueSheet <= 0) {
+                     errorMessages.push(`Linha ${i + 2}: Valor do frete não pode ser zero ou negativo. Motorista: ${driverNameFromSheet}, Data: ${tripDateFormatted}`);
+                     skippedTripsLog += `Linha ${i+2}: Valor do frete inválido (${driverNameFromSheet}, ${formatDisplayDate(tripDateFormatted)})\n`;
+                     continue;
+                }
+
+                const arla32CostSheet = parseNumericValueFromString(String(rowArray[headerMap.arla32Cost] || '0').trim());
+                const tollCostSheet = parseNumericValueFromString(String(rowArray[headerMap.tollCost] || '0').trim());
+                const commissionCostSheet = parseNumericValueFromString(String(rowArray[headerMap.commissionCost] || '0').trim());
+                const otherExpensesSheet = parseNumericValueFromString(String(rowArray[headerMap.otherExpenses] || '0').trim());
+
+                const totalExpensesSheet = totalFuelCostSheet + arla32CostSheet + tollCostSheet + otherExpensesSheet + commissionCostSheet;
+                const netProfitSheet = freightValueSheet - totalExpensesSheet;
+
+                const newTrip = {
+                    userId: motoristaUid,
+                    driverName: driverNameFromSheet,
+                    date: tripDateFormatted,
+                    kmInitial: kmInitialSheet,
+                    kmFinal: kmFinalSheet,
+                    kmDriven: (kmFinalSheet > kmInitialSheet) ? kmFinalSheet - kmInitialSheet : 0,
+                    weight: parseNumericValueFromString(String(rowArray[headerMap.weight] || '0').trim()),
+                    unitValue: parseNumericValueFromString(String(rowArray[headerMap.unitValue] || '0').trim()),
+                    freightValue: freightValueSheet,
+                    fuelEntries: fuelEntries,
+                    arla32Cost: arla32CostSheet,
+                    tollCost: tollCostSheet,
+                    commissionCost: commissionCostSheet,
+                    otherExpenses: otherExpensesSheet,
+                    expenseDescription: String(rowArray[headerMap.expenseDescription] || '').trim(),
+                    totalFuelCost: totalFuelCostSheet,
+                    totalExpenses: totalExpensesSheet,
+                    netProfit: netProfitSheet,
+                    declaredValue: parseNumericValueFromString(String(rowArray[headerMap.declaredValue] || '0').trim()),
+                    createdAt: Timestamp.now(),
+                };
+                
+                const newTripRef = doc(tripsCollection); 
+                batch.set(newTripRef, newTrip);
+                importCount++;
+                importedTripsLog += `Linha ${i + 2}: ${driverNameFromSheet}, ${formatDisplayDate(tripDateFormatted)}, Frete: ${formatCurrency(newTrip.freightValue)}\n`;
+            }
+
+            if (importCount > 0) {
+                await batch.commit();
+                let successMsg = `${importCount} frete(s) importado(s) com sucesso!\n\n${importedTripsLog}`;
+                if (skippedTripsLog.length > "Viagens ignoradas (já existentes ou erro):\n".length) {
+                     successMsg += `\n${skippedTripsLog}`;
+                }
+                if (errorMessages.length > 0) {
+                    successMsg += "\n\nErros detalhados:\n" + errorMessages.join("\n");
+                }
+                showFeedback(excelImportFeedback, successMsg, "success");
+                updateAdminSummary();
+                if (adminSelectedDriverUid) {
+                    loadAndRenderAdminDriverMonthlySummaries();
+                }
+            } else {
+                let noImportMsg = "Nenhum frete novo para importar.\n";
+                if (skippedTripsLog.length > "Viagens ignoradas (já existentes ou erro):\n".length) {
+                     noImportMsg += `\n${skippedTripsLog}`;
+                }
+                if (errorMessages.length > 0) {
+                     noImportMsg += "\n\nErros encontrados:\n" + errorMessages.join("\n");
+                } else if (importCount === 0 && dataRows.length > 0 && errorMessages.length === 0) {
+                    noImportMsg = "Nenhum frete novo encontrado na planilha ou todos já existiam no sistema.\n" + skippedTripsLog;
+                }
+                showFeedback(excelImportFeedback, noImportMsg, errorMessages.length > 0 ? "error" : "info");
+            }
+
+        } catch (error) {
+            console.error("Erro ao processar planilha Excel:", error);
+            showFeedback(excelImportFeedback, `Erro ao processar planilha: ${error.message}. Verifique o formato do arquivo e os cabeçalhos.`, "error");
+        } finally {
+            if (excelFileInput) excelFileInput.value = ''; // Reset file input
+        }
+    };
+    reader.onerror = () => {
+        showFeedback(excelImportFeedback, "Falha ao ler o arquivo.", "error");
+        if (excelFileInput) excelFileInput.value = '';
+    };
+    reader.readAsArrayBuffer(file);
+}
 
 // --- EVENT LISTENERS ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -2107,6 +1988,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
         console.error("loginUsername input field not found for adding lowercase listener.");
     }
+
 
     if (!app || !authFirebase || !db || !userProfilesCollection || !tripsCollection) {
         console.error("CRITICAL DOMContentLoaded: Firebase not initialized correctly or collections not set. App listeners not added.");
@@ -2128,6 +2010,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
     console.log("Firebase seems initialized, proceeding to add event listeners.");
+
 
     if (loginForm) {
         loginForm.addEventListener('submit', handleLogin);
@@ -2166,7 +2049,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             try {
-                const qUser = query(userProfilesCollection, where("username", "==", driverNameToSearch)); 
+                const qUser = query(userProfilesCollection, where("username", "==", driverNameToSearch));
                 const userSnapshot = await getDocs(qUser);
                 if (!userSnapshot.empty) {
                     const foundUser = userSnapshot.docs[0].data();
@@ -2174,12 +2057,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     currentUidForMyTripsSearch = foundUser.uid;
                     loadAndRenderMyTrips(myTripsFilterStartDateInput?.value, myTripsFilterEndDateInput?.value);
                 } else {
-                    showFeedback(myTripsFeedback, `Motorista "${capitalizeName(myTripsDriverNameInput.value.trim())}" não encontrado.`, "error");
+                    showFeedback(myTripsFeedback, `Motorista "${myTripsDriverNameInput.value.trim()}" não encontrado.`, "error");
                     if (myTripsTableBody) myTripsTableBody.innerHTML = '';
-                    if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Nenhum motorista encontrado com o nome "${capitalizeName(myTripsDriverNameInput.value.trim())}".`;
+                    if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Nenhum motorista encontrado com o nome "${myTripsDriverNameInput.value.trim()}".`;
                     if (myTripsTable) myTripsTable.style.display = 'none';
                     if (myTripsTablePlaceholder) myTripsTablePlaceholder.style.display = 'block';
-                    updateDriverSummary([], capitalizeName(myTripsDriverNameInput.value.trim()));
+                    updateDriverSummary([], myTripsDriverNameInput.value.trim());
                 }
             } catch(err) {
                 console.error("Error searching driver by name:", "Code:", err.code, "Message:", err.message);
@@ -2202,8 +2085,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (exportAdminReportBtn) {
         exportAdminReportBtn.addEventListener('click', handleExportAdminReport);
     }
-     if (importExcelBtn) {
-        importExcelBtn.addEventListener('click', handleExcelFileImport);
+    if (importExcelBtn && excelFileInput) {
+        importExcelBtn.addEventListener('click', () => {
+            if (excelFileInput.files && excelFileInput.files[0]) {
+                handleExcelFileImport({ target: { files: excelFileInput.files } });
+            } else {
+                showFeedback(excelImportFeedback, "Por favor, selecione um arquivo Excel primeiro.", "info");
+            }
+        });
     }
 
 
@@ -2231,14 +2120,77 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (adminCreateUserForm) {
-        adminCreateUserForm.addEventListener('submit', handleAdminCreateUser);
-    } else { console.error("adminCreateUserForm not found!"); }
-
 
     if(editUserForm) editUserForm.addEventListener('submit', handleEditUserFormSubmit);
     if(closeEditUserModalBtn && editUserModal) {
         closeEditUserModalBtn.addEventListener('click', () => editUserModal.style.display = 'none');
+    }
+
+    if (adminCreateUserForm) {
+        adminCreateUserForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const username = adminCreateUsernameInput.value.trim();
+            const role = adminCreateUserRoleSelect.value;
+            const password = adminCreateUserPasswordInput.value;
+            const confirmPassword = adminCreateUserConfirmPasswordInput.value;
+
+            const normalizedUsernamePart = normalizeUsernameForEmail(username);
+
+            if (!username) {
+                showFeedback(adminCreateUserFeedback, "Nome de usuário é obrigatório.", "error"); return;
+            }
+            if (!normalizedUsernamePart || normalizedUsernamePart.includes("user.invalid")) {
+                 showFeedback(adminCreateUserFeedback, `Nome de usuário "${username}" inválido. Use letras ou números e evite apenas espaços ou caracteres especiais.`, "error"); return;
+            }
+            if (!password || password.length < 6) {
+                showFeedback(adminCreateUserFeedback, "Senha deve ter pelo menos 6 caracteres.", "error"); return;
+            }
+            if (password !== confirmPassword) {
+                showFeedback(adminCreateUserFeedback, "As senhas não coincidem.", "error"); return;
+            }
+
+            const email = `${normalizedUsernamePart}@example.com`;
+
+            try {
+                if (adminCreateUserBtn) {
+                    adminCreateUserBtn.disabled = true;
+                    adminCreateUserBtn.textContent = 'Cadastrando...';
+                }
+
+                const userCredential = await createUserWithEmailAndPassword(authFirebase, email, password);
+                const firebaseUser = userCredential.user;
+
+                const newUserProfile = {
+                    uid: firebaseUser.uid,
+                    username: username,
+                    email: firebaseUser.email || email,
+                    role: role,
+                    createdAt: Timestamp.now()
+                };
+                await firebaseSetDoc(doc(userProfilesCollection, firebaseUser.uid), newUserProfile);
+                showFeedback(adminCreateUserFeedback, `Usuário "${username}" (${role}) cadastrado com sucesso!`, "success");
+                adminCreateUserForm.reset();
+                loadAndRenderUsersForAdmin(); 
+                populateAdminDriverSelect(); 
+
+            } catch (error) {
+                console.error("Error creating user from admin panel:", "Code:", error.code, "Message:", error.message);
+                if (error.code === 'auth/email-already-in-use') {
+                    showFeedback(adminCreateUserFeedback, `Nome de usuário "${username}" (ou e-mail derivado: ${email}) já existe. Tente outro.`, "error");
+                } else if (error.code === 'auth/weak-password') {
+                    showFeedback(adminCreateUserFeedback, "Senha muito fraca.", "error");
+                } else if (error.code === 'auth/invalid-email') {
+                    showFeedback(adminCreateUserFeedback, `O nome de usuário "${username}" resultou em um e-mail inválido ("${email}"). Tente outro nome.`, "error");
+                } else {
+                    showFeedback(adminCreateUserFeedback, "Erro ao cadastrar usuário. Verifique o console.", "error");
+                }
+            } finally {
+                 if (adminCreateUserBtn) {
+                    adminCreateUserBtn.disabled = false;
+                    adminCreateUserBtn.textContent = 'Cadastrar Usuário';
+                }
+            }
+        });
     }
 
     const modals = document.querySelectorAll('.modal');

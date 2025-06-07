@@ -236,26 +236,27 @@ function capitalizeName(nameString) {
 }
 
 function parseNumericValueFromString(value) {
-    if (value === null || value === undefined) return 0;
+    if (value === null || value === undefined || String(value).trim() === "") return 0;
     let strValue = String(value).trim();
-    // Remove R$, espaços, pontos de milhar (exceto se for o único ponto decimal), e substitui vírgula decimal por ponto
-    strValue = strValue.replace(/R\$\s?/g, ''); // Remove "R$" e espaço opcional
-    // Verifica se existe vírgula para decimal e múltiplos pontos para milhar
-    const hasCommaDecimal = strValue.includes(',');
-    const hasMultiplePeriods = (strValue.match(/\./g) || []).length > 1;
+    strValue = strValue.replace(/R\$\s?/g, ''); // Remove R$ e espaço opcional
 
-    if (hasMultiplePeriods && hasCommaDecimal) { // Formato como "1.234,56"
-        strValue = strValue.replace(/\./g, '').replace(',', '.');
-    } else if (hasMultiplePeriods && !hasCommaDecimal) { // Formato como "1.234.56" (assumindo que último é decimal se não houver vírgula)
-        // Esta lógica pode ser ambígua. Por segurança, se houver múltiplos pontos e nenhuma vírgula,
-        // vamos remover todos os pontos exceto o último, se ele parecer ser um separador decimal.
-        // Para simplificar, vamos apenas remover todos os pontos e deixar o parseFloat lidar com um possível decimal.
-        // Se for "1.234", se torna "1234". Se "1.234.56", se torna "123456".
-        // Isso é menos ideal. É melhor se a planilha usar vírgula para decimal ou um único ponto.
-        // Por ora, a estratégia mais segura para múltiplos pontos sem vírgula é remover todos.
-        strValue = strValue.replace(/\./g, '');
-    } else { // Casos como "1234,56" ou "1234.56" (único ponto)
-        strValue = strValue.replace(',', '.');
+    const hasComma = strValue.includes(',');
+    const periodCount = (strValue.match(/\./g) || []).length;
+
+    if (hasComma) {
+        // Se tem vírgula, assume que é o decimal. Pontos são milhares.
+        // Ex: "1.234,56" ou "14.459,84" ou "123,45"
+        strValue = strValue.replace(/\./g, ''); // Remove todos os pontos
+        strValue = strValue.replace(',', '.');   // Converte vírgula para ponto
+    } else {
+        // Sem vírgula. Pontos podem ser milhares ou um único decimal.
+        // Ex: "1.234.567" (milhares) -> "1234567"
+        // Ex: "1234.56" (decimal) -> "1234.56" (parseFloat lida com isso)
+        // Ex: "1.234" (ambíguo, parseFloat torna 1.234. Se for 1234, esta regra é problemática para este caso específico)
+        if (periodCount > 1) { // Múltiplos pontos indicam que são separadores de milhar
+            strValue = strValue.replace(/\./g, '');
+        }
+        // Se periodCount é 1 (ex: "1234.56" ou "1.234") ou 0, parseFloat lida.
     }
 
     const num = parseFloat(strValue);
@@ -276,14 +277,11 @@ function formatDate(dateInput) {
         } else if (!trimmedDateInput.includes('T') && /^\d{4}-\d{2}-\d{2}$/.test(trimmedDateInput)) { // YYYY-MM-DD
             dateToFormat = new Date(trimmedDateInput + 'T00:00:00Z'); // Adiciona Z para UTC
         } else {
-            // Tenta parsear outros formatos de string, incluindo ISO com 'T'
-            // new Date() pode ser sensível ao fuso horário se a string não especificar um.
-            // Para datas ISO, é melhor que especifiquem Z ou offset.
             dateToFormat = new Date(trimmedDateInput);
         }
-    } else if (dateInput instanceof Date) { // Já é um objeto Date (ex: de cellDates:true do XLSX)
+    } else if (dateInput instanceof Date) { 
         dateToFormat = dateInput;
-    } else if (dateInput && typeof dateInput.toDate === 'function') { // Firestore Timestamp
+    } else if (dateInput && typeof dateInput.toDate === 'function') { 
         dateToFormat = dateInput.toDate();
     } else {
         console.warn("Unsupported dateInput type in formatDate:", dateInput, typeof dateInput);
@@ -295,19 +293,18 @@ function formatDate(dateInput) {
         return 'Data inválida';
     }
 
-    // Sempre retorna YYYY-MM-DD UTC para consistência interna e armazenamento no Firestore
     const year = dateToFormat.getUTCFullYear();
     const month = (dateToFormat.getUTCMonth() + 1).toString().padStart(2, '0');
     const day = dateToFormat.getUTCDate().toString().padStart(2, '0');
     return `${year}-${month}-${day}`;
 }
 
-function formatDisplayDate(dateInput) { // For display purposes
+function formatDisplayDate(dateInput) { 
     if (!dateInput) return 'Data inválida';
-    const formattedYYYYMMDD = formatDate(dateInput); // Get YYYY-MM-DD (já em UTC)
+    const formattedYYYYMMDD = formatDate(dateInput); 
     if (formattedYYYYMMDD === 'Data inválida') return formattedYYYYMMDD;
     const [year, month, day] = formattedYYYYMMDD.split('-');
-    return `${day}/${month}/${year}`; // Convert to DD/MM/YYYY
+    return `${day}/${month}/${year}`; 
 }
 
 function formatMonthYear(yearMonthKey) {
@@ -322,7 +319,7 @@ function formatMonthYear(yearMonthKey) {
         return 'Mês/Ano Inválido';
     }
     const dateForMonthName = new Date(parseInt(year, 10), month - 1, 1);
-    const monthName = dateForMonthName.toLocaleString('pt-BR', { month: 'long', timeZone: 'UTC' }); // Ensure month name is UTC based
+    const monthName = dateForMonthName.toLocaleString('pt-BR', { month: 'long', timeZone: 'UTC' }); 
     return `${monthName.charAt(0).toUpperCase() + monthName.slice(1)}/${year}`;
 }
 
@@ -507,7 +504,7 @@ async function handleLogout() {
         if(myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = 'Nenhum frete para exibir...';
         if(adminDriverTripsTableBody) adminDriverTripsTableBody.innerHTML = '';
         if(adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = 'Nenhum frete encontrado para este motorista.';
-        if(adminDriverIndividualTripsTableBody) adminDriverIndividualTripsTableBody.innerHTML = ''; // Clear individual trips
+        if(adminDriverIndividualTripsTableBody) adminDriverIndividualTripsTableBody.innerHTML = ''; 
         if(adminDriverIndividualTripsPlaceholder) adminDriverIndividualTripsPlaceholder.textContent = 'Selecione um mês na tabela de resumos para ver as viagens individuais.';
         if(adminDriverIndividualTripsSection) adminDriverIndividualTripsSection.style.display = 'none';
 
@@ -641,19 +638,19 @@ function addFuelEntryToForm(entry) {
         <input type="hidden" name="fuelEntryId" value="${entryId}">
         <div class="form-group">
             <label for="liters_${entryId}">Litros:</label>
-            <input type="number" id="liters_${entryId}" name="liters" min="0" step="any" placeholder="0" value="${entry?.liters || ''}" required>
+            <input type="text" id="liters_${entryId}" name="liters" placeholder="0" value="${entry?.liters || ''}" required inputmode="decimal">
         </div>
         <div class="form-group">
             <label for="valuePerLiter_${entryId}">Valor/Litro (R$):</label>
-            <input type="number" id="valuePerLiter_${entryId}" name="valuePerLiter" min="0" step="0.01" placeholder="0,00" value="${entry?.valuePerLiter || ''}" required>
+            <input type="text" id="valuePerLiter_${entryId}" name="valuePerLiter" placeholder="0,00" value="${entry?.valuePerLiter || ''}" required inputmode="decimal">
         </div>
         <div class="form-group">
             <label for="discount_${entryId}">Desconto (R$):</label>
-            <input type="number" id="discount_${entryId}" name="discount" min="0" step="0.01" placeholder="0,00" value="${entry?.discount || '0'}">
+            <input type="text" id="discount_${entryId}" name="discount" placeholder="0,00" value="${entry?.discount || '0'}" inputmode="decimal">
         </div>
         <div class="form-group">
             <label for="totalValue_${entryId}">Valor Total (R$):</label>
-            <input type="number" id="totalValue_${entryId}" name="totalValue" min="0" step="0.01" placeholder="0,00" value="${entry?.totalValue || ''}" required readonly>
+            <input type="text" id="totalValue_${entryId}" name="totalValue" placeholder="0,00" value="${entry?.totalValue || ''}" required readonly inputmode="decimal">
         </div>
         <button type="button" class="control-btn danger-btn small-btn remove-fuel-entry-btn" data-entry-id="${entryId}" aria-label="Remover este abastecimento">Remover</button>
     `;
@@ -665,11 +662,11 @@ function addFuelEntryToForm(entry) {
     const totalValueInput = document.getElementById(`totalValue_${entryId}`);
 
     function calculateTotalFuelValue() {
-        const liters = parseFloat(litersInput.value) || 0;
-        const valuePerLiter = parseFloat(valuePerLiterInput.value) || 0;
-        const discount = parseFloat(discountInput.value) || 0;
+        const liters = parseNumericValueFromString(litersInput.value);
+        const valuePerLiter = parseNumericValueFromString(valuePerLiterInput.value);
+        const discount = parseNumericValueFromString(discountInput.value);
         const total = (liters * valuePerLiter) - discount;
-        totalValueInput.value = total.toFixed(2);
+        totalValueInput.value = total.toFixed(2).replace('.', ','); // Display with comma
     }
 
     litersInput.addEventListener('input', calculateTotalFuelValue);
@@ -701,9 +698,9 @@ async function handleTripFormSubmit(event) {
 
     fuelEntryElements.forEach(entryEl => {
         const entryId = entryEl.id;
-        const liters = parseFloat(entryEl.querySelector(`input[name="liters"]`).value) || 0;
-        const valuePerLiter = parseFloat(entryEl.querySelector(`input[name="valuePerLiter"]`).value) || 0;
-        const discount = parseFloat(entryEl.querySelector(`input[name="discount"]`).value) || 0;
+        const liters = parseNumericValueFromString((entryEl.querySelector(`input[name="liters"]`)).value);
+        const valuePerLiter = parseNumericValueFromString((entryEl.querySelector(`input[name="valuePerLiter"]`)).value);
+        const discount = parseNumericValueFromString((entryEl.querySelector(`input[name="discount"]`)).value);
         const totalValue = (liters * valuePerLiter) - discount;
 
         if (liters > 0 && valuePerLiter > 0) {
@@ -718,29 +715,28 @@ async function handleTripFormSubmit(event) {
         }
     });
 
-    const kmInitialVal = parseFloat(formData.get('kmInitial')) || 0;
-    const kmFinalVal = parseFloat(formData.get('kmFinal')) || 0;
+    const kmInitialVal = parseNumericValueFromString(formData.get('kmInitial'));
+    const kmFinalVal = parseNumericValueFromString(formData.get('kmFinal'));
     const kmDrivenVal = (kmFinalVal > kmInitialVal) ? kmFinalVal - kmInitialVal : 0;
 
-    const arla32CostVal = parseFloat(formData.get('arla32Cost')) || 0;
-    const tollCostVal = parseFloat(formData.get('tollCost')) || 0;
-    const commissionCostVal = parseFloat(formData.get('commissionCost')) || 0;
-    const otherExpensesVal = parseFloat(formData.get('otherExpenses')) || 0;
+    const arla32CostVal = parseNumericValueFromString(formData.get('arla32Cost'));
+    const tollCostVal = parseNumericValueFromString(formData.get('tollCost'));
+    const commissionCostVal = parseNumericValueFromString(formData.get('commissionCost'));
+    const otherExpensesVal = parseNumericValueFromString(formData.get('otherExpenses'));
 
     const totalExpensesCalculated = totalFuelCostCalculated + arla32CostVal + tollCostVal + otherExpensesVal + commissionCostVal;
-    const freightValueVal = parseFloat(formData.get('freightValue')) || 0;
+    const freightValueVal = parseNumericValueFromString(formData.get('freightValue'));
     const netProfitVal = freightValueVal - totalExpensesCalculated;
 
     const tripDataObjectFromForm = {
         userId: loggedInUser.uid,
-        driverName: (formData.get('driverName')).trim() || loggedInUserProfile.username, // Nome original, não capitalizado no BD
+        driverName: (formData.get('driverName')).trim() || loggedInUserProfile.username, 
         date: formData.get('tripDate'),
-        // cargoType: formData.get('cargoType') || '', // Removido
         kmInitial: kmInitialVal,
         kmFinal: kmFinalVal,
         kmDriven: kmDrivenVal,
-        weight: parseFloat(formData.get('weight')) || 0,
-        unitValue: parseFloat(formData.get('unitValue')) || 0,
+        weight: parseNumericValueFromString(formData.get('weight')),
+        unitValue: parseNumericValueFromString(formData.get('unitValue')),
         freightValue: freightValueVal,
         fuelEntries: fuelEntriesFromForm,
         arla32Cost: arla32CostVal,
@@ -751,7 +747,7 @@ async function handleTripFormSubmit(event) {
         totalFuelCost: totalFuelCostCalculated,
         totalExpenses: totalExpensesCalculated,
         netProfit: netProfitVal,
-        declaredValue: parseFloat(formData.get('declaredValue')) || 0,
+        declaredValue: parseNumericValueFromString(formData.get('declaredValue')),
     };
 
     try {
@@ -788,8 +784,8 @@ async function handleTripFormSubmit(event) {
         }
         if (adminView && adminView.style.display === 'block') {
             updateAdminSummary();
-            if (loggedInUser && adminSelectedDriverUid === loggedInUser.uid) { // Check if the updated trip belongs to the currently selected admin driver
-                 loadAndRenderAdminDriverMonthlySummaries(); // This will also clear individual trips
+            if (loggedInUser && adminSelectedDriverUid === loggedInUser.uid) { 
+                 loadAndRenderAdminDriverMonthlySummaries(); 
             }
         }
 
@@ -893,7 +889,6 @@ function renderMyTripsTable(tripsToRender) {
     tripsToRender.forEach(trip => {
         const row = myTripsTableBody.insertRow();
         row.insertCell().textContent = formatDisplayDate(trip.date);
-        // row.insertCell().textContent = trip.cargoType || 'N/A'; // Removido
         row.insertCell().textContent = formatCurrency(trip.freightValue);
         row.insertCell().textContent = formatCurrency(trip.totalExpenses);
         row.insertCell().textContent = formatCurrency(trip.commissionCost);
@@ -945,22 +940,21 @@ async function loadTripForEditing(tripId) {
             if(tripIdToEditInput) tripIdToEditInput.value = trip.id;
             editingTripId = trip.id;
             if(driverNameInput) driverNameInput.value = capitalizeName(trip.driverName);
-            if(tripDateInput) tripDateInput.value = trip.date; // trip.date já deve estar como YYYY-MM-DD
-            // if(cargoTypeInput) cargoTypeInput.value = trip.cargoType || ''; // Removido
-            if(kmInitialInput) kmInitialInput.value = trip.kmInitial?.toString() || '';
-            if(kmFinalInput) kmFinalInput.value = trip.kmFinal?.toString() || '';
-            if(weightInput) weightInput.value = trip.weight?.toString() || '';
-            if(unitValueInput) unitValueInput.value = trip.unitValue?.toString() || '';
-            if(freightValueInput) freightValueInput.value = trip.freightValue.toString();
+            if(tripDateInput) tripDateInput.value = trip.date; 
+            if(kmInitialInput) kmInitialInput.value = trip.kmInitial?.toString().replace('.', ',') || ''; // Display with comma
+            if(kmFinalInput) kmFinalInput.value = trip.kmFinal?.toString().replace('.', ',') || '';     // Display with comma
+            if(weightInput) weightInput.value = trip.weight?.toString().replace('.', ',') || '';       // Display with comma
+            if(unitValueInput) unitValueInput.value = trip.unitValue?.toString().replace('.', ',') || ''; // Display with comma
+            if(freightValueInput) freightValueInput.value = trip.freightValue.toString().replace('.', ','); // Display with comma
 
-            trip.fuelEntries.forEach(entry => addFuelEntryToForm(entry));
+            trip.fuelEntries.forEach(entry => addFuelEntryToForm(entry)); // addFuelEntryToForm will handle display formatting
 
-            if(arla32CostInput) arla32CostInput.value = trip.arla32Cost?.toString() || '';
-            if(tollCostInput) tollCostInput.value = trip.tollCost.toString();
-            if(commissionCostInput) commissionCostInput.value = trip.commissionCost?.toString() || '';
-            if(otherExpensesInput) otherExpensesInput.value = trip.otherExpenses.toString();
+            if(arla32CostInput) arla32CostInput.value = trip.arla32Cost?.toString().replace('.', ',') || ''; // Display with comma
+            if(tollCostInput) tollCostInput.value = trip.tollCost.toString().replace('.', ',');             // Display with comma
+            if(commissionCostInput) commissionCostInput.value = trip.commissionCost?.toString().replace('.', ',') || ''; // Display with comma
+            if(otherExpensesInput) otherExpensesInput.value = trip.otherExpenses.toString().replace('.', ',');       // Display with comma
             if(expenseDescriptionInput) expenseDescriptionInput.value = trip.expenseDescription || '';
-            if(declaredValueInput) declaredValueInput.value = trip.declaredValue?.toString() || '';
+            if(declaredValueInput) declaredValueInput.value = trip.declaredValue?.toString().replace('.', ',') || ''; // Display with comma
 
 
             if (submitTripBtn) submitTripBtn.textContent = 'Salvar Alterações';
@@ -1010,7 +1004,7 @@ async function deleteTrip(tripId) {
             loadAndRenderMyTrips(myTripsFilterStartDateInput?.value, myTripsFilterEndDateInput?.value);
         }
         if (adminView && adminView.style.display === 'block' && adminSelectedDriverUid) {
-            loadAndRenderAdminDriverMonthlySummaries(); // This will reload summaries and clear individual trips if any
+            loadAndRenderAdminDriverMonthlySummaries(); 
             updateAdminSummary();
         } else if (adminView && adminView.style.display === 'block') {
             updateAdminSummary();
@@ -1136,7 +1130,6 @@ async function loadAndRenderAdminDriverMonthlySummaries() {
     const driverUid = adminSelectDriver.value;
     const driverName = adminSelectDriver.options[adminSelectDriver.selectedIndex]?.dataset.name;
 
-    // Hide individual trips section when loading new monthly summaries
     if (adminDriverIndividualTripsSection) adminDriverIndividualTripsSection.style.display = 'none';
     if (adminDriverIndividualTripsTableBody) adminDriverIndividualTripsTableBody.innerHTML = '';
     if (adminIndividualTripsTitle) adminIndividualTripsTitle.textContent = '';
@@ -1184,7 +1177,7 @@ async function loadAndRenderAdminDriverMonthlySummaries() {
 
         querySnapshot.forEach((docSnap) => {
             const trip = docSnap.data();
-            const tripDate = trip.date; // Should be YYYY-MM-DD
+            const tripDate = trip.date; 
             const yearMonthKey = tripDate.substring(0, 7);
 
             if (!monthlyDataMap.has(yearMonthKey)) {
@@ -1226,7 +1219,6 @@ function renderAdminDriverMonthlySummariesTable() {
     if (!adminDriverTripsTableBody) return;
     adminDriverTripsTableBody.innerHTML = '';
 
-    // When filters for monthly summaries are applied, hide individual trips section
     if (adminDriverIndividualTripsSection) adminDriverIndividualTripsSection.style.display = 'none';
     if (adminDriverIndividualTripsTableBody) adminDriverIndividualTripsTableBody.innerHTML = '';
 
@@ -1300,10 +1292,9 @@ async function loadAndRenderTripsForMonth(yearMonthKey, driverUid, driverName, d
     try {
         const [yearStr, monthStr] = yearMonthKey.split('-');
         const yearNum = parseInt(yearStr);
-        const monthNum = parseInt(monthStr); // 1-indexed
+        const monthNum = parseInt(monthStr); 
 
         const startDate = `${yearStr}-${monthStr}-01`;
-        // Create a date for the first day of the *next* month, then go back one day for the last day of the current month
         const endDate = new Date(yearNum, monthNum, 0).toISOString().split('T')[0];
 
 
@@ -1389,7 +1380,6 @@ function showAdminTripDetailModal(trip) {
             <h4>Informações Gerais</h4>
             <p><strong>Motorista:</strong> ${escapeHtml(capitalizeName(trip.driverName))}</p>
             <p><strong>Data:</strong> ${formatDisplayDate(trip.date)}</p>
-            <!-- <p><strong>Tipo de Carga:</strong> ${escapeHtml(trip.cargoType) || 'N/A'}</p> --><!-- Removido -->
             <p><strong>Km Inicial:</strong> ${formatGenericNumber(trip.kmInitial, 0, 0)}</p>
             <p><strong>Km Final:</strong> ${formatGenericNumber(trip.kmFinal, 0, 0)}</p>
             <p><strong>Km Rodados:</strong> ${formatGenericNumber(trip.kmDriven, 0, 0)}</p>
@@ -1467,7 +1457,7 @@ async function handleAdminCreateUser(event) {
 
         const newUserProfile = {
             uid: firebaseUser.uid,
-            username: rawUsername, // Salva o nome original
+            username: rawUsername, 
             email: firebaseUser.email || email,
             role: role,
             createdAt: Timestamp.now()
@@ -1682,7 +1672,6 @@ function initializeAdminView() {
         adminDriverFiltersContainer.style.display = 'none';
     }
 
-    // Reset and hide individual trips section
     if (adminDriverIndividualTripsSection) adminDriverIndividualTripsSection.style.display = 'none';
     if (adminIndividualTripsTitle) adminIndividualTripsTitle.textContent = '';
     if (adminDriverIndividualTripsTableBody) adminDriverIndividualTripsTableBody.innerHTML = '';
@@ -1705,7 +1694,6 @@ function initializeAdminView() {
     adminSelectedDriverUid = null;
     adminSelectedDriverName = null;
 
-    // Reset Excel import fields
     if (excelFileInput) excelFileInput.value = '';
     if (excelImportFeedback) {
         excelImportFeedback.textContent = '';
@@ -1812,7 +1800,7 @@ async function handleExcelFileImport() {
                 } else {
                     console.warn(`Mapeamento para "${internalKey}" (esperando um de: [${possibleSheetNames.join(', ')}]) não encontrado nos cabeçalhos da planilha: [${headersFromSheet.join(', ')}]`);
                     if (requiredInternalKeys.includes(internalKey)) {
-                        missingRequiredHeadersForMessage.push(possibleSheetNames[0]); // Pega o primeiro alias como exemplo
+                        missingRequiredHeadersForMessage.push(possibleSheetNames[0]); 
                     }
                 }
             });
@@ -1868,7 +1856,6 @@ async function handleExcelFileImport() {
                     continue;
                 }
 
-                // *** INÍCIO DA VERIFICAÇÃO DE DUPLICIDADE ***
                 if (tripEntry.userId && tripEntry.date !== 'Data inválida') {
                     const qExisting = query(tripsCollection, 
                                             where("userId", "==", tripEntry.userId), 
@@ -1876,11 +1863,9 @@ async function handleExcelFileImport() {
                     const querySnapshotExisting = await getDocs(qExisting);
                     if (!querySnapshotExisting.empty) {
                         errorMessages.push(`Linha ${i + 2}: Viagem duplicada para ${capitalizeName(motoristaNomeOriginal)} na data ${formatDisplayDate(tripEntry.date)}. Ignorada.`);
-                        continue; // Pula para a próxima linha da planilha
+                        continue; 
                     }
                 }
-                // *** FIM DA VERIFICAÇÃO DE DUPLICIDADE ***
-
 
                 tripEntry.freightValue = parseNumericValueFromString(rowArray[headerMap.valor_frete]);
                 if (tripEntry.freightValue <= 0 && headerMap.valor_frete !== undefined && (rowArray[headerMap.valor_frete] !== undefined && rowArray[headerMap.valor_frete] !== null && String(rowArray[headerMap.valor_frete]).trim() !== '')) {
@@ -1896,7 +1881,7 @@ async function handleExcelFileImport() {
 
                 tripEntry.fuelEntries = [];
                 let totalFuelCostCalculated = 0;
-                for (let j = 1; j <= 4; j++) { // Changed limit from 3 to 4
+                for (let j = 1; j <= 4; j++) { 
                     const litrosKey = `litros${j}`;
                     const valorLitroKey = `valor_litro${j}`;
                     const descontoKey = `desconto${j}`;
@@ -2023,20 +2008,20 @@ async function handleExportAdminReport() {
 
     const today = new Date();
     let year = today.getFullYear();
-    let month = today.getMonth(); // 0-11
+    let month = today.getMonth(); 
 
-    if (month === 0) { // Se Janeiro, mês anterior é Dezembro do ano passado
-        month = 11; // Dezembro
+    if (month === 0) { 
+        month = 11; 
         year -= 1;
     } else {
-        month -= 1; // Mês anterior
+        month -= 1; 
     }
 
     const firstDayPrevMonth = new Date(year, month, 1);
-    const lastDayPrevMonth = new Date(year, month + 1, 0); // Dia 0 do mês seguinte é o último dia do mês atual
+    const lastDayPrevMonth = new Date(year, month + 1, 0); 
 
-    const startDate = formatDate(firstDayPrevMonth); // Garante YYYY-MM-DD
-    const endDate = formatDate(lastDayPrevMonth);   // Garante YYYY-MM-DD
+    const startDate = formatDate(firstDayPrevMonth); 
+    const endDate = formatDate(lastDayPrevMonth);   
     const reportMonthStrForDisplay = `${String(month + 1).padStart(2, '0')}/${year}`;
     const reportMonthStrForFilename = `${year}-${String(month + 1).padStart(2, '0')}`;
 
@@ -2064,7 +2049,7 @@ async function handleExportAdminReport() {
 
 
         const headers = [
-            "Data", "Motorista", /*"Tipo Carga",*/ "Km Inicial", "Km Final", "Km Rodados", // "Tipo Carga" Removido
+            "Data", "Motorista", "Km Inicial", "Km Final", "Km Rodados", 
             "Peso (Kg)", "Valor Frete Bruto (R$)", "Total Combustivel (R$)", "Arla-32 (R$)", "Pedagio (R$)",
             "Comissao (R$)", "Outras Despesas (R$)", "Descricao Outras Despesas",
             "Despesas Totais (R$)", "Lucro Liquido (R$)", "Valor Declarado (R$)"
@@ -2073,10 +2058,9 @@ async function handleExportAdminReport() {
         const dataForHTML = reportTrips.map(trip => [
             formatDisplayDate(trip.date),
             capitalizeName(userMap.get(trip.userId) || trip.driverName),
-            // trip.cargoType || '', // Removido
-            formatGenericNumber(trip.kmInitial, 2, 2), // Corrigido para 2 casas decimais
-            formatGenericNumber(trip.kmFinal, 2, 2),   // Corrigido para 2 casas decimais
-            formatGenericNumber(trip.kmDriven, 2, 2),  // Corrigido para 2 casas decimais
+            formatGenericNumber(trip.kmInitial, 2, 2), 
+            formatGenericNumber(trip.kmFinal, 2, 2),   
+            formatGenericNumber(trip.kmDriven, 2, 2),  
             formatGenericNumber(trip.weight, 2, 2),
             formatCurrency(trip.freightValue || 0),
             formatCurrency(trip.totalFuelCost || 0),
@@ -2182,7 +2166,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             try {
-                const qUser = query(userProfilesCollection, where("username", "==", driverNameToSearch)); // Busca pelo nome em minúsculas
+                const qUser = query(userProfilesCollection, where("username", "==", driverNameToSearch)); 
                 const userSnapshot = await getDocs(qUser);
                 if (!userSnapshot.empty) {
                     const foundUser = userSnapshot.docs[0].data();

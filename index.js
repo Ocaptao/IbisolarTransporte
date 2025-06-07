@@ -168,6 +168,14 @@ const adminDriverFiltersContainer = document.getElementById('adminDriverFiltersC
 const adminMonthFilterSelect = document.getElementById('adminMonthFilterSelect');
 const adminYearFilterSelect = document.getElementById('adminYearFilterSelect');
 
+// New DOM Elements for Individual Trips Display
+const adminDriverIndividualTripsSection = document.getElementById('adminDriverIndividualTripsSection');
+const adminIndividualTripsTitle = document.getElementById('adminIndividualTripsTitle');
+const adminDriverIndividualTripsTable = document.getElementById('adminDriverIndividualTripsTable');
+const adminDriverIndividualTripsTableBody = document.getElementById('adminDriverIndividualTripsTableBody');
+const adminDriverIndividualTripsPlaceholder = document.getElementById('adminDriverIndividualTripsPlaceholder');
+
+
 const userManagementTableBody = document.getElementById('userManagementTableBody');
 const editUserModal = document.getElementById('editUserModal');
 const closeEditUserModalBtn = document.getElementById('closeEditUserModalBtn');
@@ -499,6 +507,11 @@ async function handleLogout() {
         if(myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = 'Nenhum frete para exibir...';
         if(adminDriverTripsTableBody) adminDriverTripsTableBody.innerHTML = '';
         if(adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = 'Nenhum frete encontrado para este motorista.';
+        if(adminDriverIndividualTripsTableBody) adminDriverIndividualTripsTableBody.innerHTML = ''; // Clear individual trips
+        if(adminDriverIndividualTripsPlaceholder) adminDriverIndividualTripsPlaceholder.textContent = 'Selecione um mês na tabela de resumos para ver as viagens individuais.';
+        if(adminDriverIndividualTripsSection) adminDriverIndividualTripsSection.style.display = 'none';
+
+
         if(adminSelectDriver) adminSelectDriver.innerHTML = '<option value="">-- Selecione um Motorista --</option>';
         if(userManagementTableBody) userManagementTableBody.innerHTML = '';
         if(adminCreateUserForm) adminCreateUserForm.reset();
@@ -775,8 +788,8 @@ async function handleTripFormSubmit(event) {
         }
         if (adminView && adminView.style.display === 'block') {
             updateAdminSummary();
-            if (loggedInUser && adminSelectedDriverUid === loggedInUser.uid) {
-                 loadAndRenderAdminDriverMonthlySummaries();
+            if (loggedInUser && adminSelectedDriverUid === loggedInUser.uid) { // Check if the updated trip belongs to the currently selected admin driver
+                 loadAndRenderAdminDriverMonthlySummaries(); // This will also clear individual trips
             }
         }
 
@@ -997,7 +1010,7 @@ async function deleteTrip(tripId) {
             loadAndRenderMyTrips(myTripsFilterStartDateInput?.value, myTripsFilterEndDateInput?.value);
         }
         if (adminView && adminView.style.display === 'block' && adminSelectedDriverUid) {
-            loadAndRenderAdminDriverMonthlySummaries();
+            loadAndRenderAdminDriverMonthlySummaries(); // This will reload summaries and clear individual trips if any
             updateAdminSummary();
         } else if (adminView && adminView.style.display === 'block') {
             updateAdminSummary();
@@ -1123,6 +1136,12 @@ async function loadAndRenderAdminDriverMonthlySummaries() {
     const driverUid = adminSelectDriver.value;
     const driverName = adminSelectDriver.options[adminSelectDriver.selectedIndex]?.dataset.name;
 
+    // Hide individual trips section when loading new monthly summaries
+    if (adminDriverIndividualTripsSection) adminDriverIndividualTripsSection.style.display = 'none';
+    if (adminDriverIndividualTripsTableBody) adminDriverIndividualTripsTableBody.innerHTML = '';
+    if (adminIndividualTripsTitle) adminIndividualTripsTitle.textContent = '';
+
+
     if (!adminDriverFiltersContainer) {
         console.error("Admin Panel Bug: adminDriverFiltersContainer not found in DOM!");
         if(adminGeneralFeedback) showFeedback(adminGeneralFeedback, "Erro de Interface: Controles de filtro não encontrados. Contate o suporte.", "error");
@@ -1207,6 +1226,11 @@ function renderAdminDriverMonthlySummariesTable() {
     if (!adminDriverTripsTableBody) return;
     adminDriverTripsTableBody.innerHTML = '';
 
+    // When filters for monthly summaries are applied, hide individual trips section
+    if (adminDriverIndividualTripsSection) adminDriverIndividualTripsSection.style.display = 'none';
+    if (adminDriverIndividualTripsTableBody) adminDriverIndividualTripsTableBody.innerHTML = '';
+
+
     const selectedMonth = adminMonthFilterSelect.value;
     const selectedYear = adminYearFilterSelect.value;
 
@@ -1239,6 +1263,106 @@ function renderAdminDriverMonthlySummariesTable() {
         row.insertCell().textContent = formatCurrency(summary.totalFreightValue);
         row.insertCell().textContent = formatCurrency(summary.totalExpenses);
         row.insertCell().textContent = formatCurrency(summary.totalNetProfit);
+        
+        const actionsCell = row.insertCell();
+        const viewMonthTripsButton = document.createElement('button');
+        viewMonthTripsButton.className = 'control-btn small-btn view-month-trips-btn';
+        viewMonthTripsButton.textContent = 'Ver Viagens do Mês';
+        viewMonthTripsButton.setAttribute('aria-label', `Ver viagens de ${summary.displayMonthYear}`);
+        viewMonthTripsButton.dataset.yearMonth = summary.yearMonthKey;
+        viewMonthTripsButton.dataset.driverUid = adminSelectedDriverUid;
+        viewMonthTripsButton.dataset.driverName = adminSelectedDriverName;
+        viewMonthTripsButton.dataset.displayMonthYear = summary.displayMonthYear;
+        viewMonthTripsButton.onclick = () => handleViewMonthTripsClick(
+            summary.yearMonthKey, 
+            adminSelectedDriverUid, 
+            adminSelectedDriverName, 
+            summary.displayMonthYear
+        );
+        actionsCell.appendChild(viewMonthTripsButton);
+    });
+}
+
+function handleViewMonthTripsClick(yearMonthKey, driverUid, driverName, displayMonthYear) {
+    loadAndRenderTripsForMonth(yearMonthKey, driverUid, driverName, displayMonthYear);
+}
+
+async function loadAndRenderTripsForMonth(yearMonthKey, driverUid, driverName, displayMonthYear) {
+    if (!adminDriverIndividualTripsSection || !adminIndividualTripsTitle || !adminDriverIndividualTripsTableBody || !adminDriverIndividualTripsPlaceholder || !adminDriverIndividualTripsTable) return;
+
+    adminDriverIndividualTripsSection.style.display = 'block';
+    adminIndividualTripsTitle.textContent = `Viagens Individuais de ${capitalizeName(driverName)} para ${displayMonthYear}`;
+    adminDriverIndividualTripsTableBody.innerHTML = '';
+    adminDriverIndividualTripsPlaceholder.textContent = `Carregando viagens de ${capitalizeName(driverName)} para ${displayMonthYear}...`;
+    adminDriverIndividualTripsTable.style.display = 'none';
+    adminDriverIndividualTripsPlaceholder.style.display = 'block';
+
+    try {
+        const [yearStr, monthStr] = yearMonthKey.split('-');
+        const yearNum = parseInt(yearStr);
+        const monthNum = parseInt(monthStr); // 1-indexed
+
+        const startDate = `${yearStr}-${monthStr}-01`;
+        // Create a date for the first day of the *next* month, then go back one day for the last day of the current month
+        const endDate = new Date(yearNum, monthNum, 0).toISOString().split('T')[0];
+
+
+        const q = query(
+            tripsCollection,
+            where("userId", "==", driverUid),
+            where("date", ">=", startDate),
+            where("date", "<=", endDate),
+            orderBy("date", "desc")
+        );
+
+        const querySnapshot = await getDocs(q);
+        const fetchedTrips = [];
+        querySnapshot.forEach((docSnap) => {
+            fetchedTrips.push({ id: docSnap.id, ...docSnap.data() });
+        });
+
+        renderAdminDriverIndividualTripsTable(fetchedTrips, displayMonthYear, driverName);
+
+    } catch (error) {
+        console.error(`ERRO CRÍTICO ao carregar viagens individuais para ${driverName} (${yearMonthKey}):`, "Código:", error.code, "Mensagem:", error.message);
+        let userMessage = `Erro ao carregar viagens de ${capitalizeName(driverName)} para ${displayMonthYear}. Verifique o console.`;
+        if (error.code === 'failed-precondition') {
+            userMessage = `Erro ao carregar viagens: Provavelmente um índice está faltando no Firestore. Verifique o console do navegador (F12).`;
+        }
+        adminDriverIndividualTripsPlaceholder.textContent = userMessage;
+        showFeedback(adminGeneralFeedback, userMessage, "error");
+    }
+}
+
+function renderAdminDriverIndividualTripsTable(individualTrips, displayMonthYear, driverName) {
+    if (!adminDriverIndividualTripsTableBody || !adminDriverIndividualTripsPlaceholder || !adminDriverIndividualTripsTable) return;
+    
+    adminDriverIndividualTripsTableBody.innerHTML = '';
+
+    if (individualTrips.length === 0) {
+        adminDriverIndividualTripsPlaceholder.textContent = `Nenhuma viagem individual encontrada para ${capitalizeName(driverName)} em ${displayMonthYear}.`;
+        adminDriverIndividualTripsTable.style.display = 'none';
+        adminDriverIndividualTripsPlaceholder.style.display = 'block';
+        return;
+    }
+
+    adminDriverIndividualTripsTable.style.display = 'table';
+    adminDriverIndividualTripsPlaceholder.style.display = 'none';
+
+    individualTrips.forEach(trip => {
+        const row = adminDriverIndividualTripsTableBody.insertRow();
+        row.insertCell().textContent = formatDisplayDate(trip.date);
+        row.insertCell().textContent = formatCurrency(trip.freightValue);
+        row.insertCell().textContent = formatCurrency(trip.totalExpenses);
+        row.insertCell().textContent = formatCurrency(trip.netProfit);
+
+        const actionsCell = row.insertCell();
+        const detailsButton = document.createElement('button');
+        detailsButton.className = 'control-btn small-btn';
+        detailsButton.textContent = 'Ver Detalhes';
+        detailsButton.setAttribute('aria-label', `Ver detalhes da viagem de ${formatDisplayDate(trip.date)}`);
+        detailsButton.onclick = () => showAdminTripDetailModal(trip);
+        actionsCell.appendChild(detailsButton);
     });
 }
 
@@ -1558,6 +1682,13 @@ function initializeAdminView() {
         adminDriverFiltersContainer.style.display = 'none';
     }
 
+    // Reset and hide individual trips section
+    if (adminDriverIndividualTripsSection) adminDriverIndividualTripsSection.style.display = 'none';
+    if (adminIndividualTripsTitle) adminIndividualTripsTitle.textContent = '';
+    if (adminDriverIndividualTripsTableBody) adminDriverIndividualTripsTableBody.innerHTML = '';
+    if (adminDriverIndividualTripsPlaceholder) adminDriverIndividualTripsPlaceholder.textContent = 'Selecione um mês na tabela de resumos para ver as viagens individuais.';
+
+
     if(adminGeneralFeedback) { adminGeneralFeedback.textContent = ''; adminGeneralFeedback.style.display = 'none';}
     if (adminSummaryFilterStartDateInput) adminSummaryFilterStartDateInput.value = '';
     if (adminSummaryFilterEndDateInput) adminSummaryFilterEndDateInput.value = '';
@@ -1720,7 +1851,7 @@ async function handleExcelFileImport() {
                 const motoristaUid = motoristaProfiles.get(motoristaNomeOriginal.toLowerCase());
 
                 if (!motoristaUid && motoristaNomeOriginal) {
-                    errorMessages.push(`Linha ${i + 2}: Motorista "${motoristaNomeOriginal}" não encontrado no sistema. Frete ignorado.`);
+                    errorMessages.push(`Linha ${i + 2}: Motorista "${capitalizeName(motoristaNomeOriginal)}" não encontrado no sistema. Frete ignorado.`);
                     continue;
                 }
                  if (!motoristaUid && !motoristaNomeOriginal && headerMap.motorista !== undefined) {
@@ -1736,6 +1867,20 @@ async function handleExcelFileImport() {
                      errorMessages.push(`Linha ${i + 2}: Data "${dateValueFromSheet}" inválida. Frete ignorado.`);
                     continue;
                 }
+
+                // *** INÍCIO DA VERIFICAÇÃO DE DUPLICIDADE ***
+                if (tripEntry.userId && tripEntry.date !== 'Data inválida') {
+                    const qExisting = query(tripsCollection, 
+                                            where("userId", "==", tripEntry.userId), 
+                                            where("date", "==", tripEntry.date));
+                    const querySnapshotExisting = await getDocs(qExisting);
+                    if (!querySnapshotExisting.empty) {
+                        errorMessages.push(`Linha ${i + 2}: Viagem duplicada para ${capitalizeName(motoristaNomeOriginal)} na data ${formatDisplayDate(tripEntry.date)}. Ignorada.`);
+                        continue; // Pula para a próxima linha da planilha
+                    }
+                }
+                // *** FIM DA VERIFICAÇÃO DE DUPLICIDADE ***
+
 
                 tripEntry.freightValue = parseNumericValueFromString(rowArray[headerMap.valor_frete]);
                 if (tripEntry.freightValue <= 0 && headerMap.valor_frete !== undefined && (rowArray[headerMap.valor_frete] !== undefined && rowArray[headerMap.valor_frete] !== null && String(rowArray[headerMap.valor_frete]).trim() !== '')) {

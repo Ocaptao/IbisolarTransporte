@@ -1,5 +1,6 @@
 
 
+
 import { Chart, registerables } from 'chart.js';
 // Firebase App (o núcleo do Firebase SDK) é sempre necessário e deve ser listado primeiro
 import { initializeApp } from "@firebase/app";
@@ -27,6 +28,7 @@ import {
     writeBatch,
     setDoc as firebaseSetDoc,
 } from "@firebase/firestore";
+import * as XLSX from 'xlsx';
 
 Chart.register(...registerables);
 
@@ -1430,7 +1432,7 @@ async function loadAndRenderUsersForAdmin() {
         renderUserManagementTable(userProfiles);
     } catch (error) {
         console.error("Error loading users for admin:", "Code:", error.code, "Message:", error.message);
-        showFeedback(userManagementFeedback, "Erro ao carregar lista de usuários.", "error");
+        showFeedback(userManagementFeedback, `Erro ao carregar usuários. (${error.message})`, "error");
         userManagementTableBody.innerHTML = '<tr><td colspan="3">Erro ao carregar usuários.</td></tr>';
     }
 }
@@ -1442,48 +1444,66 @@ function renderUserManagementTable(usersToRender) {
         userManagementTableBody.innerHTML = '<tr><td colspan="3">Nenhum usuário cadastrado.</td></tr>';
         return;
     }
-    usersToRender.forEach(userProf => {
+
+    usersToRender.forEach(user => {
         const row = userManagementTableBody.insertRow();
-        row.insertCell().textContent = capitalizeName(userProf.username);
-        row.insertCell().textContent = userProf.role === 'admin' ? 'Administrador' : 'Motorista';
+        row.insertCell().textContent = capitalizeName(user.username);
+        row.insertCell().textContent = user.role === 'admin' ? 'Administrador' : 'Motorista';
 
         const actionsCell = row.insertCell();
         const editButton = document.createElement('button');
         editButton.className = 'control-btn small-btn';
-        editButton.textContent = 'Editar Papel';
-        editButton.setAttribute('aria-label', `Editar papel do usuário ${userProf.username}`);
-        editButton.onclick = () => openEditUserModal(userProf);
+        editButton.textContent = 'Editar';
+        editButton.setAttribute('aria-label', `Editar usuário ${user.username}`);
+        editButton.onclick = () => openEditUserModal(user.id);
         actionsCell.appendChild(editButton);
+
+        if (user.username !== 'fabio' && user.username !== loggedInUserProfile.username) {
+            const deleteButton = document.createElement('button');
+            deleteButton.className = 'control-btn danger-btn small-btn delete-user-btn';
+            deleteButton.textContent = 'Excluir';
+            deleteButton.setAttribute('aria-label', `Excluir usuário ${user.username}`);
+            deleteButton.onclick = () => confirmDeleteUser(user.id, user.username);
+            actionsCell.appendChild(deleteButton);
+        }
     });
 }
 
-function openEditUserModal(userProf) {
-    if (!editUserIdInput || !editUsernameDisplayInput || !editUserRoleSelect || !editUserNewPasswordInput || !editUserConfirmNewPasswordInput || !editUserModal) return;
+function openEditUserModal(userId) {
+    const userToEdit = userProfiles.find(u => u.id === userId);
+    if (!userToEdit) {
+        showFeedback(userManagementFeedback, "Usuário não encontrado para edição.", "error");
+        return;
+    }
 
-    editingUserIdForAdmin = userProf.uid;
-    editUserIdInput.value = userProf.uid;
-    editUsernameDisplayInput.value = capitalizeName(userProf.username);
-    editUserRoleSelect.value = userProf.role;
-    editUserNewPasswordInput.value = '';
-    editUserConfirmNewPasswordInput.value = '';
-    editUserModal.style.display = 'flex';
-    showFeedback(editUserFeedback, "", "info");
+    editingUserIdForAdmin = userToEdit.id;
+    if(editUserIdInput) editUserIdInput.value = userToEdit.id;
+    if(editUsernameDisplayInput) editUsernameDisplayInput.value = capitalizeName(userToEdit.username);
+    if(editUserRoleSelect) editUserRoleSelect.value = userToEdit.role;
+    if(editUserNewPasswordInput) editUserNewPasswordInput.value = '';
+    if(editUserConfirmNewPasswordInput) editUserConfirmNewPasswordInput.value = '';
+    if(editUserFeedback) {editUserFeedback.textContent = ''; editUserFeedback.style.display = 'none';}
+
+    if(editUserModal) editUserModal.style.display = 'flex';
 }
 
-async function handleEditUserFormSubmit(event) {
+async function handleEditUserSubmit(event) {
     event.preventDefault();
-    if (!editingUserIdForAdmin || !editUserRoleSelect || !editUserNewPasswordInput || !editUserConfirmNewPasswordInput) return;
+    if (!editingUserIdForAdmin) {
+        showFeedback(editUserFeedback, "Nenhum usuário selecionado para edição.", "error");
+        return;
+    }
 
     const newRole = editUserRoleSelect.value;
     const newPassword = editUserNewPasswordInput.value;
     const confirmNewPassword = editUserConfirmNewPasswordInput.value;
 
     if (newPassword && newPassword.length < 6) {
-        showFeedback(editUserFeedback, "Nova senha deve ter pelo menos 6 caracteres.", "error");
+        showFeedback(editUserFeedback, "A nova senha deve ter pelo menos 6 caracteres.", "error");
         return;
     }
     if (newPassword && newPassword !== confirmNewPassword) {
-        showFeedback(editUserFeedback, "As novas senhas não coincidem.", "error");
+        showFeedback(editUserFeedback, "As senhas não coincidem.", "error");
         return;
     }
 
@@ -1492,553 +1512,654 @@ async function handleEditUserFormSubmit(event) {
         await updateDoc(userProfileRef, { role: newRole });
 
         if (newPassword) {
-            showFeedback(editUserFeedback, "Papel do usuário atualizado. A alteração de senha por esta tela não é diretamente suportada. Se necessário, o administrador pode usar o console do Firebase ou o usuário pode redefinir sua própria senha.", "info");
-        } else {
-            showFeedback(editUserFeedback, "Papel do usuário atualizado com sucesso!", "success");
+            
+            const userToUpdate = authFirebase.currentUser;
+            if (userToUpdate && userToUpdate.uid === editingUserIdForAdmin) {
+                await updateUserPasswordInAuth(userToUpdate, newPassword);
+                console.log("Password updated in Auth for current user.");
+            } else {
+
+                console.warn("Attempting to update password for a user who is not the currently logged-in user. This requires admin privileges and a different Firebase Admin SDK function, not available client-side directly.");
+                showFeedback(editUserFeedback, "Senha atualizada no perfil, mas a alteração de senha para outros usuários requer backend com Admin SDK.", "info");
+            }
         }
 
-        loadAndRenderUsersForAdmin();
+        showFeedback(editUserFeedback, "Usuário atualizado com sucesso!", "success");
+        loadAndRenderUsersForAdmin(); 
+        populateAdminDriverSelect(); 
         setTimeout(() => {
-            if (closeEditUserModalBtn) closeEditUserModalBtn.click();
+            if(editUserModal) editUserModal.style.display = 'none';
+            editingUserIdForAdmin = null;
         }, 1500);
 
     } catch (error) {
-        console.error("Error updating user role/password:", "Code:", error.code, "Message:", error.message);
-        showFeedback(editUserFeedback, "Erro ao atualizar usuário. Tente novamente.", "error");
+        console.error("Error updating user:", "Code:", error.code, "Message:", error.message);
+        let feedbackMsg = "Erro ao atualizar usuário.";
+        if (error.code === 'auth/requires-recent-login' && newPassword) {
+            feedbackMsg = "Para alterar a senha, você precisa ter feito login recentemente. Faça logout e login novamente.";
+        }
+        showFeedback(editUserFeedback, `${feedbackMsg} (${error.message})`, "error");
     }
 }
 
-
-// --- INITIALIZATION FUNCTIONS FOR VIEWS ---
-function initializeUserView() {
-    if (tripForm) tripForm.reset();
-    if (fuelEntriesContainer) fuelEntriesContainer.innerHTML = '';
-    fuelEntryIdCounter = 0;
-    editingTripId = null;
-    if (tripIdToEditInput) tripIdToEditInput.value = '';
-    if (submitTripBtn) submitTripBtn.textContent = 'Salvar Frete';
-    if (cancelEditBtn) cancelEditBtn.style.display = 'none';
-    if (userFormFeedback) { userFormFeedback.textContent = ''; userFormFeedback.style.display = 'none';}
-
-    if(driverNameInput && loggedInUserProfile) {
-        driverNameInput.value = capitalizeName(loggedInUserProfile.username);
-    }
-    addFuelEntryToForm();
-}
-
-function initializeMyTripsView() {
-    if (!loggedInUserProfile) return;
-
-    if (myTripsDriverNameContainer) {
-        myTripsDriverNameContainer.style.display = (loggedInUserProfile.role === 'admin') ? 'flex' : 'none';
-    }
-    if (myTripsFilterControls) myTripsFilterControls.style.display = 'block';
-
-    if (myTripsFilterStartDateInput) myTripsFilterStartDateInput.value = '';
-    if (myTripsFilterEndDateInput) myTripsFilterEndDateInput.value = '';
-    if (myTripsDriverNameInput) myTripsDriverNameInput.value = '';
-
-    currentUserForMyTripsSearch = null;
-    currentUidForMyTripsSearch = null;
-
-    loadAndRenderMyTrips();
-}
-
-function initializeAdminView() {
-    if (!loggedInUserProfile || loggedInUserProfile.role !== 'admin') return;
-    updateAdminSummary();
-    populateAdminDriverSelect();
-    populateAdminYearFilterSelect();
-    if(adminDriverTripsSection) adminDriverTripsSection.style.display = 'none';
-    if(adminDriverIndividualTripsSection) adminDriverIndividualTripsSection.style.display = 'none';
-
-
-    if (!adminDriverFiltersContainer) {
-        console.warn("Admin View Init: adminDriverFiltersContainer not found. Filters might not work.");
-    } else {
-        adminDriverFiltersContainer.style.display = 'none';
-    }
-
-    if(adminGeneralFeedback) { adminGeneralFeedback.textContent = ''; adminGeneralFeedback.style.display = 'none';}
-    if (adminSummaryFilterStartDateInput) adminSummaryFilterStartDateInput.value = '';
-    if (adminSummaryFilterEndDateInput) adminSummaryFilterEndDateInput.value = '';
-    if (adminMonthFilterSelect) adminMonthFilterSelect.value = '';
-    if (adminYearFilterSelect) adminYearFilterSelect.value = '';
-    if (adminSelectDriver) adminSelectDriver.value = "";
-    if (adminSelectedDriverNameDisplay) adminSelectedDriverNameDisplay.textContent = "Selecione um motorista para ver os resumos.";
-    if (adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = "Selecione um motorista para ver os resumos.";
-    currentDriverMonthlySummaries = [];
-    adminSelectedDriverUid = null;
-    adminSelectedDriverName = null;
-}
-
-function initializeUserManagementView() {
-     if (!loggedInUserProfile || loggedInUserProfile.role !== 'admin' || loggedInUserProfile.username !== 'fabio') return;
-    loadAndRenderUsersForAdmin();
-    if(adminCreateUserForm) adminCreateUserForm.reset();
-    if(adminCreateUserFeedback) {adminCreateUserFeedback.textContent = ''; adminCreateUserFeedback.style.display = 'none';}
-}
-
-// --- FUNÇÃO DE EXPORTAÇÃO HTML ---
-function convertToHTMLTable(dataArray, headers, reportMonthStr) {
-    let tableHTML = `
-        <!DOCTYPE html>
-        <html lang="pt-BR">
-        <head>
-            <meta charset="UTF-8">
-            <title>Relatório de Fretes ${reportMonthStr}</title>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 20px; }
-                table { border-collapse: collapse; width: 100%; margin-top: 20px; }
-                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                th { background-color: #f2f2f2; font-weight: bold; }
-                tr:nth-child(even) { background-color: #f9f9f9; }
-                h2 { color: #333; }
-            </style>
-        </head>
-        <body>
-            <h2>Relatório de Fretes - Mês ${escapeHtml(reportMonthStr)}</h2>
-            <table>
-                <thead>
-                    <tr>`;
-    headers.forEach(header => {
-        tableHTML += `<th>${escapeHtml(header)}</th>`;
-    });
-    tableHTML += `
-                    </tr>
-                </thead>
-                <tbody>`;
-    dataArray.forEach(row => {
-        tableHTML += '<tr>';
-        row.forEach(cell => {
-            tableHTML += `<td>${escapeHtml(cell)}</td>`;
-        });
-        tableHTML += '</tr>';
-    });
-    tableHTML += `
-                </tbody>
-            </table>
-        </body>
-        </html>`;
-    return tableHTML;
-}
-
-async function handleExportAdminReport() {
-    if (!loggedInUserProfile || loggedInUserProfile.role !== 'admin') {
-        showFeedback(adminGeneralFeedback, "Apenas administradores podem exportar relatórios.", "error");
+function confirmDeleteUser(userId, username) {
+     if (username === 'fabio') {
+        showFeedback(userManagementFeedback, "O usuário 'fabio' não pode ser excluído.", "error");
         return;
     }
-    showFeedback(adminGeneralFeedback, "Gerando relatório do mês anterior...", "info");
-
-    const today = new Date();
-    let year = today.getFullYear();
-    let month = today.getMonth();
-
-    if (month === 0) {
-        month = 11;
-        year -= 1;
-    } else {
-        month -= 1;
+    if (loggedInUser && loggedInUserProfile && username === loggedInUserProfile.username) {
+        showFeedback(userManagementFeedback, "Você não pode excluir seu próprio usuário.", "error");
+        return;
     }
 
-    const firstDayPrevMonth = new Date(year, month, 1);
-    const lastDayPrevMonth = new Date(year, month + 1, 0);
+    if (confirm(`Tem certeza que deseja excluir o usuário ${capitalizeName(username)}? Esta ação NÃO pode ser desfeita e removerá o perfil, mas não exclui automaticamente o usuário da autenticação do Firebase (isso precisa ser feito manualmente no console do Firebase ou via Admin SDK).`)) {
+        deleteUserProfile(userId);
+    }
+}
 
-    const startDate = firstDayPrevMonth.toISOString().split('T')[0];
-    const endDate = lastDayPrevMonth.toISOString().split('T')[0];
-    const reportMonthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
+async function deleteUserProfile(userId) {
+    try {
+        await deleteDoc(doc(userProfilesCollection, userId));
+        showFeedback(userManagementFeedback, "Perfil de usuário excluído com sucesso do Firestore. Lembre-se de excluir o usuário da Autenticação no console do Firebase, se necessário.", "success");
+        loadAndRenderUsersForAdmin(); 
+        populateAdminDriverSelect(); 
+    } catch (error) {
+        console.error("Error deleting user profile from Firestore:", "Code:", error.code, "Message:", error.message);
+        showFeedback(userManagementFeedback, `Erro ao excluir perfil de usuário. (${error.message})`, "error");
+    }
+}
+
+async function handleAdminCreateUserFormSubmit(event) {
+    event.preventDefault();
+    if (!adminCreateUsernameInput || !adminCreateUserRoleSelect || !adminCreateUserPasswordInput || !adminCreateUserConfirmPasswordInput || !adminCreateUserFeedback) {
+        console.error("Um ou mais elementos do formulário de criação de usuário não foram encontrados.");
+        return;
+    }
+
+    const rawUsername = adminCreateUsernameInput.value.trim();
+    const role = adminCreateUserRoleSelect.value;
+    const password = adminCreateUserPasswordInput.value;
+    const confirmPassword = adminCreateUserConfirmPasswordInput.value;
+
+    if (!rawUsername) {
+        showFeedback(adminCreateUserFeedback, "Nome de usuário é obrigatório.", "error");
+        return;
+    }
+    if (password.length < 6) {
+        showFeedback(adminCreateUserFeedback, "A senha deve ter pelo menos 6 caracteres.", "error");
+        return;
+    }
+    if (password !== confirmPassword) {
+        showFeedback(adminCreateUserFeedback, "As senhas não coincidem.", "error");
+        return;
+    }
+
+    const normalizedUsernamePart = normalizeUsernameForEmail(rawUsername);
+    if (!normalizedUsernamePart || normalizedUsernamePart.includes("user.invalid")) {
+        showFeedback(adminCreateUserFeedback, `Nome de usuário "${rawUsername}" inválido. Use letras e números, sem espaços ou caracteres especiais complexos.`, "error");
+        return;
+    }
+    const emailForAuth = `${normalizedUsernamePart}@example.com`;
 
     try {
-        const q = query(tripsCollection, where("date", ">=", startDate), where("date", "<=", endDate), orderBy("date", "asc"));
+        
+        const userCredential = await createUserWithEmailAndPassword(authFirebase, emailForAuth, password);
+        const newUserUid = userCredential.user.uid;
+
+        
+        const userProfileData = {
+            uid: newUserUid,
+            username: rawUsername, 
+            email: emailForAuth, 
+            role: role,
+            createdAt: Timestamp.now()
+        };
+        await firebaseSetDoc(doc(userProfilesCollection, newUserUid), userProfileData);
+
+        showFeedback(adminCreateUserFeedback, `Usuário "${capitalizeName(rawUsername)}" criado com sucesso!`, "success");
+        if(adminCreateUserForm) adminCreateUserForm.reset();
+        loadAndRenderUsersForAdmin(); 
+        populateAdminDriverSelect(); 
+
+    } catch (error) {
+        console.error("Error creating new user:", "Code:", error.code, "Message:", error.message);
+        let feedbackMessage = "Erro ao criar usuário.";
+        if (error.code === 'auth/email-already-in-use') {
+            feedbackMessage = `Este nome de usuário ("${capitalizeName(rawUsername)}") já está em uso ou resulta em um e-mail de autenticação (${emailForAuth}) já cadastrado.`;
+        } else if (error.code === 'auth/invalid-email') {
+            feedbackMessage = `O nome de usuário "${capitalizeName(rawUsername)}" resultou em um e-mail inválido (${emailForAuth}) para autenticação.`;
+        } else if (error.code === 'auth/weak-password') {
+            feedbackMessage = "A senha fornecida é muito fraca.";
+        }
+        showFeedback(adminCreateUserFeedback, `${feedbackMessage} (${error.message})`, "error");
+    }
+}
+
+
+// --- HTML REPORT EXPORT ---
+
+async function handleExportAdminReport() {
+    console.log("handleExportAdminReport function called");
+    let startDate = null;
+    let endDate = null;
+    let reportPeriodTitle = "Geral Completo";
+    let fileNameSuffix = "Geral_Completo";
+
+    // Verifique se os elementos existem antes de tentar acessar .value
+    const startDateInput = document.getElementById('adminSummaryFilterStartDate');
+    const endDateInput = document.getElementById('adminSummaryFilterEndDate');
+
+    if (startDateInput && endDateInput) {
+        startDate = startDateInput.value;
+        endDate = endDateInput.value;
+
+        if (startDate && endDate) {
+            reportPeriodTitle = `Período: ${formatDisplayDate(startDate)} - ${formatDisplayDate(endDate)}`;
+            fileNameSuffix = `${formatDate(startDate)}_a_${formatDate(endDate)}`;
+        } else if (startDate) {
+            reportPeriodTitle = `A partir de: ${formatDisplayDate(startDate)}`;
+            fileNameSuffix = `Desde_${formatDate(startDate)}`;
+        } else if (endDate) {
+            reportPeriodTitle = `Até: ${formatDisplayDate(endDate)}`;
+            fileNameSuffix = `Ate_${formatDate(endDate)}`;
+        }
+    } else {
+        console.warn("Admin summary filter date inputs not found. Exporting full report.");
+    }
+
+
+    try {
+        let q = query(tripsCollection, orderBy("date", "desc"));
+        if (startDate) q = query(q, where("date", ">=", startDate));
+        if (endDate) q = query(q, where("date", "<=", endDate));
+        
         const querySnapshot = await getDocs(q);
         const reportTrips = [];
-        querySnapshot.forEach(docSnap => {
-            reportTrips.push({ id: docSnap.id, ...docSnap.data() });
-        });
+        querySnapshot.forEach(docSnap => reportTrips.push({ id: docSnap.id, ...docSnap.data() }));
 
         if (reportTrips.length === 0) {
-            showFeedback(adminGeneralFeedback, `Nenhum frete encontrado para ${reportMonthStr} para exportar.`, "info");
+            showFeedback(adminGeneralFeedback, "Nenhum frete encontrado para o período selecionado para exportar.", "info");
             return;
         }
-        
-        const localUserProfilesForReport = [];
-        const qProfiles = query(userProfilesCollection, orderBy("username"));
-        const profileSnapshot = await getDocs(qProfiles);
-        profileSnapshot.forEach(docSnap => {
-            localUserProfilesForReport.push({ uid: docSnap.id, ...docSnap.data() });
-        });
-        const userMap = new Map(localUserProfilesForReport.map(p => [p.uid, p.username]));
 
-
-        const headers = [
-            "Data", "Motorista", "Km Inicial", "Km Final", "Km Rodados",
-            "Peso (Kg)", "Valor Unidade (R$)", "Valor Frete Bruto (R$)",
-            "Litros 1", "V/Litro 1", "Desc 1", "Total 1",
-            "Litros 2", "V/Litro 2", "Desc 2", "Total 2",
-            "Litros 3", "V/Litro 3", "Desc 3", "Total 3",
-            "Litros 4", "V/Litro 4", "Desc 4", "Total 4",
-            "Total Combustivel (R$)", "Arla-32 (R$)", "Pedagio (R$)",
-            "Comissao (R$)", "Outras Despesas (R$)", "Descricao Outras Despesas",
-            "Despesas Totais (R$)", "Lucro Liquido (R$)", "Valor Declarado (R$)"
-        ];
-        
-        const dataForHTML = reportTrips.map(trip => {
-            const rowData = [
-                formatDisplayDate(trip.date),
-                capitalizeName(userMap.get(trip.userId) || trip.driverName),
-                formatGenericNumber(trip.kmInitial, 2, 2),
-                formatGenericNumber(trip.kmFinal, 2, 2),
-                formatGenericNumber(trip.kmDriven, 2, 2),
-                formatGenericNumber(trip.weight, 2, 2),
-                formatCurrency(trip.unitValue || 0),
-                formatCurrency(trip.freightValue || 0),
-            ];
-
-            for (let i = 0; i < 4; i++) { // For up to 4 fuel entries
-                if (trip.fuelEntries && trip.fuelEntries[i]) {
-                    rowData.push(
-                        formatGenericNumber(trip.fuelEntries[i].liters, 2, 2),
-                        formatCurrency(trip.fuelEntries[i].valuePerLiter),
-                        formatCurrency(trip.fuelEntries[i].discount),
-                        formatCurrency(trip.fuelEntries[i].totalValue)
-                    );
-                } else {
-                    rowData.push('', '', '', ''); // Empty cells if no entry
-                }
-            }
-
-            rowData.push(
-                formatCurrency(trip.totalFuelCost || 0),
-                formatCurrency(trip.arla32Cost || 0),
-                formatCurrency(trip.tollCost || 0),
-                formatCurrency(trip.commissionCost || 0),
-                formatCurrency(trip.otherExpenses || 0),
-                trip.expenseDescription || '',
-                formatCurrency(trip.totalExpenses || 0),
-                formatCurrency(trip.netProfit || 0),
-                formatCurrency(trip.declaredValue || 0)
-            );
-            return rowData;
-        });
-
-
-        const htmlString = convertToHTMLTable(dataForHTML, headers, reportMonthStr);
-        const blob = new Blob([htmlString], { type: 'text/html;charset=utf-8;' });
-        const link = document.createElement("a");
-        const url = URL.createObjectURL(blob);
-        link.setAttribute("href", url);
-        link.setAttribute("download", `Relatorio_Fretes_${reportMonthStr}.html`);
-        link.style.visibility = 'hidden';
+        const htmlContent = convertToHTMLTable(reportTrips, reportPeriodTitle);
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `Relatorio_Fretes_${fileNameSuffix}.html`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-
-        showFeedback(adminGeneralFeedback, `Relatório HTML para ${reportMonthStr} gerado e baixado. Por favor, anexe o arquivo .html em um e-mail para ibisolaribipitanga@gmail.com.`, "success");
+        URL.revokeObjectURL(link.href);
+        showFeedback(adminGeneralFeedback, `Relatório (${reportPeriodTitle}) exportado como HTML.`, "success");
 
     } catch (error) {
-        console.error("Erro ao gerar relatório HTML:", error);
-        showFeedback(adminGeneralFeedback, "Erro ao gerar relatório. Verifique o console.", "error");
+        console.error("CRITICAL ERROR generating HTML report:", "Code:", error.code, "Message:", error.message, "Details:", error);
+        let userMessage = "Erro ao gerar relatório HTML. Verifique o console para detalhes.";
+        if (error.code === 'failed-precondition') {
+            userMessage = "Erro ao gerar relatório: Provavelmente um índice está faltando no Firestore. Verifique o console do navegador (F12).";
+        }
+        showFeedback(adminGeneralFeedback, userMessage, "error");
     }
 }
 
 
-async function handleExcelFileImport(event) {
-    const file = event.target.files[0];
+function convertToHTMLTable(data, reportPeriodTitle) {
+    let tableHTML = `
+        <html>
+        <head>
+            <meta charset="UTF-F">
+            <title>Relatório de Fretes - ${escapeHtml(reportPeriodTitle)}</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+                h1 { color: #333; text-align: center; }
+                table { width: 100%; border-collapse: collapse; margin-top: 20px; background-color: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+                th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+                th { background-color: #e2e2e2; font-weight: bold; }
+                tr:nth-child(even) { background-color: #f9f9f9; }
+                tr:hover { background-color: #f1f1f1; }
+                .currency { text-align: right; }
+                .total-row td { font-weight: bold; background-color: #e9e9e9; }
+                .summary-section { margin-top: 30px; padding: 15px; background-color: #f0f0f0; border-radius: 5px; }
+                .summary-section h2 { margin-top: 0; color: #555; }
+            </style>
+        </head>
+        <body>
+            <h1>Relatório de Fretes</h1>
+            <h2>${escapeHtml(reportPeriodTitle)}</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Motorista</th>
+                        <th>Km Inicial</th>
+                        <th>Km Final</th>
+                        <th>Km Rodados</th>
+                        <th>Peso (Kg)</th>
+                        <th>V. Unidade (R$)</th>
+                        <th>Valor Frete (R$)</th>
+                        <th>Total Combust. (R$)</th>
+                        <th>Arla-32 (R$)</th>
+                        <th>Pedágio (R$)</th>
+                        <th>Comissão (R$)</th>
+                        <th>Outras Desp. (R$)</th>
+                        <th>Despesas Totais (R$)</th>
+                        <th>Lucro Líquido (R$)</th>
+                        <th>Valor Declarado (R$)</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    let grandTotalFreight = 0;
+    let grandTotalExpenses = 0;
+    let grandTotalNetProfit = 0;
+    let grandTotalKmDriven = 0;
+    let grandTotalWeight = 0;
+    let grandTotalFuelCost = 0;
+    let grandTotalCommission = 0;
+    let grandTotalDeclared = 0;
+
+
+    data.sort((a,b) => new Date(a.date) - new Date(b.date)).forEach(trip => {
+        grandTotalFreight += trip.freightValue || 0;
+        grandTotalExpenses += trip.totalExpenses || 0;
+        grandTotalNetProfit += trip.netProfit || 0;
+        grandTotalKmDriven += trip.kmDriven || 0;
+        grandTotalWeight += trip.weight || 0;
+        grandTotalFuelCost += trip.totalFuelCost || 0;
+        grandTotalCommission += trip.commissionCost || 0;
+        grandTotalDeclared += trip.declaredValue || 0;
+
+
+        tableHTML += `
+            <tr>
+                <td>${formatDisplayDate(trip.date)}</td>
+                <td>${escapeHtml(capitalizeName(trip.driverName))}</td>
+                <td class="currency">${formatGenericNumber(trip.kmInitial, 2, 2)}</td>
+                <td class="currency">${formatGenericNumber(trip.kmFinal, 2, 2)}</td>
+                <td class="currency">${formatGenericNumber(trip.kmDriven, 2, 2)}</td>
+                <td class="currency">${formatGenericNumber(trip.weight, 2, 2)}</td>
+                <td class="currency">${formatCurrency(trip.unitValue)}</td>
+                <td class="currency">${formatCurrency(trip.freightValue)}</td>
+                <td class="currency">${formatCurrency(trip.totalFuelCost)}</td>
+                <td class="currency">${formatCurrency(trip.arla32Cost)}</td>
+                <td class="currency">${formatCurrency(trip.tollCost)}</td>
+                <td class="currency">${formatCurrency(trip.commissionCost)}</td>
+                <td class="currency">${formatCurrency(trip.otherExpenses)}</td>
+                <td class="currency">${formatCurrency(trip.totalExpenses)}</td>
+                <td class="currency">${formatCurrency(trip.netProfit)}</td>
+                <td class="currency">${formatCurrency(trip.declaredValue)}</td>
+            </tr>
+        `;
+    });
+
+    tableHTML += `
+                </tbody>
+                <tfoot>
+                    <tr class="total-row">
+                        <td colspan="4">TOTAIS GERAIS:</td>
+                        <td class="currency">${formatGenericNumber(grandTotalKmDriven, 2, 2)}</td>
+                        <td class="currency">${formatGenericNumber(grandTotalWeight, 2, 2)}</td>
+                        <td></td>
+                        <td class="currency">${formatCurrency(grandTotalFreight)}</td>
+                        <td class="currency">${formatCurrency(grandTotalFuelCost)}</td>
+                        <td></td> 
+                        <td></td> 
+                        <td class="currency">${formatCurrency(grandTotalCommission)}</td>
+                        <td></td> 
+                        <td class="currency">${formatCurrency(grandTotalExpenses)}</td>
+                        <td class="currency">${formatCurrency(grandTotalNetProfit)}</td>
+                        <td class="currency">${formatCurrency(grandTotalDeclared)}</td>
+                    </tr>
+                </tfoot>
+            </table>
+            <div class="summary-section">
+                <h2>Resumo dos Totais</h2>
+                <p><strong>Total de Fretes no Período:</strong> ${data.length}</p>
+                <p><strong>Total Receita Bruta (Fretes):</strong> ${formatCurrency(grandTotalFreight)}</p>
+                <p><strong>Total de Despesas:</strong> ${formatCurrency(grandTotalExpenses)}</p>
+                <p><strong>Total Lucro Líquido:</strong> ${formatCurrency(grandTotalNetProfit)}</p>
+                <p><strong>Total de Km Rodados:</strong> ${formatGenericNumber(grandTotalKmDriven, 2, 2)} Km</p>
+                <p><strong>Total de Peso Transportado:</strong> ${formatGenericNumber(grandTotalWeight, 2, 2)} Kg</p>
+            </div>
+        </body>
+        </html>
+    `;
+    return tableHTML;
+}
+
+// --- EXCEL IMPORT ---
+async function handleExcelFileImport() {
+    if (!excelFileInput || !excelImportFeedback) return;
+    const file = excelFileInput.files[0];
     if (!file) {
-        showFeedback(excelImportFeedback, "Nenhum arquivo selecionado.", "info");
+        showFeedback(excelImportFeedback, "Por favor, selecione um arquivo Excel.", "error");
         return;
     }
 
-    if (!loggedInUserProfile || loggedInUserProfile.role !== 'admin') {
-        showFeedback(excelImportFeedback, "Apenas administradores podem importar planilhas.", "error");
-        return;
-    }
+    excelImportFeedback.textContent = "Processando arquivo...";
+    excelImportFeedback.className = 'feedback-message info';
+    excelImportFeedback.style.display = 'block';
 
-    showFeedback(excelImportFeedback, "Processando arquivo Excel...", "info");
     const reader = new FileReader();
-
     reader.onload = async (e) => {
         try {
             const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array', cellDates: true, cellNF: false, cellText: true });
+            const workbook = XLSX.read(data, { type: 'array', cellDates: true });
             const firstSheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[firstSheetName];
+            
+            // Usar raw:true para tentar obter valores numéricos brutos
             const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true, defval: null });
 
-
             if (jsonData.length < 2) {
-                showFeedback(excelImportFeedback, "Planilha vazia ou sem dados após o cabeçalho.", "error");
+                showFeedback(excelImportFeedback, "A planilha está vazia ou não contém cabeçalhos e dados.", "error");
                 return;
             }
 
-            const headerRow = jsonData[0].map(header => String(header || '').trim().toLowerCase());
+            const headers = jsonData[0].map(header => String(header || '').trim().toLowerCase());
             const dataRows = jsonData.slice(1);
 
             const internalToSheetHeaderMap = {
-                date: ["data"],
-                driverName: ["motorista", "nome motorista", "motoristas"],
-                kmInitial: ["km inicial", "km in", "km ini", "km inicial.", "kminicial"],
-                kmFinal: ["km final", "km fn", "km fim", "km final.", "kmfinal"],
-                weight: ["peso", "peso (kg)", "peso kg"],
-                unitValue: ["v.un", "v. un", "v un", "valor unidade", "valor unitario", "valor/un", "valor_unidade"],
-                freightValue: ["valor frete", "valor do frete", "vlr frete", "v. frete", "frete bruto", "valorfrete"],
-                litros1: ["litros", "litro", "lts", "litros1", "litro1"],
-                valor_litro1: ["v.litro", "v. litro", "valor litro", "v litro", "valor/litro", "valor_litro", "v.litro1", "valor_litro1"],
-                desconto1: ["descont", "desconto", "desc", "desconto1", "desc1"],
-                litros2: ["litros2", "litro2", "lts2"],
-                valor_litro2: ["v.litro2", "v. litro2", "valor litro2", "v litro2", "valor/litro2", "valor_litro2"],
-                desconto2: ["descont2", "desconto2", "desc2"],
-                litros3: ["litros3", "litro3", "lts3"],
-                valor_litro3: ["v.litro3", "v. litro3", "valor litro3", "v litro3", "valor/litro3", "valor_litro3"],
-                desconto3: ["descont3", "desconto3", "desc3"],
-                litros4: ["litros4", "litro4", "lts4"],
-                valor_litro4: ["v.litro4", "v. litro4", "valor litro4", "v litro4", "valor/litro4", "valor_litro4"],
-                desconto4: ["descont4", "desconto4", "desc4"],
-                arla32Cost: ["arla-32", "arla32", "arla", "custo arla"],
-                tollCost: ["pedágio", "pedagio", "pedágios", "pedagios"],
-                commissionCost: ["comissão", "comissao", "comissões", "comissoes", "comiss"],
-                otherExpenses: ["outras despesas", "outrasdespesas", "desp. adic.", "despesas adicionais"],
-                expenseDescription: ["descrição outras despesas", "descricao outras despesas", "desc. outras", "detalhes despesas"],
-                declaredValue: ["declarado", "valor declarado", "vlr declarado", "valordeclarado"],
+                date: ['data', 'date'],
+                driverName: ['motorista', 'driver name', 'nome motorista', 'nome do motorista'],
+                kmInitial: ['km inicial', 'km in', 'km inicial', 'kminicial', 'km inicio'],
+                kmFinal: ['km final', 'km fn', 'kmfinal', 'km fim'],
+                weight: ['peso (kg)', 'peso', 'peso kg', 'carga (kg)', 'carga', 'peso carga'],
+                unitValue: ['v. unidade (r$)', 'v.un', 'v.unidade', 'valor unidade', 'valor/un', 'valor unitario', 'v.unitario'],
+                freightValue: ['valor frete (r$)', 'valor frete', 'v.frete', 'v frete', 'valor do frete'],
+                litros1: ['litros', 'litros1', 'litro', 'litro1', 'lts', 'lts1', 'combustivel litros', 'combustivel litros1'],
+                valor_litro1: ['v.litro', 'v.litro1', 'valor litro', 'valor/litro', 'valor/litro1', 'valor litro1', 'vl litro', 'vl litro1', 'combustivel valor/litro', 'combustivel valor/litro1'],
+                desconto1: ['descont', 'descont1', 'desconto', 'desconto1', 'desc', 'desc1', 'combustivel desconto', 'combustivel desconto1'],
+                litros2: ['litro2', 'litros2', 'lts2', 'combustivel litros2'],
+                valor_litro2: ['v.litro2', 'valor litro2', 'valor/litro2', 'vl litro2', 'combustivel valor/litro2'],
+                desconto2: ['descont2', 'desconto2', 'desc2', 'combustivel desconto2'],
+                litros3: ['litros3', 'litro3', 'lts3', 'combustivel litros3'],
+                valor_litro3: ['v.litro3', 'valor litro3', 'valor/litro3', 'vl litro3', 'combustivel valor/litro3'],
+                desconto3: ['descont3', 'desconto3', 'desc3', 'combustivel desconto3'],
+                litros4: ['litros4', 'litro4', 'lts4', 'combustivel litros4'], // Added 4th fuel entry
+                valor_litro4: ['v.litro4', 'valor litro4', 'valor/litro4', 'vl litro4', 'combustivel valor/litro4'], // Added 4th
+                desconto4: ['descont4', 'desconto4', 'desc4', 'combustivel desconto4'], // Added 4th
+                arla32Cost: ['arla-32 (r$)', 'arla-32', 'arla32', 'arla', 'custo arla', 'valor arla'],
+                tollCost: ['pedágio (r$)', 'pedagio', 'pedágio', 'custo pedagio', 'valor pedagio'],
+                commissionCost: ['comissão (r$)', 'comissao', 'comissão', 'comissao motorista', 'comissão motorista'],
+                otherExpenses: ['outras despesas adicionais (r$)', 'outras despesas', 'outrasdespesas', 'desp. adic.', 'despesas adicionais'],
+                expenseDescription: ['descrição (outras despesas adicionais)', 'descricao outras despesas', 'desc. outras despesas', 'obs despesas'],
+                declaredValue: ['valor declarado', 'declarado', 'v.declarado', 'v declarado', 'valor declarado (r$)']
             };
-
+            
             const headerMap = {};
-            for (const internalKey in internalToSheetHeaderMap) {
-                for (const alias of internalToSheetHeaderMap[internalKey]) {
-                    const index = headerRow.indexOf(alias);
-                    if (index !== -1) {
-                        headerMap[internalKey] = index;
-                        break; 
-                    }
+            Object.keys(internalToSheetHeaderMap).forEach(internalKey => {
+                const possibleHeaders = internalToSheetHeaderMap[internalKey];
+                const foundIndex = headers.findIndex(h => possibleHeaders.includes(h));
+                if (foundIndex !== -1) {
+                    headerMap[internalKey] = foundIndex;
                 }
+            });
+
+            if (!('date' in headerMap) || !('driverName' in headerMap) || !('freightValue' in headerMap)) {
+                showFeedback(excelImportFeedback, "Erro: Cabeçalhos obrigatórios (Data, Motorista, Valor Frete) não encontrados na planilha. Verifique a primeira linha.", "error");
+                return;
             }
             
-            const essentialHeaders = ["date", "driverName", "freightValue"];
-            for (const essential of essentialHeaders) {
-                if (headerMap[essential] === undefined) {
-                    throw new Error(`Coluna essencial "${internalToSheetHeaderMap[essential][0]}" não encontrada na planilha.`);
-                }
-            }
-
-
             const batch = writeBatch(db);
             let importCount = 0;
             const errorMessages = [];
-            let importedTripsLog = "Viagens importadas com sucesso:\n";
-            let skippedTripsLog = "Viagens ignoradas (já existentes ou erro):\n";
-
-
-            const motoristasSnapshot = await getDocs(query(userProfilesCollection, where("role", "==", "motorista")));
-            const motoristasMap = new Map();
-            motoristasSnapshot.forEach(docSnap => {
-                const profile = docSnap.data();
-                motoristasMap.set(profile.username.trim().toLowerCase(), profile.uid);
-            });
+            const importedTripIdentifiers = new Set();
 
 
             for (let i = 0; i < dataRows.length; i++) {
                 const rowArray = dataRows[i];
-                if (!rowArray || rowArray.every(cell => cell === null || String(cell).trim() === '')) continue; 
-
                 const driverNameFromSheet = String(rowArray[headerMap.driverName] || '').trim();
-                const motoristaUid = motoristasMap.get(driverNameFromSheet.toLowerCase());
-
-                if (!motoristaUid) {
-                    errorMessages.push(`Linha ${i + 2}: Motorista "${driverNameFromSheet}" não encontrado no sistema. Cadastre-o primeiro.`);
-                    skippedTripsLog += `Linha ${i + 2}: Motorista "${driverNameFromSheet}" não cadastrado.\n`;
+                
+                if (!driverNameFromSheet) {
+                    errorMessages.push(`Linha ${i + 2}: Nome do motorista não fornecido. Pulando.`);
                     continue;
                 }
-                
-                let tripDateRaw = rowArray[headerMap.date];
-                let tripDateFormatted;
-                
-                if (tripDateRaw instanceof Date) { 
-                     tripDateFormatted = formatDate(tripDateRaw);
-                } else if (typeof tripDateRaw === 'number') { 
-                    const excelEpoch = new Date(1899, 11, 30); 
-                    const jsDate = new Date(excelEpoch.getTime() + tripDateRaw * 24 * 60 * 60 * 1000);
-                    tripDateFormatted = formatDate(jsDate);
-                } else if (typeof tripDateRaw === 'string') { 
-                    tripDateFormatted = formatDate(tripDateRaw.trim());
-                } else {
-                     errorMessages.push(`Linha ${i + 2}: Formato de data inválido ou não reconhecido: ${tripDateRaw}. Use YYYY-MM-DD ou DD/MM/YYYY.`);
-                     skippedTripsLog += `Linha ${i+2}: Data inválida: ${tripDateRaw}\n`;
-                     continue;
+
+                const userProfile = userProfiles.find(profile => profile.username.toLowerCase() === driverNameFromSheet.toLowerCase());
+                if (!userProfile) {
+                    errorMessages.push(`Linha ${i + 2}: Motorista "${driverNameFromSheet}" não encontrado no sistema. Cadastre o motorista primeiro. Pulando.`);
+                    continue;
                 }
+                const motoristaUid = userProfile.uid;
+
+                const tripDateRaw = rowArray[headerMap.date];
+                const tripDateFormatted = formatDate(tripDateRaw);
 
                 if (tripDateFormatted === 'Data inválida') {
-                    errorMessages.push(`Linha ${i + 2}: Data inválida ou mal formatada: "${rowArray[headerMap.date]}". Use YYYY-MM-DD ou DD/MM/YYYY.`);
-                    skippedTripsLog += `Linha ${i+2}: Data mal formatada: ${rowArray[headerMap.date]}\n`;
+                    errorMessages.push(`Linha ${i + 2}: Data "${tripDateRaw}" inválida para motorista ${driverNameFromSheet}. Pulando.`);
                     continue;
                 }
+                
+                // Check for duplicates before processing the row
+                const tripIdentifier = `${motoristaUid}_${tripDateFormatted}`;
+                const qDup = query(tripsCollection, where("userId", "==", motoristaUid), where("date", "==", tripDateFormatted));
+                const dupSnapshot = await getDocs(qDup);
 
-
-                const existingTripQuery = query(tripsCollection, 
-                    where("userId", "==", motoristaUid), 
-                    where("date", "==", tripDateFormatted)
-                );
-                const existingTripSnapshot = await getDocs(existingTripQuery);
-
-                if (!existingTripSnapshot.empty) {
-                     skippedTripsLog += `Linha ${i + 2}: Viagem para ${capitalizeName(driverNameFromSheet)} em ${formatDisplayDate(tripDateFormatted)} já existe. Ignorando.\n`;
-                    continue; 
+                if (!dupSnapshot.empty) {
+                     errorMessages.push(`Linha ${i + 2}: Viagem duplicada para ${driverNameFromSheet} em ${formatDisplayDate(tripDateFormatted)}. Ignorando.`);
+                     importedTripIdentifiers.add(tripIdentifier); // Ensure we don't try to add it again
+                     continue;
                 }
+                 if (importedTripIdentifiers.has(tripIdentifier)) {
+                     // Already processed in this batch (e.g. if sheet has duplicates itself)
+                     continue; 
+                 }
 
 
                 const fuelEntries = [];
-                let totalFuelCostSheet = 0;
-                for (let j = 1; j <= 4; j++) { 
+                let totalFuelCost = 0;
+
+                for (let j = 1; j <= 4; j++) { // Loop for up to 4 fuel entries
                     const litersKey = `litros${j}`;
                     const valuePerLiterKey = `valor_litro${j}`;
                     const discountKey = `desconto${j}`;
 
-                    const liters = parseNumericValueFromString( (headerMap[litersKey] !== undefined) ? rowArray[headerMap[litersKey]] : '0' );
-                    const valuePerLiter = parseNumericValueFromString( (headerMap[valuePerLiterKey] !== undefined) ? rowArray[headerMap[valuePerLiterKey]] : '0' );
-                    const discount = parseNumericValueFromString( (headerMap[discountKey] !== undefined) ? rowArray[headerMap[discountKey]] : '0' );
-
-                    if (liters > 0 && valuePerLiter > 0) {
-                        const totalValue = (liters * valuePerLiter) - discount;
-                        fuelEntries.push({ id: generateId(), liters, valuePerLiter, discount, totalValue });
-                        totalFuelCostSheet += totalValue;
+                    if (litersKey in headerMap && valuePerLiterKey in headerMap) {
+                        const liters = parseNumericValueFromString(rowArray[headerMap[litersKey]]);
+                        const valuePerLiter = parseNumericValueFromString(rowArray[headerMap[valuePerLiterKey]]);
+                        const discount = parseNumericValueFromString(rowArray[headerMap[discountKey]] || '0');
+                        
+                        if (liters > 0 && valuePerLiter > 0) {
+                            const entryTotal = (liters * valuePerLiter) - discount;
+                            fuelEntries.push({
+                                id: `excel_fuel_${i}_${j}`,
+                                liters,
+                                valuePerLiter,
+                                discount,
+                                totalValue: entryTotal
+                            });
+                            totalFuelCost += entryTotal;
+                        }
+                    } else if (j === 1 && ('litros1' in headerMap || 'valor_litro1' in headerMap) ){ 
+                        // Only add error if primary fuel fields are partially present
+                         // errorMessages.push(`Linha ${i + 2}: Faltando colunas para o ${j}º abastecimento. Se presentes, verifique nomes ('Litros${j}', 'V.Litro${j}').`);
                     }
                 }
+
+
+                const kmInitial = parseNumericValueFromString(rowArray[headerMap.kmInitial] || '0');
+                const kmFinal = parseNumericValueFromString(rowArray[headerMap.kmFinal] || '0');
+                const kmDriven = (kmFinal > kmInitial) ? kmFinal - kmInitial : 0;
                 
-                const kmInitialSheet = parseNumericValueFromString(rowArray[headerMap.kmInitial] || '0');
-                const kmFinalSheet = parseNumericValueFromString(rowArray[headerMap.kmFinal] || '0');
-                const freightValueSheet = parseNumericValueFromString(rowArray[headerMap.freightValue] || '0');
-
-
-                if (freightValueSheet <= 0) {
-                     errorMessages.push(`Linha ${i + 2}: Valor do frete não pode ser zero ou negativo. Motorista: ${driverNameFromSheet}, Data: ${tripDateFormatted}`);
-                     skippedTripsLog += `Linha ${i+2}: Valor do frete inválido (${driverNameFromSheet}, ${formatDisplayDate(tripDateFormatted)})\n`;
+                const arla32Cost = parseNumericValueFromString(rowArray[headerMap.arla32Cost] || '0');
+                const tollCost = parseNumericValueFromString(rowArray[headerMap.tollCost] || '0');
+                const commissionCost = parseNumericValueFromString(rowArray[headerMap.commissionCost] || '0');
+                const otherExpenses = parseNumericValueFromString(rowArray[headerMap.otherExpenses] || '0');
+                
+                const totalExpenses = totalFuelCost + arla32Cost + tollCost + commissionCost + otherExpenses;
+                const freightValue = parseNumericValueFromString(rowArray[headerMap.freightValue]);
+                
+                if (isNaN(freightValue) || freightValue === 0 && String(rowArray[headerMap.freightValue]).trim() !== "0") {
+                     errorMessages.push(`Linha ${i+2}: Valor do Frete "${rowArray[headerMap.freightValue]}" inválido para motorista ${driverNameFromSheet}. Pulando.`);
                      continue;
                 }
 
-                const arla32CostSheet = parseNumericValueFromString(rowArray[headerMap.arla32Cost] || '0');
-                const tollCostSheet = parseNumericValueFromString(rowArray[headerMap.tollCost] || '0');
-                const commissionCostSheet = parseNumericValueFromString(rowArray[headerMap.commissionCost] || '0');
-                const otherExpensesSheet = parseNumericValueFromString(rowArray[headerMap.otherExpenses] || '0');
+                const netProfit = freightValue - totalExpenses;
 
-                const totalExpensesSheet = totalFuelCostSheet + arla32CostSheet + tollCostSheet + otherExpensesSheet + commissionCostSheet;
-                const netProfitSheet = freightValueSheet - totalExpensesSheet;
-
-                const newTrip = {
+                const newTripRef = doc(tripsCollection); 
+                batch.set(newTripRef, {
                     userId: motoristaUid,
-                    driverName: driverNameFromSheet, 
+                    driverName: driverNameFromSheet,
                     date: tripDateFormatted,
-                    kmInitial: kmInitialSheet,
-                    kmFinal: kmFinalSheet,
-                    kmDriven: (kmFinalSheet > kmInitialSheet) ? kmFinalSheet - kmInitialSheet : 0,
+                    kmInitial,
+                    kmFinal,
+                    kmDriven,
                     weight: parseNumericValueFromString(rowArray[headerMap.weight] || '0'),
                     unitValue: parseNumericValueFromString(rowArray[headerMap.unitValue] || '0'),
-                    freightValue: freightValueSheet,
-                    fuelEntries: fuelEntries,
-                    arla32Cost: arla32CostSheet,
-                    tollCost: tollCostSheet,
-                    commissionCost: commissionCostSheet,
-                    otherExpenses: otherExpensesSheet,
+                    freightValue,
+                    fuelEntries,
+                    arla32Cost,
+                    tollCost,
+                    commissionCost,
+                    otherExpenses,
                     expenseDescription: String(rowArray[headerMap.expenseDescription] || '').trim(),
-                    totalFuelCost: totalFuelCostSheet,
-                    totalExpenses: totalExpensesSheet,
-                    netProfit: netProfitSheet,
+                    totalFuelCost,
+                    totalExpenses,
+                    netProfit,
                     declaredValue: parseNumericValueFromString(rowArray[headerMap.declaredValue] || '0'),
-                    createdAt: Timestamp.now(),
-                };
-                
-                const newTripRef = doc(tripsCollection); 
-                batch.set(newTripRef, newTrip);
+                    createdAt: Timestamp.now()
+                });
                 importCount++;
-                importedTripsLog += `Linha ${i + 2}: ${capitalizeName(driverNameFromSheet)}, ${formatDisplayDate(tripDateFormatted)}, Frete: ${formatCurrency(newTrip.freightValue)}\n`;
+                importedTripIdentifiers.add(tripIdentifier);
             }
 
             if (importCount > 0) {
                 await batch.commit();
-                let successMsg = `${importCount} frete(s) importado(s) com sucesso!\n\n${importedTripsLog}`;
-                if (skippedTripsLog.length > "Viagens ignoradas (já existentes ou erro):\n".length) {
-                     successMsg += `\n${skippedTripsLog}`;
-                }
-                if (errorMessages.length > 0) {
-                    successMsg += "\n\nErros detalhados:\n" + errorMessages.join("\n");
-                }
-                showFeedback(excelImportFeedback, successMsg, "success");
+            }
+
+            let feedbackMsg = `Importação concluída. ${importCount} fretes processados da planilha.`;
+            if (errorMessages.length > 0) {
+                feedbackMsg += "\n\nAlertas/Erros durante a importação:\n" + errorMessages.join("\n");
+                showFeedback(excelImportFeedback, feedbackMsg, importCount > 0 ? "info" : "error"); // info if some imported, error if none
+            } else {
+                showFeedback(excelImportFeedback, feedbackMsg, "success");
+            }
+
+            if (importCount > 0) {
                 updateAdminSummary();
                 if (adminSelectedDriverUid) {
                     loadAndRenderAdminDriverMonthlySummaries();
                 }
-            } else {
-                let noImportMsg = "Nenhum frete novo para importar.\n";
-                if (skippedTripsLog.length > "Viagens ignoradas (já existentes ou erro):\n".length) {
-                     noImportMsg += `\n${skippedTripsLog}`;
-                }
-                if (errorMessages.length > 0) {
-                     noImportMsg += "\n\nErros encontrados:\n" + errorMessages.join("\n");
-                } else if (importCount === 0 && dataRows.length > 0 && errorMessages.length === 0) {
-                    noImportMsg = "Nenhum frete novo encontrado na planilha ou todos já existiam no sistema.\n" + skippedTripsLog;
-                }
-                showFeedback(excelImportFeedback, noImportMsg, errorMessages.length > 0 ? "error" : "info");
             }
+            if (excelFileInput) excelFileInput.value = ''; // Clear file input
 
-        } catch (error) {
-            console.error("Erro ao processar planilha Excel:", error);
-            showFeedback(excelImportFeedback, `Erro ao processar planilha: ${error.message}. Verifique o formato do arquivo e os cabeçalhos.`, "error");
-        } finally {
-            if (excelFileInput) excelFileInput.value = ''; // Reset file input
+        } catch (err) {
+            console.error("Erro CRÍTICO durante importação do Excel:", err);
+            showFeedback(excelImportFeedback, `Erro crítico ao processar o arquivo: ${err.message}. Verifique o console.`, "error");
         }
     };
     reader.onerror = () => {
-        showFeedback(excelImportFeedback, "Falha ao ler o arquivo.", "error");
-        if (excelFileInput) excelFileInput.value = '';
+        showFeedback(excelImportFeedback, "Erro ao ler o arquivo.", "error");
     };
     reader.readAsArrayBuffer(file);
 }
+
+
+
+// --- INITIALIZATION ---
+function initializeUserView() {
+    console.log("Initializing User View (Registrar Frete)...");
+    if(tripForm) tripForm.reset();
+    if(fuelEntriesContainer) fuelEntriesContainer.innerHTML = '';
+    fuelEntryIdCounter = 0;
+    addFuelEntryToForm(); 
+    editingTripId = null;
+    if(tripIdToEditInput) tripIdToEditInput.value = '';
+    if (submitTripBtn) submitTripBtn.textContent = 'Salvar Frete';
+    if (cancelEditBtn) cancelEditBtn.style.display = 'none';
+    if(userFormFeedback) { userFormFeedback.textContent = ''; userFormFeedback.style.display = 'none'; }
+    if (driverNameInput && loggedInUserProfile) {
+        driverNameInput.value = capitalizeName(loggedInUserProfile.username);
+    }
+}
+
+function initializeMyTripsView() {
+    console.log("Initializing My Fretes View...");
+    if (loggedInUserProfile) {
+        if (loggedInUserProfile.role === 'admin') {
+            if (myTripsDriverNameContainer) myTripsDriverNameContainer.style.display = 'block';
+            if (myTripsDriverNameInput) myTripsDriverNameInput.value = '';
+            currentUserForMyTripsSearch = null; 
+            currentUidForMyTripsSearch = null; 
+        } else {
+            if (myTripsDriverNameContainer) myTripsDriverNameContainer.style.display = 'none';
+            currentUserForMyTripsSearch = loggedInUserProfile.username; 
+            currentUidForMyTripsSearch = loggedInUser.uid; 
+        }
+        if (myTripsFilterControls) myTripsFilterControls.style.display = 'block';
+        if(myTripsFilterStartDateInput) myTripsFilterStartDateInput.value = '';
+        if(myTripsFilterEndDateInput) myTripsFilterEndDateInput.value = '';
+        if(myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = loggedInUserProfile.role === 'admin' ? 'Digite o nome do motorista e clique em "Buscar Fretes"' : 'Carregando seus fretes...';
+        if(myTripsTableBody) myTripsTableBody.innerHTML = ''; 
+        loadAndRenderMyTrips();
+    } else {
+        if(myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = 'Faça login para ver seus fretes.';
+    }
+    if(myTripsFeedback) {myTripsFeedback.textContent = ''; myTripsFeedback.style.display = 'none';}
+}
+
+
+function initializeAdminView() {
+    console.log("Initializing Admin View...");
+    updateAdminSummary();
+    populateAdminDriverSelect();
+    populateAdminYearFilterSelect();
+    if (adminSelectDriver) adminSelectDriver.value = '';
+    if (adminDriverTripsSection) adminDriverTripsSection.style.display = 'none';
+    if (adminDriverIndividualTripsSection) adminDriverIndividualTripsSection.style.display = 'none';
+    if (adminSelectedDriverNameDisplay) adminSelectedDriverNameDisplay.textContent = "Selecione um motorista para ver os resumos.";
+    if (adminDriverTripsPlaceholder) adminDriverTripsPlaceholder.textContent = "Selecione um motorista para carregar os resumos mensais.";
+    if (adminDriverFiltersContainer) adminDriverFiltersContainer.style.display = 'none';
+    if (adminMonthFilterSelect) adminMonthFilterSelect.value = '';
+    if (adminYearFilterSelect) adminYearFilterSelect.value = '';
+    if(adminGeneralFeedback) {adminGeneralFeedback.textContent = ''; adminGeneralFeedback.style.display = 'none';}
+    if(adminSummaryFilterStartDateInput) adminSummaryFilterStartDateInput.value = '';
+    if(adminSummaryFilterEndDateInput) adminSummaryFilterEndDateInput.value = '';
+    if(excelFileInput) excelFileInput.value = '';
+    if(excelImportFeedback) {excelImportFeedback.textContent = ''; excelImportFeedback.style.display = 'none';}
+
+}
+
+function initializeUserManagementView() {
+    console.log("Initializing User Management View...");
+    if (loggedInUserProfile && loggedInUserProfile.role === 'admin' && loggedInUserProfile.username === 'fabio') {
+        loadAndRenderUsersForAdmin();
+    }
+    if (adminCreateUserForm) adminCreateUserForm.reset();
+    if (adminCreateUserFeedback) {adminCreateUserFeedback.textContent = ''; adminCreateUserFeedback.style.display = 'none';}
+    if (userManagementFeedback) {userManagementFeedback.textContent = ''; userManagementFeedback.style.display = 'none';}
+}
+
 
 // --- EVENT LISTENERS ---
 document.addEventListener('DOMContentLoaded', () => {
     console.log("DOMContentLoaded event fired.");
 
-    const loginUsernameInput = document.getElementById('loginUsername');
-    if (loginUsernameInput) {
-        loginUsernameInput.addEventListener('input', function() {
-            this.value = this.value.toLowerCase();
-        });
-        console.log("Event listener 'input' added to loginUsername for lowercase conversion.");
-    } else {
-        console.error("loginUsername input field not found for adding lowercase listener.");
-    }
-
-
-    if (!app || !authFirebase || !db || !userProfilesCollection || !tripsCollection) {
-        console.error("CRITICAL DOMContentLoaded: Firebase not initialized correctly or collections not set. App listeners not added.");
+    if (!app || !authFirebase || !db) {
+        console.error("CRITICAL: Firebase not initialized at DOMContentLoaded. App will not function.");
         const body = document.querySelector('body');
         if (body) {
-            const errorDiv = document.createElement('div');
-            errorDiv.textContent = "ERRO CRÍTICO: FALHA AO CONECTAR AOS SERVIÇOS DE DADOS. VERIFIQUE O CONSOLE.";
-            errorDiv.style.backgroundColor = "red";
-            errorDiv.style.color = "white";
-            errorDiv.style.padding = "10px";
-            errorDiv.style.textAlign = "center";
-            errorDiv.style.position = "fixed";
-            errorDiv.style.top = "0";
-            errorDiv.style.left = "0";
-            errorDiv.style.width = "100%";
-            errorDiv.style.zIndex = "9999";
-            body.prepend(errorDiv);
+            body.innerHTML = `<div style="padding: 20px; text-align: center; background-color: #ffdddd; border: 1px solid red; color: red;">
+                <h1>Erro Crítico</h1>
+                <p>A aplicação não pôde ser iniciada devido a um problema na inicialização do Firebase. Verifique o console para detalhes.</p>
+                <p>Por favor, recarregue a página ou contate o suporte técnico.</p>
+            </div>`;
         }
-        return;
+        return; 
     }
-    console.log("Firebase seems initialized, proceeding to add event listeners.");
 
-
-    if (loginForm) {
-        loginForm.addEventListener('submit', handleLogin);
-    } else { console.error("loginForm not found!");}
+    if (loginForm) loginForm.addEventListener('submit', handleLogin);
 
     if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
 
     if (userViewBtn) userViewBtn.addEventListener('click', () => { showView('userView'); initializeUserView(); });
     if (myTripsViewBtn) myTripsViewBtn.addEventListener('click', () => { showView('myTripsView'); initializeMyTripsView(); });
     if (adminViewBtn) adminViewBtn.addEventListener('click', () => { showView('adminView'); initializeAdminView(); });
-    if (userManagementViewBtn) userManagementViewBtn.addEventListener('click', () => { showView('userManagementView'); initializeUserManagementView();});
+    if (userManagementViewBtn) userManagementViewBtn.addEventListener('click', () => { showView('userManagementView'); initializeUserManagementView(); });
+
 
     if (tripForm) tripForm.addEventListener('submit', handleTripFormSubmit);
     if (addFuelEntryBtn) addFuelEntryBtn.addEventListener('click', () => addFuelEntryToForm());
@@ -2047,180 +2168,91 @@ document.addEventListener('DOMContentLoaded', () => {
         if(tripIdToEditInput) tripIdToEditInput.value = '';
         if(tripForm) tripForm.reset();
         if(fuelEntriesContainer) fuelEntriesContainer.innerHTML = '';
-        fuelEntryIdCounter = 0;
-        if(submitTripBtn) submitTripBtn.textContent = 'Salvar Frete';
-        if(cancelEditBtn) cancelEditBtn.style.display = 'none';
-        if(driverNameInput && loggedInUserProfile) driverNameInput.value = capitalizeName(loggedInUserProfile.username);
-        addFuelEntryToForm();
+        addFuelEntryToForm(); 
+        if (submitTripBtn) submitTripBtn.textContent = 'Salvar Frete';
+        if (cancelEditBtn) cancelEditBtn.style.display = 'none';
+        if (driverNameInput && loggedInUserProfile) driverNameInput.value = capitalizeName(loggedInUserProfile.username);
         showFeedback(userFormFeedback, "Edição cancelada.", "info");
     });
 
     if (loadMyTripsBtn && myTripsDriverNameInput) {
-        loadMyTripsBtn.addEventListener('click', async () => {
-            const driverNameToSearch = myTripsDriverNameInput.value.trim().toLowerCase();
+        loadMyTripsBtn.addEventListener('click', () => {
+            const driverNameToSearch = myTripsDriverNameInput.value.trim();
             if (!driverNameToSearch) {
-                showFeedback(myTripsFeedback, "Digite um nome de motorista para buscar.", "error");
+                showFeedback(myTripsFeedback, "Por favor, digite o nome de um motorista para buscar.", "error");
                 currentUserForMyTripsSearch = null;
                 currentUidForMyTripsSearch = null;
-                loadAndRenderMyTrips(myTripsFilterStartDateInput?.value, myTripsFilterEndDateInput?.value);
                 return;
             }
-            try {
-                const qUser = query(userProfilesCollection, where("username", "==", driverNameToSearch));
-                const userSnapshot = await getDocs(qUser);
-                if (!userSnapshot.empty) {
-                    const foundUser = userSnapshot.docs[0].data();
-                    currentUserForMyTripsSearch = foundUser.username;
-                    currentUidForMyTripsSearch = foundUser.uid;
-                    loadAndRenderMyTrips(myTripsFilterStartDateInput?.value, myTripsFilterEndDateInput?.value);
-                } else {
-                    showFeedback(myTripsFeedback, `Motorista "${myTripsDriverNameInput.value.trim()}" não encontrado.`, "error");
-                    if (myTripsTableBody) myTripsTableBody.innerHTML = '';
-                    if (myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Nenhum motorista encontrado com o nome "${myTripsDriverNameInput.value.trim()}".`;
-                    if (myTripsTable) myTripsTable.style.display = 'none';
-                    if (myTripsTablePlaceholder) myTripsTablePlaceholder.style.display = 'block';
-                    updateDriverSummary([], myTripsDriverNameInput.value.trim());
-                }
-            } catch(err) {
-                console.error("Error searching driver by name:", "Code:", err.code, "Message:", err.message);
-                showFeedback(myTripsFeedback, "Erro ao buscar motorista.", "error");
+            const foundProfile = userProfiles.find(p => p.username.toLowerCase() === driverNameToSearch.toLowerCase() && p.role === 'motorista');
+            if (foundProfile) {
+                currentUserForMyTripsSearch = foundProfile.username;
+                currentUidForMyTripsSearch = foundProfile.uid;
+                if(myTripsFilterStartDateInput) myTripsFilterStartDateInput.value = ''; // Reset date filters
+                if(myTripsFilterEndDateInput) myTripsFilterEndDateInput.value = '';
+                loadAndRenderMyTrips();
+            } else {
+                showFeedback(myTripsFeedback, `Motorista "${capitalizeName(driverNameToSearch)}" não encontrado.`, "error");
+                if(myTripsTableBody) myTripsTableBody.innerHTML = '';
+                if(myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Motorista "${capitalizeName(driverNameToSearch)}" não encontrado.`;
+                currentUserForMyTripsSearch = null;
+                currentUidForMyTripsSearch = null;
             }
         });
     }
-    if (applyMyTripsFilterBtn) {
+
+    if (applyMyTripsFilterBtn && myTripsFilterStartDateInput && myTripsFilterEndDateInput) {
         applyMyTripsFilterBtn.addEventListener('click', () => {
-            loadAndRenderMyTrips(myTripsFilterStartDateInput?.value, myTripsFilterEndDateInput?.value);
+            const startDate = myTripsFilterStartDateInput.value;
+            const endDate = myTripsFilterEndDateInput.value;
+            loadAndRenderMyTrips(startDate, endDate);
         });
     }
 
-
-    if (applyAdminSummaryFilterBtn) {
+    if(applyAdminSummaryFilterBtn && adminSummaryFilterStartDateInput && adminSummaryFilterEndDateInput) {
         applyAdminSummaryFilterBtn.addEventListener('click', () => {
-            updateAdminSummary(adminSummaryFilterStartDateInput?.value, adminSummaryFilterEndDateInput?.value);
+            updateAdminSummary(adminSummaryFilterStartDateInput.value, adminSummaryFilterEndDateInput.value);
         });
     }
+
     if (exportAdminReportBtn) {
         exportAdminReportBtn.addEventListener('click', handleExportAdminReport);
-    }
-    if (importExcelBtn && excelFileInput) {
-        importExcelBtn.addEventListener('click', () => {
-            if (excelFileInput.files && excelFileInput.files[0]) {
-                handleExcelFileImport({ target: { files: excelFileInput.files } });
-            } else {
-                showFeedback(excelImportFeedback, "Por favor, selecione um arquivo Excel primeiro.", "info");
-            }
-        });
+    } else {
+        console.warn("Botão exportAdminReportBtn não encontrado no DOM.");
     }
 
-
-    if (adminLoadDriverTripsBtn) {
+    if (adminLoadDriverTripsBtn && adminSelectDriver) {
         adminLoadDriverTripsBtn.addEventListener('click', loadAndRenderAdminDriverMonthlySummaries);
     }
-    if (adminMonthFilterSelect) {
+
+    if(adminMonthFilterSelect && adminYearFilterSelect) {
         adminMonthFilterSelect.addEventListener('change', renderAdminDriverMonthlySummariesTable);
-    }
-    if (adminYearFilterSelect) {
         adminYearFilterSelect.addEventListener('change', renderAdminDriverMonthlySummariesTable);
     }
 
-    if(closeAdminTripDetailModalBtn && adminTripDetailModal) {
+
+    if (closeAdminTripDetailModalBtn && adminTripDetailModal) {
         closeAdminTripDetailModalBtn.addEventListener('click', () => adminTripDetailModal.style.display = 'none');
     }
     if (printAdminTripDetailBtn) {
-        printAdminTripDetailBtn.addEventListener('click', () => {
-            if (adminTripDetailModal && adminTripDetailModal.style.display === 'flex') {
-                window.print();
-            } else {
-                console.warn("Print button clicked, but admin trip detail modal is not visible.");
-                 showFeedback(adminGeneralFeedback, "Abra os detalhes de um frete para imprimir.", "info");
-            }
-        });
-    }
-
-
-    if(editUserForm) editUserForm.addEventListener('submit', handleEditUserFormSubmit);
-    if(closeEditUserModalBtn && editUserModal) {
-        closeEditUserModalBtn.addEventListener('click', () => editUserModal.style.display = 'none');
+        printAdminTripDetailBtn.addEventListener('click', () => window.print());
     }
 
     if (adminCreateUserForm) {
-        adminCreateUserForm.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            const username = adminCreateUsernameInput.value.trim();
-            const role = adminCreateUserRoleSelect.value;
-            const password = adminCreateUserPasswordInput.value;
-            const confirmPassword = adminCreateUserConfirmPasswordInput.value;
-
-            const normalizedUsernamePart = normalizeUsernameForEmail(username);
-
-            if (!username) {
-                showFeedback(adminCreateUserFeedback, "Nome de usuário é obrigatório.", "error"); return;
-            }
-            if (!normalizedUsernamePart || normalizedUsernamePart.includes("user.invalid")) {
-                 showFeedback(adminCreateUserFeedback, `Nome de usuário "${username}" inválido. Use letras ou números e evite apenas espaços ou caracteres especiais.`, "error"); return;
-            }
-            if (!password || password.length < 6) {
-                showFeedback(adminCreateUserFeedback, "Senha deve ter pelo menos 6 caracteres.", "error"); return;
-            }
-            if (password !== confirmPassword) {
-                showFeedback(adminCreateUserFeedback, "As senhas não coincidem.", "error"); return;
-            }
-
-            const email = `${normalizedUsernamePart}@example.com`;
-
-            try {
-                if (adminCreateUserBtn) {
-                    adminCreateUserBtn.disabled = true;
-                    adminCreateUserBtn.textContent = 'Cadastrando...';
-                }
-
-                const userCredential = await createUserWithEmailAndPassword(authFirebase, email, password);
-                const firebaseUser = userCredential.user;
-
-                const newUserProfile = {
-                    uid: firebaseUser.uid,
-                    username: username, // Store the original, non-normalized username for display
-                    email: firebaseUser.email || email,
-                    role: role,
-                    createdAt: Timestamp.now()
-                };
-                await firebaseSetDoc(doc(userProfilesCollection, firebaseUser.uid), newUserProfile);
-                showFeedback(adminCreateUserFeedback, `Usuário "${capitalizeName(username)}" (${role}) cadastrado com sucesso!`, "success");
-                adminCreateUserForm.reset();
-                loadAndRenderUsersForAdmin(); 
-                populateAdminDriverSelect(); 
-
-            } catch (error) {
-                console.error("Error creating user from admin panel:", "Code:", error.code, "Message:", error.message);
-                if (error.code === 'auth/email-already-in-use') {
-                    showFeedback(adminCreateUserFeedback, `Nome de usuário "${username}" (ou e-mail derivado: ${email}) já existe. Tente outro.`, "error");
-                } else if (error.code === 'auth/weak-password') {
-                    showFeedback(adminCreateUserFeedback, "Senha muito fraca.", "error");
-                } else if (error.code === 'auth/invalid-email') {
-                    showFeedback(adminCreateUserFeedback, `O nome de usuário "${username}" resultou em um e-mail inválido ("${email}"). Tente outro nome.`, "error");
-                } else {
-                    showFeedback(adminCreateUserFeedback, "Erro ao cadastrar usuário. Verifique o console.", "error");
-                }
-            } finally {
-                 if (adminCreateUserBtn) {
-                    adminCreateUserBtn.disabled = false;
-                    adminCreateUserBtn.textContent = 'Cadastrar Usuário';
-                }
-            }
-        });
+        adminCreateUserForm.addEventListener('submit', handleAdminCreateUserFormSubmit);
+    }
+    if (closeEditUserModalBtn && editUserModal) {
+        closeEditUserModalBtn.addEventListener('click', () => editUserModal.style.display = 'none');
+    }
+    if (editUserForm) {
+        editUserForm.addEventListener('submit', handleEditUserSubmit);
     }
 
-    const modals = document.querySelectorAll('.modal');
-    modals.forEach(modal => {
-        const modalElement = modal;
-        if(modalElement) {
-            modalElement.style.display = 'none';
-            modalElement.addEventListener('click', (event) => {
-                if (event.target === modalElement) {
-                    modalElement.style.display = 'none';
-                }
-            });
-        }
-    });
-    console.log("All DOMContentLoaded event listeners nominally set up.");
+    if(importExcelBtn && excelFileInput) {
+        importExcelBtn.addEventListener('click', handleExcelFileImport);
+    }
+
+    
+    showView('loginView');
+    console.log("Initial view set to loginView.");
 });

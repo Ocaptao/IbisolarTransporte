@@ -290,7 +290,7 @@
                 <div id="adminDriverFiltersContainer" class="dashboard-controls" style="margin-top:1rem; display:none;">
                     <div class="filter-grid">
                          <div class="form-group">
-                            <label for="adminMonthFilterSelect">Filtrar por Mês:</label>
+                            <label for="adminMonthFilterSelect">Filtrar Resumos por Mês:</label>
                             <select id="adminMonthFilterSelect">
                                 <option value="">Todos os Meses</option>
                                 <option value="01">Janeiro</option>
@@ -308,7 +308,7 @@
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="adminYearFilterSelect">Filtrar por Ano:</label>
+                            <label for="adminYearFilterSelect">Filtrar Resumos por Ano:</label>
                             <select id="adminYearFilterSelect">
                                 <option value="">Todos os Anos</option>
                                 <!-- Anos serão populados por JS -->
@@ -320,7 +320,7 @@
 
                 <div id="adminDriverTripsSection" style="display: none;">
                     <h3 id="adminSelectedDriverNameDisplay">Resumos Mensais de [Motorista]</h3>
-                    <table id="adminDriverTripsTable"> <!-- Tabela reutilizada para resumos mensais -->
+                    <table id="adminDriverTripsTable"> <!-- Tabela para resumos mensais -->
                         <thead>
                             <tr>
                                 <th>Mês/Ano</th>
@@ -328,12 +328,31 @@
                                 <th>Total Frete Bruto (R$)</th>
                                 <th>Despesas Totais (R$)</th>
                                 <th>Lucro Líquido (R$)</th>
+                                <th>Ações</th>
                             </tr>
                         </thead>
                         <tbody id="adminDriverTripsTableBody"></tbody>
                     </table>
                     <p id="adminDriverTripsPlaceholder">Nenhum resumo encontrado para este motorista ou filtros.</p>
                 </div>
+
+                <div id="adminDriverIndividualTripsSection" style="display: none; margin-top: 2rem;">
+                    <h3 id="adminIndividualTripsTitle">Viagens Individuais de [Motorista] para [Mês/Ano]</h3>
+                    <table id="adminDriverIndividualTripsTable">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Valor Frete (R$)</th>
+                                <th>Despesas (R$)</th>
+                                <th>Lucro (R$)</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminDriverIndividualTripsTableBody"></tbody>
+                    </table>
+                    <p id="adminDriverIndividualTripsPlaceholder">Selecione um mês na tabela de resumos para ver as viagens individuais.</p>
+                </div>
+
                 <p id="adminGeneralFeedback" class="feedback-message" aria-live="polite"></p>
             </section>
 

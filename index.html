@@ -18,10 +18,13 @@
     "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
     "firebase/auth": "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js",
     "firebase/firestore": "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js",
+    "firebase/storage": "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js", 
     "firebase/": "https://esm.sh/firebase@^11.9.0/",
     "@firebase/app": "https://esm.sh/@firebase/app@^0.13.1",
     "@firebase/firestore": "https://esm.sh/@firebase/firestore@^4.7.17",
-    "@firebase/auth": "https://esm.sh/@firebase/auth@^1.10.6"
+    "@firebase/auth": "https://esm.sh/@firebase/auth@^1.10.6",
+    "@firebase/storage": "https://esm.sh/@firebase/storage@^0.12.1", 
+    "xlsx": "https://esm.sh/xlsx@^0.18.5"
   }
 }
 </script>
@@ -155,6 +158,15 @@
                         </div>
                     </fieldset>
 
+                    <fieldset>
+                        <legend>Anexos</legend>
+                        <div class="form-group">
+                            <label for="tripAttachments">Anexar Arquivos (Fotos, PDF, Comprovantes):</label>
+                            <input type="file" id="tripAttachments" name="tripAttachments" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt">
+                            <div id="tripAttachmentsFeedback" class="form-input-feedback"></div>
+                        </div>
+                    </fieldset>
+
                     <div class="form-actions">
                         <button type="submit" id="submitTripBtn" class="submit-btn">Salvar Frete</button>
                         <button type="button" id="cancelEditBtn" class="control-btn secondary-btn" style="display: none;">Cancelar Edição</button>
@@ -243,7 +255,7 @@
                             </div>
                         </div>
                         <button id="applyAdminSummaryFilterBtn" class="control-btn">Atualizar Resumo Geral</button>
-                        <button id="exportAdminReportBtn" class="control-btn secondary-btn" style="margin-top: 10px;">Exportar Relatório Mensal (HTML)</button>
+                        <button id="exportAdminReportBtn" class="control-btn secondary-btn" style="margin-top: 10px;">Exportar Relatório (HTML)</button>
                     </div>
                     <div class="summary-metrics">
                         <div class="metric-card">
@@ -440,7 +452,15 @@
             <div class="modal-content large-modal">
                 <span class="close-modal-btn" id="closeAdminTripDetailModalBtn">&times;</span>
                 <h3>Detalhes do Frete</h3>
-                <div id="adminTripDetailContent"></div>
+                <div id="adminTripDetailContent">
+                    <!-- Detalhes do Frete serão inseridos aqui -->
+                </div>
+                <div class="trip-detail-section" id="adminTripAttachmentsSection" style="display: none;">
+                    <h4>Anexos</h4>
+                    <div id="adminTripAttachmentsList">
+                        <!-- Lista de anexos será inserida aqui -->
+                    </div>
+                </div>
                 <button id="printAdminTripDetailBtn" class="control-btn" style="margin-top: 1rem;">Imprimir Detalhes</button>
             </div>
         </div>

@@ -1628,7 +1628,6 @@ async function handleExcelFileImport() {
             const headersFromSheet = jsonData[0].map(h => String(h || '').trim().toLowerCase());
             console.log("Cabeçalhos lidos da planilha (normalizados):", headersFromSheet);
 
-            // Mapa de nomes de chaves internas para possíveis nomes de cabeçalho na planilha (em minúsculas)
             const internalToSheetHeaderMap = {
                 data: ["data"],
                 motorista: ["motorista"],
@@ -1638,21 +1637,21 @@ async function handleExcelFileImport() {
                 peso: ["peso (kg)", "peso"],
                 valor_unidade: ["v. unidade (r$)", "valor unidade", "v. unidade", "valor unitário", "v.un"],
 
-                // Abastecimento 1 (usa nomes genéricos das colunas da imagem para o primeiro bloco)
                 litros1: ["litros1", "litros 1", "litros"],
                 valor_litro1: ["valor/litro1", "valor/litro 1", "valor litro1", "valor litro 1", "v.litro"],
                 desconto1: ["desconto1", "desconto 1", "descont"],
 
-                // Abastecimento 2 (usa "litro" singular da imagem; para v.litro e descont, espera nomes distintos como "v.litro2")
                 litros2: ["litros2", "litros 2", "litro"],
-                valor_litro2: ["valor/litro2", "valor/litro 2", "valor litro2", "valor litro 2", "v.litro2", "v.litro 2"], // Adicionado v.litro2
-                desconto2: ["desconto2", "desconto 2", "descont2", "descont 2"], // Adicionado descont2
+                valor_litro2: ["valor/litro2", "valor/litro 2", "valor litro2", "valor litro 2", "v.litro2", "v.litro 2"],
+                desconto2: ["desconto2", "desconto 2", "descont2", "descont 2"],
 
-                // Abastecimento 3 (espera nomes distintos como "litro3", "v.litro3")
-                // Se a planilha usar "litro" para o terceiro abastecimento também, precisaria de um "litro3" ou similar na planilha.
                 litros3: ["litros3", "litros 3"],
                 valor_litro3: ["valor/litro3", "valor/litro 3", "valor litro3", "valor litro 3", "v.litro3", "v.litro 3"],
                 desconto3: ["desconto3", "desconto 3", "descont3", "descont 3"],
+                
+                litros4: ["litros4", "litros 4"],
+                valor_litro4: ["valor/litro4", "valor/litro 4", "valor litro4", "valor litro 4", "v.litro4", "v.litro 4"],
+                desconto4: ["desconto4", "desconto 4", "descont4", "descont 4"],
 
                 arla32_cost: ["arla-32 (r$)", "arla-32", "arla", "arla 32", "arla32", "valor arla"],
                 toll_cost: ["pedagio (r$)", "pedagio", "pedágio"],
@@ -1752,7 +1751,7 @@ async function handleExcelFileImport() {
 
                 tripEntry.fuelEntries = [];
                 let totalFuelCostCalculated = 0;
-                for (let j = 1; j <= 3; j++) {
+                for (let j = 1; j <= 4; j++) { // Changed limit from 3 to 4
                     const litrosKey = `litros${j}`;
                     const valorLitroKey = `valor_litro${j}`;
                     const descontoKey = `desconto${j}`;
@@ -1760,7 +1759,6 @@ async function handleExcelFileImport() {
                     if (headerMap[litrosKey] !== undefined && headerMap[valorLitroKey] !== undefined && rowArray[headerMap[litrosKey]]) {
                         const liters = parseNumericValueFromString(rowArray[headerMap[litrosKey]]);
                         const valuePerLiter = parseNumericValueFromString(rowArray[headerMap[valorLitroKey]]);
-                        // Para desconto, se a coluna não existir no headerMap (opcional), o valor será 0.
                         const discount = headerMap[descontoKey] !== undefined ? parseNumericValueFromString(rowArray[headerMap[descontoKey]]) : 0;
                         if (liters > 0 && valuePerLiter > 0) {
                             const totalValue = (liters * valuePerLiter) - discount;

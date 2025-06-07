@@ -1,6 +1,5 @@
 
 
-
 import { Chart, registerables } from 'chart.js';
 // Firebase App (o núcleo do Firebase SDK) é sempre necessário e deve ser listado primeiro
 import { initializeApp } from "@firebase/app";
@@ -28,6 +27,13 @@ import {
     writeBatch,
     setDoc as firebaseSetDoc,
 } from "@firebase/firestore";
+import {
+    getStorage,
+    ref as storageRef,
+    uploadBytesResumable,
+    getDownloadURL,
+    deleteObject
+} from "@firebase/storage";
 import * as XLSX from 'xlsx';
 
 Chart.register(...registerables);
@@ -47,6 +53,7 @@ const firebaseConfig = {
 let app;
 let authFirebase;
 let db;
+let storage; // Firebase Storage instance
 let userProfilesCollection;
 let tripsCollection;
 
@@ -55,9 +62,10 @@ try {
     app = initializeApp(firebaseConfig);
     authFirebase = getAuth(app);
     db = getFirestore(app);
+    storage = getStorage(app); // Initialize Storage
     userProfilesCollection = collection(db, "userProfiles");
     tripsCollection = collection(db, "trips");
-    console.log("Firebase initialized successfully!");
+    console.log("Firebase initialized successfully (including Storage)!");
 } catch (error) {
     console.error("CRITICAL ERROR: Firebase initialization failed:", "Code:", error.code, "Message:", error.message);
     alert("Erro crítico: Não foi possível conectar ao serviço de dados. Verifique a configuração do Firebase e sua conexão com a internet.");
@@ -82,20 +90,15 @@ let adminSummaryChart = null;
 
 // --- DOM ELEMENTS ---
 const loginView = document.getElementById('loginView');
-// registerView foi removido do HTML e não é mais referenciado aqui.
 const appContainer = document.getElementById('appContainer');
 const loginForm = document.getElementById('loginForm');
-// registerForm foi removido.
 const tripForm = document.getElementById('tripForm');
 const loginFeedback = document.getElementById('loginFeedback');
-// registerFeedback foi removido.
 const userFormFeedback = document.getElementById('userFormFeedback');
 const myTripsFeedback = document.getElementById('myTripsFeedback');
 const adminGeneralFeedback = document.getElementById('adminGeneralFeedback');
 const userManagementFeedback = document.getElementById('userManagementFeedback');
 const editUserFeedback = document.getElementById('editUserFeedback');
-
-// showRegisterViewLink e showLoginViewLink (se referia ao registro) foram removidos.
 
 const userViewBtn = document.getElementById('userViewBtn');
 const myTripsViewBtn = document.getElementById('myTripsViewBtn');
@@ -103,7 +106,6 @@ const adminViewBtn = document.getElementById('adminViewBtn');
 const userManagementViewBtn = document.getElementById('userManagementViewBtn');
 const logoutBtn = document.getElementById('logoutBtn');
 const welcomeMessageContainer = document.getElementById('welcomeMessageContainer');
-
 
 const userView = document.getElementById('userView');
 const myTripsView = document.getElementById('myTripsView');
@@ -113,7 +115,6 @@ const userManagementView = document.getElementById('userManagementView');
 const tripIdToEditInput = document.getElementById('tripIdToEdit');
 const tripDateInput = document.getElementById('tripDate');
 const driverNameInput = document.getElementById('driverName');
-// const cargoTypeInput = document.getElementById('cargoType'); // Removido
 const kmInitialInput = document.getElementById('kmInitial');
 const kmFinalInput = document.getElementById('kmFinal');
 const weightInput = document.getElementById('weight');
@@ -129,6 +130,13 @@ const expenseDescriptionInput = document.getElementById('expenseDescription');
 const declaredValueInput = document.getElementById('declaredValue');
 const submitTripBtn = document.getElementById('submitTripBtn');
 const cancelEditBtn = document.getElementById('cancelEditBtn');
+
+// Attachment DOM Elements
+const tripAttachmentsInput = document.getElementById('tripAttachments');
+const tripAttachmentsFeedback = document.getElementById('tripAttachmentsFeedback');
+const adminTripAttachmentsSection = document.getElementById('adminTripAttachmentsSection');
+const adminTripAttachmentsList = document.getElementById('adminTripAttachmentsList');
+
 
 const driverSummaryContainer = document.getElementById('driverSummaryContainer');
 const driverTotalTripsEl = document.getElementById('driverTotalTripsEl');
@@ -170,13 +178,11 @@ const adminDriverFiltersContainer = document.getElementById('adminDriverFiltersC
 const adminMonthFilterSelect = document.getElementById('adminMonthFilterSelect');
 const adminYearFilterSelect = document.getElementById('adminYearFilterSelect');
 
-// New DOM Elements for Individual Trips Display
 const adminDriverIndividualTripsSection = document.getElementById('adminDriverIndividualTripsSection');
 const adminIndividualTripsTitle = document.getElementById('adminIndividualTripsTitle');
 const adminDriverIndividualTripsTable = document.getElementById('adminDriverIndividualTripsTable');
 const adminDriverIndividualTripsTableBody = document.getElementById('adminDriverIndividualTripsTableBody');
 const adminDriverIndividualTripsPlaceholder = document.getElementById('adminDriverIndividualTripsPlaceholder');
-
 
 const userManagementTableBody = document.getElementById('userManagementTableBody');
 const editUserModal = document.getElementById('editUserModal');
@@ -188,7 +194,6 @@ const editUserRoleSelect = document.getElementById('editUserRole');
 const editUserNewPasswordInput = document.getElementById('editUserNewPassword');
 const editUserConfirmNewPasswordInput = document.getElementById('editUserConfirmNewPassword');
 
-// DOM Elements para o formulário de criação de usuário pelo Admin
 const adminCreateUserForm = document.getElementById('adminCreateUserForm');
 const adminCreateUsernameInput = document.getElementById('adminCreateUsername');
 const adminCreateUserRoleSelect = document.getElementById('adminCreateUserRole');
@@ -196,11 +201,9 @@ const adminCreateUserPasswordInput = document.getElementById('adminCreateUserPas
 const adminCreateUserConfirmPasswordInput = document.getElementById('adminCreateUserConfirmPassword');
 const adminCreateUserFeedback = document.getElementById('adminCreateUserFeedback');
 
-// DOM Elements para importação de Excel
 const excelFileInput = document.getElementById('excelFileInput');
 const importExcelBtn = document.getElementById('importExcelBtn');
 const excelImportFeedback = document.getElementById('excelImportFeedback');
-
 
 let fuelEntryIdCounter = 0;
 
@@ -242,30 +245,23 @@ function parseNumericValueFromString(value) {
     let strValue = String(value).trim();
     if (strValue === "") return 0;
 
-    strValue = strValue.replace(/R\$\s?/g, ''); // Remove R$
+    strValue = strValue.replace(/R\$\s?/g, ''); 
 
     const hasComma = strValue.includes(',');
     const dotCount = (strValue.match(/\./g) || []).length;
 
     if (hasComma) {
-        // Assume pt-BR format: "1.234,56" or "1234,56"
-        strValue = strValue.replace(/\./g, ''); // Remove all dots (thousand separators)
-        strValue = strValue.replace(/,/g, '.'); // Convert comma to dot (decimal)
+        strValue = strValue.replace(/\./g, ''); 
+        strValue = strValue.replace(/,/g, '.'); 
     } else {
-        // No comma
         if (dotCount > 1) {
-            // Multiple dots, no comma: "1.234.567" (pt-BR integer for thousands)
-            strValue = strValue.replace(/\./g, ''); // Remove all dots
+            strValue = strValue.replace(/\./g, ''); 
         }
-        // else if dotCount === 1: "1234.56" (US-style decimal). parseFloat handles this.
-        // else if dotCount === 0: "1234" (integer). parseFloat handles this.
-        // No change needed for strValue in these cases as parseFloat will handle them.
     }
 
     const num = parseFloat(strValue);
     return isNaN(num) ? 0 : num;
 }
-
 
 function formatDate(dateInput) {
     if (!dateInput) return 'Data inválida';
@@ -273,12 +269,11 @@ function formatDate(dateInput) {
 
     if (typeof dateInput === 'string') {
         const trimmedDateInput = dateInput.trim();
-        if (/^\d{2}\/\d{2}\/\d{4}$/.test(trimmedDateInput)) { // DD/MM/YYYY
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(trimmedDateInput)) { 
             const parts = trimmedDateInput.split('/');
-            // new Date(year, monthIndex (0-11), day)
             dateToFormat = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
-        } else if (!trimmedDateInput.includes('T') && /^\d{4}-\d{2}-\d{2}$/.test(trimmedDateInput)) { // YYYY-MM-DD
-            dateToFormat = new Date(trimmedDateInput + 'T00:00:00Z'); // Adiciona Z para UTC
+        } else if (!trimmedDateInput.includes('T') && /^\d{4}-\d{2}-\d{2}$/.test(trimmedDateInput)) { 
+            dateToFormat = new Date(trimmedDateInput + 'T00:00:00Z'); 
         } else {
             dateToFormat = new Date(trimmedDateInput);
         }
@@ -326,7 +321,6 @@ function formatMonthYear(yearMonthKey) {
     return `${monthName.charAt(0).toUpperCase() + monthName.slice(1)}/${year}`;
 }
 
-
 function formatCurrency(value) {
     if (value === undefined || value === null || isNaN(value)) {
         return 'R$ 0,00';
@@ -347,6 +341,15 @@ function formatGenericNumber(value, minDigits = 0, maxDigits = 2) {
     });
 }
 
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+
 function escapeHtml(unsafe) {
     if (unsafe === null || unsafe === undefined) return '';
     return String(unsafe)
@@ -356,7 +359,6 @@ function escapeHtml(unsafe) {
          .replace(/"/g, "&quot;")
          .replace(/'/g, "&#039;");
 }
-
 
 function showFeedback(element, message, type) {
     if (!element) {
@@ -383,7 +385,6 @@ function showView(viewId) {
 
     const navButtons = document.querySelectorAll('.nav-btn');
     navButtons.forEach(btn => btn.setAttribute('aria-pressed', 'false'));
-
 
     if (viewId === 'loginView' && loginView) {
         loginView.style.display = 'flex';
@@ -511,14 +512,14 @@ async function handleLogout() {
         if(adminDriverIndividualTripsPlaceholder) adminDriverIndividualTripsPlaceholder.textContent = 'Selecione um mês na tabela de resumos para ver as viagens individuais.';
         if(adminDriverIndividualTripsSection) adminDriverIndividualTripsSection.style.display = 'none';
 
-
         if(adminSelectDriver) adminSelectDriver.innerHTML = '<option value="">-- Selecione um Motorista --</option>';
         if(userManagementTableBody) userManagementTableBody.innerHTML = '';
         if(adminCreateUserForm) adminCreateUserForm.reset();
         if(adminCreateUserFeedback) {adminCreateUserFeedback.textContent = ''; adminCreateUserFeedback.style.display = 'none';}
         if(excelFileInput) excelFileInput.value = '';
         if(excelImportFeedback) {excelImportFeedback.textContent = ''; excelImportFeedback.style.display = 'none';}
-
+        if(tripAttachmentsInput) tripAttachmentsInput.value = '';
+        if(tripAttachmentsFeedback) tripAttachmentsFeedback.innerHTML = '';
 
         currentUserForMyTripsSearch = null;
         currentUidForMyTripsSearch = null;
@@ -535,13 +536,11 @@ async function handleLogout() {
         if (adminYearFilterSelect) adminYearFilterSelect.value = '';
         if (adminSelectedDriverNameDisplay) adminSelectedDriverNameDisplay.textContent = "Selecione um motorista para ver os resumos.";
 
-
     } catch (error) {
         console.error("CRITICAL ERROR during logout:", "Code:", error.code, "Message:", error.message);
         showFeedback(loginFeedback, "Erro ao sair. Tente novamente.", "error");
     }
 }
-
 
 if (authFirebase) {
     onAuthStateChanged(authFirebase, async (user) => {
@@ -555,7 +554,6 @@ if (authFirebase) {
                 const userProfileDoc = await getDoc(userProfileDocRef);
 
                 if (userProfileDoc.exists()) {
-
                     if (authFirebase.currentUser && authFirebase.currentUser.uid === user.uid) {
                         loggedInUserProfile = { id: userProfileDoc.id, ...userProfileDoc.data() };
                         console.log("User profile found in Firestore:", "Username:", loggedInUserProfile.username, "Role:", loggedInUserProfile.role);
@@ -629,8 +627,60 @@ if (authFirebase) {
     });
 }
 
-
 // --- TRIP MANAGEMENT WITH FIRESTORE ---
+
+// Function to compress image before upload
+async function compressImage(file, maxSizeKB = 500, maxWidthOrHeight = 1920, quality = 0.7) {
+    if (!file.type.startsWith('image/')) {
+        return file; // Not an image
+    }
+
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > maxWidthOrHeight) {
+                        height = Math.round((height * maxWidthOrHeight) / width);
+                        width = maxWidthOrHeight;
+                    }
+                } else {
+                    if (height > maxWidthOrHeight) {
+                        width = Math.round((width * maxWidthOrHeight) / height);
+                        height = maxWidthOrHeight;
+                    }
+                }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                canvas.toBlob(
+                    (blob) => {
+                        if (blob && blob.size / 1024 < maxSizeKB && blob.size < file.size) {
+                            resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() }));
+                        } else {
+                            resolve(file); // Original file if compression not effective or resulted in larger size
+                        }
+                    },
+                    'image/jpeg',
+                    quality
+                );
+            };
+            img.onerror = reject;
+            img.src = event.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
 
 function addFuelEntryToForm(entry) {
     const entryId = entry ? entry.id : `fuel_${fuelEntryIdCounter++}`;
@@ -669,7 +719,7 @@ function addFuelEntryToForm(entry) {
         const valuePerLiter = parseNumericValueFromString(valuePerLiterInput.value);
         const discount = parseNumericValueFromString(discountInput.value);
         const total = (liters * valuePerLiter) - discount;
-        totalValueInput.value = total.toFixed(2).replace('.', ','); // Display with comma
+        totalValueInput.value = total.toFixed(2).replace('.', ','); 
     }
 
     litersInput.addEventListener('input', calculateTotalFuelValue);
@@ -692,6 +742,11 @@ async function handleTripFormSubmit(event) {
     if (!loggedInUser || !loggedInUserProfile) {
         showFeedback(userFormFeedback, "Você precisa estar logado para registrar um frete.", "error");
         return;
+    }
+
+    if(submitTripBtn) {
+        submitTripBtn.disabled = true;
+        submitTripBtn.textContent = 'Salvando...';
     }
 
     const formData = new FormData(tripForm);
@@ -751,30 +806,80 @@ async function handleTripFormSubmit(event) {
         totalExpenses: totalExpensesCalculated,
         netProfit: netProfitVal,
         declaredValue: parseNumericValueFromString(formData.get('declaredValue')),
+        attachments: [] // Initialize attachments array
     };
 
-    try {
-        if(submitTripBtn) {
-            submitTripBtn.disabled = true;
-            submitTripBtn.textContent = 'Salvando...';
-        }
+    // Handle file attachments
+    const filesToUpload = tripAttachmentsInput.files;
+    const uploadedAttachmentsData = [];
 
+    const currentTripId = editingTripId || doc(tripsCollection).id; // Get ID for storage path
+
+    if (filesToUpload && filesToUpload.length > 0) {
+        showFeedback(userFormFeedback, `Enviando ${filesToUpload.length} anexos...`, "info");
+        for (let i = 0; i < filesToUpload.length; i++) {
+            let file = filesToUpload[i];
+            try {
+                const compressedFile = await compressImage(file); // Compress if image
+                const fileName = `${Date.now()}_${compressedFile.name}`;
+                const attachmentRef = storageRef(storage, `trips/${currentTripId}/attachments/${fileName}`);
+                
+                const uploadTask = uploadBytesResumable(attachmentRef, compressedFile);
+
+                await new Promise((resolve, reject) => {
+                    uploadTask.on('state_changed',
+                        (snapshot) => {
+                            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                            console.log(`Upload de ${fileName} está ${progress}% concluído`);
+                        },
+                        (error) => {
+                            console.error(`Erro no upload do anexo ${fileName}:`, error);
+                            reject(error);
+                        },
+                        async () => {
+                            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                            uploadedAttachmentsData.push({
+                                name: compressedFile.name,
+                                url: downloadURL,
+                                type: compressedFile.type,
+                                size: compressedFile.size,
+                                storagePath: attachmentRef.fullPath,
+                                uploadedAt: Timestamp.now()
+                            });
+                            resolve();
+                        }
+                    );
+                });
+            } catch (error) {
+                console.error(`Falha ao processar ou enviar o anexo ${file.name}:`, error);
+                showFeedback(userFormFeedback, `Falha ao enviar o anexo ${file.name}.`, "error");
+                // Optionally, decide if a single attachment failure should stop the whole process
+            }
+        }
+    }
+
+
+    try {
         if (editingTripId) {
             const tripRef = doc(tripsCollection, editingTripId);
-            const updatePayload = { ...tripDataObjectFromForm };
-
-            await updateDoc(tripRef, updatePayload);
+            const existingTripDoc = await getDoc(tripRef);
+            const existingAttachments = existingTripDoc.exists() ? (existingTripDoc.data().attachments || []) : [];
+            tripDataObjectFromForm.attachments = [...existingAttachments, ...uploadedAttachmentsData];
+            await updateDoc(tripRef, tripDataObjectFromForm);
             showFeedback(userFormFeedback, "Frete atualizado com sucesso!", "success");
         } else {
-            const createPayload = {
-                ...tripDataObjectFromForm,
-                createdAt: Timestamp.now()
-            };
-            await addDoc(tripsCollection, createPayload);
+            tripDataObjectFromForm.createdAt = Timestamp.now();
+            tripDataObjectFromForm.attachments = uploadedAttachmentsData;
+            // Use the pre-generated currentTripId if it was a new trip
+            const newTripDocRef = doc(tripsCollection, currentTripId);
+            await firebaseSetDoc(newTripDocRef, tripDataObjectFromForm);
             showFeedback(userFormFeedback, "Frete registrado com sucesso!", "success");
         }
+
         if(tripForm) tripForm.reset();
         if(fuelEntriesContainer) fuelEntriesContainer.innerHTML = '';
+        if(tripAttachmentsInput) tripAttachmentsInput.value = '';
+        if(tripAttachmentsFeedback) tripAttachmentsFeedback.innerHTML = '';
         fuelEntryIdCounter = 0;
         editingTripId = null;
         if(tripIdToEditInput) tripIdToEditInput.value = '';
@@ -795,11 +900,14 @@ async function handleTripFormSubmit(event) {
     } catch (error) {
         console.error("Error saving trip to Firestore:", "Code:", error.code, "Message:", error.message);
         showFeedback(userFormFeedback, "Erro ao salvar frete. Tente novamente.", "error");
-        if (submitTripBtn) submitTripBtn.textContent = editingTripId ? 'Salvar Alterações' : 'Salvar Frete';
     } finally {
-        if (submitTripBtn) submitTripBtn.disabled = false;
+        if (submitTripBtn) {
+            submitTripBtn.disabled = false;
+            submitTripBtn.textContent = editingTripId ? 'Salvar Alterações' : 'Salvar Frete';
+        }
     }
 }
+
 
 async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
     if (!loggedInUser || !loggedInUserProfile) {
@@ -826,7 +934,6 @@ async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
         return;
     }
 
-
     if(myTripsTablePlaceholder) myTripsTablePlaceholder.textContent = `Carregando fretes de ${capitalizeName(targetUsername)}...`;
     if(myTripsTable) myTripsTable.style.display = 'none';
     if(myTripsTablePlaceholder) myTripsTablePlaceholder.style.display = 'block';
@@ -841,7 +948,6 @@ async function loadAndRenderMyTrips(filterStartDate, filterEndDate) {
         if (filterEndDate) {
             q = query(q, where("date", "<=", filterEndDate));
         }
-
 
         const querySnapshot = await getDocs(q);
         const fetchedTrips = [];
@@ -912,7 +1018,6 @@ function renderMyTripsTable(tripsToRender) {
             canDelete = true;
         }
 
-
         if (canDelete) {
             const deleteButton = document.createElement('button');
             deleteButton.className = 'control-btn danger-btn small-btn';
@@ -939,6 +1044,8 @@ async function loadTripForEditing(tripId) {
 
             if(tripForm) tripForm.reset();
             if(fuelEntriesContainer) fuelEntriesContainer.innerHTML = '';
+            if(tripAttachmentsInput) tripAttachmentsInput.value = ''; // Clear file input
+            if(tripAttachmentsFeedback) tripAttachmentsFeedback.innerHTML = ''; // Clear feedback
 
             if(tripIdToEditInput) tripIdToEditInput.value = trip.id;
             editingTripId = trip.id;
@@ -959,6 +1066,18 @@ async function loadTripForEditing(tripId) {
             if(expenseDescriptionInput) expenseDescriptionInput.value = trip.expenseDescription || '';
             if(declaredValueInput) declaredValueInput.value = trip.declaredValue?.toString().replace('.', ',') || '';
 
+            // Display existing attachments
+            if (trip.attachments && trip.attachments.length > 0 && tripAttachmentsFeedback) {
+                const ul = document.createElement('ul');
+                ul.innerHTML = '<li><strong>Anexos existentes (não podem ser removidos nesta tela, novos serão adicionados):</strong></li>';
+                trip.attachments.forEach(att => {
+                    const li = document.createElement('li');
+                    li.textContent = `${escapeHtml(att.name)} (${formatFileSize(att.size)})`;
+                    ul.appendChild(li);
+                });
+                tripAttachmentsFeedback.appendChild(ul);
+            }
+
 
             if (submitTripBtn) submitTripBtn.textContent = 'Salvar Alterações';
             if (cancelEditBtn) cancelEditBtn.style.display = 'inline-block';
@@ -975,12 +1094,16 @@ async function loadTripForEditing(tripId) {
     }
 }
 
-
 function confirmDeleteTrip(tripId, driverNameForConfirm) {
     if (!tripId) return;
 
     const tripToDelete = trips.find(t => t.id === tripId) ||
                         (adminView && adminView.style.display === 'block' ? trips.find(t=>t.id === tripId) : null);
+    
+    let originalTripDataForAttachments = null;
+    if (tripToDelete && tripToDelete.attachments) { // Check local cache first
+        originalTripDataForAttachments = tripToDelete;
+    }
 
     if (tripToDelete) {
          if (!loggedInUser || (loggedInUser.uid !== tripToDelete.userId &&
@@ -993,16 +1116,45 @@ function confirmDeleteTrip(tripId, driverNameForConfirm) {
         return;
     }
 
-
-    if (confirm(`Tem certeza que deseja excluir o frete de ${capitalizeName(driverNameForConfirm)}? Esta ação não pode ser desfeita.`)) {
-        deleteTrip(tripId);
+    if (confirm(`Tem certeza que deseja excluir o frete de ${capitalizeName(driverNameForConfirm)}? Esta ação não pode ser desfeita e também excluirá todos os anexos associados.`)) {
+        deleteTrip(tripId, originalTripDataForAttachments);
     }
 }
 
-async function deleteTrip(tripId) {
+async function deleteTrip(tripId, tripDataWithAttachments = null) {
     try {
+        let attachmentsToDelete = tripDataWithAttachments ? tripDataWithAttachments.attachments : null;
+
+        // If attachments not passed, fetch the trip doc to get them
+        if (!attachmentsToDelete) {
+            const tripDocRef = doc(tripsCollection, tripId);
+            const tripDocSnapshot = await getDoc(tripDocRef);
+            if (tripDocSnapshot.exists()) {
+                attachmentsToDelete = tripDocSnapshot.data().attachments;
+            }
+        }
+        
+        // Delete attachments from Storage
+        if (attachmentsToDelete && attachmentsToDelete.length > 0) {
+            showFeedback(myTripsFeedback, "Excluindo anexos...", "info");
+            for (const attachment of attachmentsToDelete) {
+                if (attachment.storagePath) {
+                    try {
+                        const fileRef = storageRef(storage, attachment.storagePath);
+                        await deleteObject(fileRef);
+                        console.log(`Anexo ${attachment.name} excluído do Storage.`);
+                    } catch (storageError) {
+                        console.error(`Erro ao excluir anexo ${attachment.name} do Storage:`, storageError);
+                        // Non-fatal, continue to delete Firestore doc
+                    }
+                }
+            }
+        }
+
+        // Delete trip document from Firestore
         await deleteDoc(doc(tripsCollection, tripId));
-        showFeedback(myTripsFeedback, "Frete excluído com sucesso.", "success");
+        showFeedback(myTripsFeedback, "Frete e seus anexos excluídos com sucesso.", "success");
+
         if (myTripsView && myTripsView.style.display === 'block') {
             loadAndRenderMyTrips(myTripsFilterStartDateInput?.value, myTripsFilterEndDateInput?.value);
         }
@@ -1018,6 +1170,7 @@ async function deleteTrip(tripId) {
         showFeedback(myTripsFeedback, "Erro ao excluir frete. Tente novamente.", "error");
     }
 }
+
 
 function updateDriverSummary(summaryTrips, driverDisplayName) {
     let totalTrips = summaryTrips.length;
@@ -1044,7 +1197,6 @@ function updateDriverSummary(summaryTrips, driverDisplayName) {
         }
     }
 }
-
 
 // --- ADMIN PANEL FUNCTIONS ---
 async function updateAdminSummary(filterStartDate, filterEndDate) {
@@ -1104,7 +1256,6 @@ async function populateAdminDriverSelect() {
             }
         });
 
-
         const options = ['<option value="">-- Selecione um Motorista --</option>'];
         motoristas.forEach((user) => {
             options.push(`<option value="${user.uid}" data-name="${user.username}">${capitalizeName(user.username)}</option>`);
@@ -1128,7 +1279,6 @@ function populateAdminYearFilterSelect() {
     adminYearFilterSelect.innerHTML = yearOptions.join('');
 }
 
-
 async function loadAndRenderAdminDriverMonthlySummaries() {
     const driverUid = adminSelectDriver.value;
     const driverName = adminSelectDriver.options[adminSelectDriver.selectedIndex]?.dataset.name;
@@ -1137,12 +1287,10 @@ async function loadAndRenderAdminDriverMonthlySummaries() {
     if (adminDriverIndividualTripsTableBody) adminDriverIndividualTripsTableBody.innerHTML = '';
     if (adminIndividualTripsTitle) adminIndividualTripsTitle.textContent = '';
 
-
     if (!adminDriverFiltersContainer) {
         console.error("Admin Panel Bug: adminDriverFiltersContainer not found in DOM!");
         if(adminGeneralFeedback) showFeedback(adminGeneralFeedback, "Erro de Interface: Controles de filtro não encontrados. Contate o suporte.", "error");
     }
-
 
     if (!driverUid) {
         if (adminDriverTripsSection) adminDriverTripsSection.style.display = 'none';
@@ -1171,11 +1319,9 @@ async function loadAndRenderAdminDriverMonthlySummaries() {
     if (adminDriverTripsSection) adminDriverTripsSection.style.display = 'block';
     if (adminDriverFiltersContainer) adminDriverFiltersContainer.style.display = 'block';
 
-
     try {
         const q = query(tripsCollection, where("userId", "==", driverUid), orderBy("date", "asc"));
         const querySnapshot = await getDocs(q);
-
         const monthlyDataMap = new Map();
 
         querySnapshot.forEach((docSnap) => {
@@ -1225,19 +1371,15 @@ function renderAdminDriverMonthlySummariesTable() {
     if (adminDriverIndividualTripsSection) adminDriverIndividualTripsSection.style.display = 'none';
     if (adminDriverIndividualTripsTableBody) adminDriverIndividualTripsTableBody.innerHTML = '';
 
-
     const selectedMonth = adminMonthFilterSelect.value;
     const selectedYear = adminYearFilterSelect.value;
 
     const filteredSummaries = currentDriverMonthlySummaries.filter(summary => {
         const [summaryYear, summaryMonth] = summary.yearMonthKey.split('-');
-
         const yearMatch = !selectedYear || selectedYear === summaryYear;
         const monthMatch = !selectedMonth || selectedMonth === summaryMonth;
-
         return yearMatch && monthMatch;
     });
-
 
     if (filteredSummaries.length === 0) {
         if (adminDriverTripsTable) adminDriverTripsTable.style.display = 'none';
@@ -1296,10 +1438,8 @@ async function loadAndRenderTripsForMonth(yearMonthKey, driverUid, driverName, d
         const [yearStr, monthStr] = yearMonthKey.split('-');
         const yearNum = parseInt(yearStr);
         const monthNum = parseInt(monthStr); 
-
         const startDate = `${yearStr}-${monthStr}-01`;
         const endDate = new Date(yearNum, monthNum, 0).toISOString().split('T')[0];
-
 
         const q = query(
             tripsCollection,
@@ -1314,9 +1454,7 @@ async function loadAndRenderTripsForMonth(yearMonthKey, driverUid, driverName, d
         querySnapshot.forEach((docSnap) => {
             fetchedTrips.push({ id: docSnap.id, ...docSnap.data() });
         });
-
         renderAdminDriverIndividualTripsTable(fetchedTrips, displayMonthYear, driverName);
-
     } catch (error) {
         console.error(`ERRO CRÍTICO ao carregar viagens individuais para ${driverName} (${yearMonthKey}):`, "Código:", error.code, "Mensagem:", error.message);
         let userMessage = `Erro ao carregar viagens de ${capitalizeName(driverName)} para ${displayMonthYear}. Verifique o console.`;
@@ -1330,7 +1468,6 @@ async function loadAndRenderTripsForMonth(yearMonthKey, driverUid, driverName, d
 
 function renderAdminDriverIndividualTripsTable(individualTrips, displayMonthYear, driverName) {
     if (!adminDriverIndividualTripsTableBody || !adminDriverIndividualTripsPlaceholder || !adminDriverIndividualTripsTable) return;
-    
     adminDriverIndividualTripsTableBody.innerHTML = '';
 
     if (individualTrips.length === 0) {
@@ -1360,9 +1497,8 @@ function renderAdminDriverIndividualTripsTable(individualTrips, displayMonthYear
     });
 }
 
-
 function showAdminTripDetailModal(trip) {
-    if(!adminTripDetailContent || !adminTripDetailModal) return;
+    if(!adminTripDetailContent || !adminTripDetailModal || !adminTripAttachmentsSection || !adminTripAttachmentsList) return;
     let fuelDetailsHtml = '<h4>Abastecimentos</h4>';
     if (trip.fuelEntries && trip.fuelEntries.length > 0) {
         trip.fuelEntries.forEach(entry => {
@@ -1409,6 +1545,29 @@ function showAdminTripDetailModal(trip) {
             <p><strong>Valor Declarado:</strong> ${formatCurrency(trip.declaredValue)}</p>
         </div>
     `;
+
+    // Display attachments
+    adminTripAttachmentsList.innerHTML = ''; // Clear previous
+    if (trip.attachments && trip.attachments.length > 0) {
+        const ul = document.createElement('ul');
+        trip.attachments.forEach(att => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <span class="attachment-info">
+                    <a href="${escapeHtml(att.url)}" target="_blank" class="filename">${escapeHtml(att.name)}</a>
+                </span>
+                <span class="attachment-meta">
+                    (${formatFileSize(att.size)}) - ${formatDisplayDate(att.uploadedAt)}
+                </span>`;
+            ul.appendChild(li);
+        });
+        adminTripAttachmentsList.appendChild(ul);
+        adminTripAttachmentsSection.style.display = 'block';
+    } else {
+        adminTripAttachmentsList.innerHTML = '<p>Nenhum anexo.</p>';
+        adminTripAttachmentsSection.style.display = 'block'; // Show section even if no attachments, to display "Nenhum anexo"
+    }
+
     adminTripDetailModal.style.display = 'flex';
 }
 
@@ -1512,13 +1671,11 @@ async function handleEditUserSubmit(event) {
         await updateDoc(userProfileRef, { role: newRole });
 
         if (newPassword) {
-            
             const userToUpdate = authFirebase.currentUser;
             if (userToUpdate && userToUpdate.uid === editingUserIdForAdmin) {
                 await updateUserPasswordInAuth(userToUpdate, newPassword);
                 console.log("Password updated in Auth for current user.");
             } else {
-
                 console.warn("Attempting to update password for a user who is not the currently logged-in user. This requires admin privileges and a different Firebase Admin SDK function, not available client-side directly.");
                 showFeedback(editUserFeedback, "Senha atualizada no perfil, mas a alteração de senha para outros usuários requer backend com Admin SDK.", "info");
             }
@@ -1602,10 +1759,8 @@ async function handleAdminCreateUserFormSubmit(event) {
     const emailForAuth = `${normalizedUsernamePart}@example.com`;
 
     try {
-        
         const userCredential = await createUserWithEmailAndPassword(authFirebase, emailForAuth, password);
         const newUserUid = userCredential.user.uid;
-
         
         const userProfileData = {
             uid: newUserUid,
@@ -1635,9 +1790,7 @@ async function handleAdminCreateUserFormSubmit(event) {
     }
 }
 
-
 // --- HTML REPORT EXPORT ---
-
 async function handleExportAdminReport() {
     console.log("handleExportAdminReport function called");
     let startDate = null;
@@ -1645,7 +1798,6 @@ async function handleExportAdminReport() {
     let reportPeriodTitle = "Geral Completo";
     let fileNameSuffix = "Geral_Completo";
 
-    // Verifique se os elementos existem antes de tentar acessar .value
     const startDateInput = document.getElementById('adminSummaryFilterStartDate');
     const endDateInput = document.getElementById('adminSummaryFilterEndDate');
 
@@ -1666,7 +1818,6 @@ async function handleExportAdminReport() {
     } else {
         console.warn("Admin summary filter date inputs not found. Exporting full report.");
     }
-
 
     try {
         let q = query(tripsCollection, orderBy("date", "desc"));
@@ -1702,7 +1853,6 @@ async function handleExportAdminReport() {
         showFeedback(adminGeneralFeedback, userMessage, "error");
     }
 }
-
 
 function convertToHTMLTable(data, reportPeriodTitle) {
     let tableHTML = `
@@ -1760,7 +1910,6 @@ function convertToHTMLTable(data, reportPeriodTitle) {
     let grandTotalCommission = 0;
     let grandTotalDeclared = 0;
 
-
     data.sort((a,b) => new Date(a.date) - new Date(b.date)).forEach(trip => {
         grandTotalFreight += trip.freightValue || 0;
         grandTotalExpenses += trip.totalExpenses || 0;
@@ -1770,7 +1919,6 @@ function convertToHTMLTable(data, reportPeriodTitle) {
         grandTotalFuelCost += trip.totalFuelCost || 0;
         grandTotalCommission += trip.commissionCost || 0;
         grandTotalDeclared += trip.declaredValue || 0;
-
 
         tableHTML += `
             <tr>
@@ -1850,7 +1998,6 @@ async function handleExcelFileImport() {
             const firstSheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[firstSheetName];
             
-            // Usar raw:true para tentar obter valores numéricos brutos
             const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true, defval: null });
 
             if (jsonData.length < 2) {
@@ -1878,9 +2025,9 @@ async function handleExcelFileImport() {
                 litros3: ['litros3', 'litro3', 'lts3', 'combustivel litros3'],
                 valor_litro3: ['v.litro3', 'valor litro3', 'valor/litro3', 'vl litro3', 'combustivel valor/litro3'],
                 desconto3: ['descont3', 'desconto3', 'desc3', 'combustivel desconto3'],
-                litros4: ['litros4', 'litro4', 'lts4', 'combustivel litros4'], // Added 4th fuel entry
-                valor_litro4: ['v.litro4', 'valor litro4', 'valor/litro4', 'vl litro4', 'combustivel valor/litro4'], // Added 4th
-                desconto4: ['descont4', 'desconto4', 'desc4', 'combustivel desconto4'], // Added 4th
+                litros4: ['litros4', 'litro4', 'lts4', 'combustivel litros4'], 
+                valor_litro4: ['v.litro4', 'valor litro4', 'valor/litro4', 'vl litro4', 'combustivel valor/litro4'], 
+                desconto4: ['descont4', 'desconto4', 'desc4', 'combustivel desconto4'], 
                 arla32Cost: ['arla-32 (r$)', 'arla-32', 'arla32', 'arla', 'custo arla', 'valor arla'],
                 tollCost: ['pedágio (r$)', 'pedagio', 'pedágio', 'custo pedagio', 'valor pedagio'],
                 commissionCost: ['comissão (r$)', 'comissao', 'comissão', 'comissao motorista', 'comissão motorista'],
@@ -1908,7 +2055,6 @@ async function handleExcelFileImport() {
             const errorMessages = [];
             const importedTripIdentifiers = new Set();
 
-
             for (let i = 0; i < dataRows.length; i++) {
                 const rowArray = dataRows[i];
                 const driverNameFromSheet = String(rowArray[headerMap.driverName] || '').trim();
@@ -1933,26 +2079,23 @@ async function handleExcelFileImport() {
                     continue;
                 }
                 
-                // Check for duplicates before processing the row
                 const tripIdentifier = `${motoristaUid}_${tripDateFormatted}`;
                 const qDup = query(tripsCollection, where("userId", "==", motoristaUid), where("date", "==", tripDateFormatted));
                 const dupSnapshot = await getDocs(qDup);
 
                 if (!dupSnapshot.empty) {
                      errorMessages.push(`Linha ${i + 2}: Viagem duplicada para ${driverNameFromSheet} em ${formatDisplayDate(tripDateFormatted)}. Ignorando.`);
-                     importedTripIdentifiers.add(tripIdentifier); // Ensure we don't try to add it again
+                     importedTripIdentifiers.add(tripIdentifier); 
                      continue;
                 }
                  if (importedTripIdentifiers.has(tripIdentifier)) {
-                     // Already processed in this batch (e.g. if sheet has duplicates itself)
                      continue; 
                  }
-
 
                 const fuelEntries = [];
                 let totalFuelCost = 0;
 
-                for (let j = 1; j <= 4; j++) { // Loop for up to 4 fuel entries
+                for (let j = 1; j <= 4; j++) { 
                     const litersKey = `litros${j}`;
                     const valuePerLiterKey = `valor_litro${j}`;
                     const discountKey = `desconto${j}`;
@@ -1973,12 +2116,8 @@ async function handleExcelFileImport() {
                             });
                             totalFuelCost += entryTotal;
                         }
-                    } else if (j === 1 && ('litros1' in headerMap || 'valor_litro1' in headerMap) ){ 
-                        // Only add error if primary fuel fields are partially present
-                         // errorMessages.push(`Linha ${i + 2}: Faltando colunas para o ${j}º abastecimento. Se presentes, verifique nomes ('Litros${j}', 'V.Litro${j}').`);
                     }
                 }
-
 
                 const kmInitial = parseNumericValueFromString(rowArray[headerMap.kmInitial] || '0');
                 const kmFinal = parseNumericValueFromString(rowArray[headerMap.kmFinal] || '0');
@@ -2020,7 +2159,8 @@ async function handleExcelFileImport() {
                     totalExpenses,
                     netProfit,
                     declaredValue: parseNumericValueFromString(rowArray[headerMap.declaredValue] || '0'),
-                    createdAt: Timestamp.now()
+                    createdAt: Timestamp.now(),
+                    attachments: [] // Initialize attachments for Excel import
                 });
                 importCount++;
                 importedTripIdentifiers.add(tripIdentifier);
@@ -2033,7 +2173,7 @@ async function handleExcelFileImport() {
             let feedbackMsg = `Importação concluída. ${importCount} fretes processados da planilha.`;
             if (errorMessages.length > 0) {
                 feedbackMsg += "\n\nAlertas/Erros durante a importação:\n" + errorMessages.join("\n");
-                showFeedback(excelImportFeedback, feedbackMsg, importCount > 0 ? "info" : "error"); // info if some imported, error if none
+                showFeedback(excelImportFeedback, feedbackMsg, importCount > 0 ? "info" : "error"); 
             } else {
                 showFeedback(excelImportFeedback, feedbackMsg, "success");
             }
@@ -2044,7 +2184,7 @@ async function handleExcelFileImport() {
                     loadAndRenderAdminDriverMonthlySummaries();
                 }
             }
-            if (excelFileInput) excelFileInput.value = ''; // Clear file input
+            if (excelFileInput) excelFileInput.value = ''; 
 
         } catch (err) {
             console.error("Erro CRÍTICO durante importação do Excel:", err);
@@ -2056,8 +2196,6 @@ async function handleExcelFileImport() {
     };
     reader.readAsArrayBuffer(file);
 }
-
-
 
 // --- INITIALIZATION ---
 function initializeUserView() {
@@ -2074,6 +2212,8 @@ function initializeUserView() {
     if (driverNameInput && loggedInUserProfile) {
         driverNameInput.value = capitalizeName(loggedInUserProfile.username);
     }
+    if(tripAttachmentsInput) tripAttachmentsInput.value = '';
+    if(tripAttachmentsFeedback) tripAttachmentsFeedback.innerHTML = '';
 }
 
 function initializeMyTripsView() {
@@ -2101,7 +2241,6 @@ function initializeMyTripsView() {
     if(myTripsFeedback) {myTripsFeedback.textContent = ''; myTripsFeedback.style.display = 'none';}
 }
 
-
 function initializeAdminView() {
     console.log("Initializing Admin View...");
     updateAdminSummary();
@@ -2120,7 +2259,6 @@ function initializeAdminView() {
     if(adminSummaryFilterEndDateInput) adminSummaryFilterEndDateInput.value = '';
     if(excelFileInput) excelFileInput.value = '';
     if(excelImportFeedback) {excelImportFeedback.textContent = ''; excelImportFeedback.style.display = 'none';}
-
 }
 
 function initializeUserManagementView() {
@@ -2133,18 +2271,17 @@ function initializeUserManagementView() {
     if (userManagementFeedback) {userManagementFeedback.textContent = ''; userManagementFeedback.style.display = 'none';}
 }
 
-
 // --- EVENT LISTENERS ---
 document.addEventListener('DOMContentLoaded', () => {
     console.log("DOMContentLoaded event fired.");
 
-    if (!app || !authFirebase || !db) {
-        console.error("CRITICAL: Firebase not initialized at DOMContentLoaded. App will not function.");
+    if (!app || !authFirebase || !db || !storage) { // Check for storage too
+        console.error("CRITICAL: Firebase not initialized (or storage missing) at DOMContentLoaded. App will not function.");
         const body = document.querySelector('body');
         if (body) {
             body.innerHTML = `<div style="padding: 20px; text-align: center; background-color: #ffdddd; border: 1px solid red; color: red;">
                 <h1>Erro Crítico</h1>
-                <p>A aplicação não pôde ser iniciada devido a um problema na inicialização do Firebase. Verifique o console para detalhes.</p>
+                <p>A aplicação não pôde ser iniciada devido a um problema na inicialização dos serviços Firebase. Verifique o console para detalhes.</p>
                 <p>Por favor, recarregue a página ou contate o suporte técnico.</p>
             </div>`;
         }
@@ -2152,14 +2289,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (loginForm) loginForm.addEventListener('submit', handleLogin);
-
     if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
 
     if (userViewBtn) userViewBtn.addEventListener('click', () => { showView('userView'); initializeUserView(); });
     if (myTripsViewBtn) myTripsViewBtn.addEventListener('click', () => { showView('myTripsView'); initializeMyTripsView(); });
     if (adminViewBtn) adminViewBtn.addEventListener('click', () => { showView('adminView'); initializeAdminView(); });
     if (userManagementViewBtn) userManagementViewBtn.addEventListener('click', () => { showView('userManagementView'); initializeUserManagementView(); });
-
 
     if (tripForm) tripForm.addEventListener('submit', handleTripFormSubmit);
     if (addFuelEntryBtn) addFuelEntryBtn.addEventListener('click', () => addFuelEntryToForm());
@@ -2172,8 +2307,26 @@ document.addEventListener('DOMContentLoaded', () => {
         if (submitTripBtn) submitTripBtn.textContent = 'Salvar Frete';
         if (cancelEditBtn) cancelEditBtn.style.display = 'none';
         if (driverNameInput && loggedInUserProfile) driverNameInput.value = capitalizeName(loggedInUserProfile.username);
+        if(tripAttachmentsInput) tripAttachmentsInput.value = ''; // Clear file input on cancel
+        if(tripAttachmentsFeedback) tripAttachmentsFeedback.innerHTML = ''; // Clear feedback on cancel
         showFeedback(userFormFeedback, "Edição cancelada.", "info");
     });
+
+    if (tripAttachmentsInput && tripAttachmentsFeedback) {
+        tripAttachmentsInput.addEventListener('change', () => {
+            tripAttachmentsFeedback.innerHTML = ''; // Clear previous
+            if (tripAttachmentsInput.files.length > 0) {
+                const ul = document.createElement('ul');
+                ul.innerHTML = '<li><strong>Arquivos selecionados para novo anexo:</strong></li>';
+                for (let i = 0; i < tripAttachmentsInput.files.length; i++) {
+                    const li = document.createElement('li');
+                    li.textContent = escapeHtml(tripAttachmentsInput.files[i].name);
+                    ul.appendChild(li);
+                }
+                tripAttachmentsFeedback.appendChild(ul);
+            }
+        });
+    }
 
     if (loadMyTripsBtn && myTripsDriverNameInput) {
         loadMyTripsBtn.addEventListener('click', () => {
@@ -2188,7 +2341,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (foundProfile) {
                 currentUserForMyTripsSearch = foundProfile.username;
                 currentUidForMyTripsSearch = foundProfile.uid;
-                if(myTripsFilterStartDateInput) myTripsFilterStartDateInput.value = ''; // Reset date filters
+                if(myTripsFilterStartDateInput) myTripsFilterStartDateInput.value = ''; 
                 if(myTripsFilterEndDateInput) myTripsFilterEndDateInput.value = '';
                 loadAndRenderMyTrips();
             } else {
@@ -2230,7 +2383,6 @@ document.addEventListener('DOMContentLoaded', () => {
         adminYearFilterSelect.addEventListener('change', renderAdminDriverMonthlySummariesTable);
     }
 
-
     if (closeAdminTripDetailModalBtn && adminTripDetailModal) {
         closeAdminTripDetailModalBtn.addEventListener('click', () => adminTripDetailModal.style.display = 'none');
     }
@@ -2251,7 +2403,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if(importExcelBtn && excelFileInput) {
         importExcelBtn.addEventListener('click', handleExcelFileImport);
     }
-
     
     showView('loginView');
     console.log("Initial view set to loginView.");

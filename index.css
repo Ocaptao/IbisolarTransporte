@@ -402,33 +402,52 @@ fieldset legend {
     color: #2c3e50;
 }
 
-#adminDriverTripsTable {
+#adminDriverTripsTable, #adminDriverIndividualTripsTable { /* Added #adminDriverIndividualTripsTable */
     width: 100%;
     border-collapse: collapse;
     margin-top: 1rem;
 }
-#adminDriverTripsTable th, #adminDriverTripsTable td {
+#adminDriverTripsTable th, #adminDriverTripsTable td,
+#adminDriverIndividualTripsTable th, #adminDriverIndividualTripsTable td { /* Added #adminDriverIndividualTripsTable */
     border: 1px solid #ddd;
     padding: 0.75rem;
     text-align: left;
     font-size: 0.9rem;
     vertical-align: middle;
 }
-#adminDriverTripsTable th {
+#adminDriverTripsTable th, #adminDriverIndividualTripsTable th { /* Added #adminDriverIndividualTripsTable */
     background-color: #e9edf0;
     font-weight: 500;
 }
-#adminDriverTripsTable tbody tr:nth-child(even) {
+#adminDriverTripsTable tbody tr:nth-child(even),
+#adminDriverIndividualTripsTable tbody tr:nth-child(even) { /* Added #adminDriverIndividualTripsTable */
     background-color: #f9f9f9;
 }
-#adminDriverTripsTable tbody tr:hover {
+#adminDriverTripsTable tbody tr:hover,
+#adminDriverIndividualTripsTable tbody tr:hover { /* Added #adminDriverIndividualTripsTable */
     background-color: #f1f1f1;
 }
-#adminDriverTripsPlaceholder { 
+#adminDriverTripsPlaceholder, #adminDriverIndividualTripsPlaceholder { /* Added #adminDriverIndividualTripsPlaceholder */
     text-align: center;
     padding: 1rem;
     color: #777;
     font-style: italic;
+}
+
+#adminDriverIndividualTripsSection {
+    background-color: #fdfdfd; /* Slightly different background for distinction */
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+}
+
+#adminIndividualTripsTitle { /* Styles for the new title */
+    color: #2c3e50;
+    margin-top: 0;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #e0e0e0;
+    font-weight: 500;
 }
 
 
@@ -516,7 +535,7 @@ fieldset legend {
 #myTripsTable tbody tr:nth-child(even) { background-color: #f9f9f9; }
 #myTripsTable tbody tr:hover { background-color: #f1f1f1; }
 
-#tablePlaceholder, #myTripsTablePlaceholder, #adminDriverTripsPlaceholder { text-align: center; padding: 1rem; color: #777; font-style: italic; display: block; }
+#tablePlaceholder, #myTripsTablePlaceholder { text-align: center; padding: 1rem; color: #777; font-style: italic; display: block; } /* Removed adminDriverTripsPlaceholder from this group as it's now duplicated below */
 
 
 footer { background-color: #34495e; color: #ecf0f1; text-align: center; padding: 1rem; font-size: 0.85rem; }
@@ -717,18 +736,24 @@ footer { background-color: #34495e; color: #ecf0f1; text-align: center; padding:
     .form-actions { flex-direction: column; }
     .form-actions .submit-btn, .form-actions .control-btn { width: 100%; }
 
-    #adminDriverTripsSection {
+    #adminDriverTripsSection, #adminDriverIndividualTripsSection { /* Added #adminDriverIndividualTripsSection */
         overflow-x: auto; 
         -webkit-overflow-scrolling: touch; 
     }
 
-    #adminDriverTripsTable {
+    #adminDriverTripsTable, #adminDriverIndividualTripsTable { /* Added #adminDriverIndividualTripsTable */
         width: auto; 
-        min-width: 600px;
+        min-width: 600px; /* Adjust as needed for monthly summary table */
+    }
+     #adminDriverIndividualTripsTable {
+        min-width: 500px; /* Potentially smaller for individual trips */
     }
 
+
     #adminDriverTripsTable th,
-    #adminDriverTripsTable td {
+    #adminDriverTripsTable td,
+    #adminDriverIndividualTripsTable th, /* Added #adminDriverIndividualTripsTable */
+    #adminDriverIndividualTripsTable td { /* Added #adminDriverIndividualTripsTable */
         white-space: nowrap; 
     }
 }

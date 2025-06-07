@@ -1763,7 +1763,9 @@ async function handleExcelFileImport(event) {
             const workbook = XLSX.read(data, { type: 'array', cellDates: true, cellNF: false, cellText: true });
             const firstSheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[firstSheetName];
-            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, defval: null });
+            // Alterado raw: false para raw: true para tentar obter valores numéricos brutos
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true, defval: null });
+
 
             if (jsonData.length < 2) {
                 showFeedback(excelImportFeedback, "Planilha vazia ou sem dados após o cabeçalho.", "error");
@@ -1888,9 +1890,10 @@ async function handleExcelFileImport(event) {
                 const fuelEntries = [];
                 let totalFuelCostSheet = 0;
                 for (let j = 1; j <= 4; j++) { 
-                    const liters = parseNumericValueFromString(String(rowArray[headerMap[`litros${j}`]] || '0').trim());
-                    const valuePerLiter = parseNumericValueFromString(String(rowArray[headerMap[`valor_litro${j}`]] || '0').trim());
-                    const discount = parseNumericValueFromString(String(rowArray[headerMap[`desconto${j}`]] || '0').trim());
+                    const liters = parseNumericValueFromString(rowArray[headerMap[`litros${j}`]] || '0');
+                    const valuePerLiter = parseNumericValueFromString(rowArray[headerMap[`valor_litro${j}`]] || '0');
+                    const discount = parseNumericValueFromString(rowArray[headerMap[`desconto${j}`]] || '0');
+
 
                     if (liters > 0 && valuePerLiter > 0) {
                         const totalValue = (liters * valuePerLiter) - discount;
@@ -1899,9 +1902,10 @@ async function handleExcelFileImport(event) {
                     }
                 }
                 
-                const kmInitialSheet = parseNumericValueFromString(String(rowArray[headerMap.kmInitial] || '0').trim());
-                const kmFinalSheet = parseNumericValueFromString(String(rowArray[headerMap.kmFinal] || '0').trim());
-                const freightValueSheet = parseNumericValueFromString(String(rowArray[headerMap.freightValue] || '0').trim());
+                const kmInitialSheet = parseNumericValueFromString(rowArray[headerMap.kmInitial] || '0');
+                const kmFinalSheet = parseNumericValueFromString(rowArray[headerMap.kmFinal] || '0');
+                const freightValueSheet = parseNumericValueFromString(rowArray[headerMap.freightValue] || '0');
+
 
                 if (freightValueSheet <= 0) {
                      errorMessages.push(`Linha ${i + 2}: Valor do frete não pode ser zero ou negativo. Motorista: ${driverNameFromSheet}, Data: ${tripDateFormatted}`);
@@ -1909,23 +1913,23 @@ async function handleExcelFileImport(event) {
                      continue;
                 }
 
-                const arla32CostSheet = parseNumericValueFromString(String(rowArray[headerMap.arla32Cost] || '0').trim());
-                const tollCostSheet = parseNumericValueFromString(String(rowArray[headerMap.tollCost] || '0').trim());
-                const commissionCostSheet = parseNumericValueFromString(String(rowArray[headerMap.commissionCost] || '0').trim());
-                const otherExpensesSheet = parseNumericValueFromString(String(rowArray[headerMap.otherExpenses] || '0').trim());
+                const arla32CostSheet = parseNumericValueFromString(rowArray[headerMap.arla32Cost] || '0');
+                const tollCostSheet = parseNumericValueFromString(rowArray[headerMap.tollCost] || '0');
+                const commissionCostSheet = parseNumericValueFromString(rowArray[headerMap.commissionCost] || '0');
+                const otherExpensesSheet = parseNumericValueFromString(rowArray[headerMap.otherExpenses] || '0');
 
                 const totalExpensesSheet = totalFuelCostSheet + arla32CostSheet + tollCostSheet + otherExpensesSheet + commissionCostSheet;
                 const netProfitSheet = freightValueSheet - totalExpensesSheet;
 
                 const newTrip = {
                     userId: motoristaUid,
-                    driverName: driverNameFromSheet, // Store the name as it is in the sheet for consistency
+                    driverName: driverNameFromSheet, 
                     date: tripDateFormatted,
                     kmInitial: kmInitialSheet,
                     kmFinal: kmFinalSheet,
                     kmDriven: (kmFinalSheet > kmInitialSheet) ? kmFinalSheet - kmInitialSheet : 0,
-                    weight: parseNumericValueFromString(String(rowArray[headerMap.weight] || '0').trim()),
-                    unitValue: parseNumericValueFromString(String(rowArray[headerMap.unitValue] || '0').trim()),
+                    weight: parseNumericValueFromString(rowArray[headerMap.weight] || '0'),
+                    unitValue: parseNumericValueFromString(rowArray[headerMap.unitValue] || '0'),
                     freightValue: freightValueSheet,
                     fuelEntries: fuelEntries,
                     arla32Cost: arla32CostSheet,
@@ -1936,7 +1940,7 @@ async function handleExcelFileImport(event) {
                     totalFuelCost: totalFuelCostSheet,
                     totalExpenses: totalExpensesSheet,
                     netProfit: netProfitSheet,
-                    declaredValue: parseNumericValueFromString(String(rowArray[headerMap.declaredValue] || '0').trim()),
+                    declaredValue: parseNumericValueFromString(rowArray[headerMap.declaredValue] || '0'),
                     createdAt: Timestamp.now(),
                 };
                 

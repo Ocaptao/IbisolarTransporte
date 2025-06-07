@@ -2074,9 +2074,9 @@ async function handleExportAdminReport() {
             formatDisplayDate(trip.date),
             capitalizeName(userMap.get(trip.userId) || trip.driverName),
             // trip.cargoType || '', // Removido
-            formatGenericNumber(trip.kmInitial, 0, 0),
-            formatGenericNumber(trip.kmFinal, 0, 0),
-            formatGenericNumber(trip.kmDriven, 0, 0),
+            formatGenericNumber(trip.kmInitial, 2, 2), // Corrigido para 2 casas decimais
+            formatGenericNumber(trip.kmFinal, 2, 2),   // Corrigido para 2 casas decimais
+            formatGenericNumber(trip.kmDriven, 2, 2),  // Corrigido para 2 casas decimais
             formatGenericNumber(trip.weight, 2, 2),
             formatCurrency(trip.freightValue || 0),
             formatCurrency(trip.totalFuelCost || 0),
